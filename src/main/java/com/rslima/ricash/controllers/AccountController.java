@@ -1,7 +1,13 @@
 package com.rslima.ricash.controllers;
 
-/**
- * Created by rslima on 24/03/16.
- */
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+@RequestMapping("/account")
 public class AccountController {
+    @RequestMapping("")
+    public String getAll() {
+        return "ok";
+    }
 }
