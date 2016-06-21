@@ -1,0 +1,200 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+CAUTION: Do not modify this file unless you know what you are doing.
+         Unexpected results may occur if the code is changed deliberately.
+-->
+<dbmodel pgmodeler-ver="0.8.2-beta1" last-position="0,0" last-zoom="1"
+	 default-schema="public" default-owner="postgres">
+<role name="rslima"
+      superuser="true"
+      createdb="true"
+      createrole="true"
+      inherit="true"
+      login="true"
+      encrypted="true"
+      password="rslima">
+</role>
+
+<database name="new_database">
+</database>
+
+<schema name="public" fill-color="#e1e1e1" sql-disabled="true">
+</schema>
+
+<schema name="ricash" rect-visible="true" fill-color="#e1e1e1">
+	<role name="rslima"/>
+</schema>
+
+<sequence name="acc_seq"
+	 start="1" increment="1"
+	 min-value="0" max-value="2147483647"
+	 cache="1" cycle="false">
+	<schema name="ricash"/>
+	<role name="rslima"/>
+</sequence>
+
+<table name="acc">
+	<schema name="ricash"/>
+	<role name="rslima"/>
+	<position x="551" y="240"/>
+	<column name="id" not-null="true" default-value="uuid_generate_v1mc()">
+		<type name="uuid"/>
+	</column>
+	<column name="name" not-null="true">
+		<type name="varchar" length="500"/>
+	</column>
+	<column name="group_id" not-null="true">
+		<type name="uuid"/>
+	</column>
+	<column name="cash" not-null="true" default-value="0">
+		<type name="bit"/>
+	</column>
+	<column name="book_id" not-null="true">
+		<type name="uuid"/>
+	</column>
+	<constraint name="acc_pk" type="pk-constr" table="ricash.acc">
+		<columns names="id" ref-type="src-columns"/>
+	</constraint>
+</table>
+
+<index name="pk_acc" table="ricash.acc"
+	 concurrent="false" unique="false" fast-update="false" buffering="false"
+	 index-type="btree" factor="0">
+		<idxelement use-sorting="false">
+			<column name="id"/>
+		</idxelement>
+</index>
+
+<sequence name="accGroup_seq"
+	 start="1" increment="1"
+	 min-value="0" max-value="2147483647"
+	 cache="1" cycle="false">
+	<schema name="ricash"/>
+	<role name="rslima"/>
+</sequence>
+
+<table name="accGroup">
+	<schema name="ricash"/>
+	<role name="rslima"/>
+	<position x="255" y="274"/>
+	<column name="id" not-null="true" default-value="uuid_generate_v1mc()">
+		<type name="uuid"/>
+	</column>
+	<column name="key" not-null="true">
+		<type name="varchar" length="50"/>
+	</column>
+	<constraint name="accGroup_pk" type="pk-constr" table="ricash.&quot;accGroup&quot;">
+		<columns names="id" ref-type="src-columns"/>
+	</constraint>
+</table>
+
+<sequence name="book_seq"
+	 start="1" increment="1"
+	 min-value="0" max-value="2147483647"
+	 cache="1" cycle="false">
+	<schema name="ricash"/>
+	<role name="rslima"/>
+</sequence>
+
+<table name="book">
+	<schema name="ricash"/>
+	<role name="rslima"/>
+	<position x="638" y="96"/>
+	<column name="id" not-null="true" default-value="uuid_generate_v1mc()">
+		<type name="uuid"/>
+	</column>
+	<column name="name" not-null="true">
+		<type name="varchar"/>
+	</column>
+	<column name="owner_id" not-null="true">
+		<type name="uuid"/>
+	</column>
+	<constraint name="book_pk" type="pk-constr" table="ricash.book">
+		<columns names="id" ref-type="src-columns"/>
+	</constraint>
+</table>
+
+<sequence name="usr_seq"
+	 start="1" increment="1"
+	 min-value="0" max-value="2147483647"
+	 cache="1" cycle="false">
+	<schema name="ricash"/>
+	<role name="rslima"/>
+</sequence>
+
+<table name="usr">
+	<schema name="ricash"/>
+	<role name="rslima"/>
+	<position x="168" y="120"/>
+	<column name="id" not-null="true" default-value="uuid_generate_v1mc()">
+		<type name="uuid"/>
+	</column>
+	<column name="login" not-null="true">
+		<type name="varchar" length="50"/>
+	</column>
+	<column name="email" not-null="true">
+		<type name="varchar" length="50"/>
+	</column>
+	<column name="password" not-null="true">
+		<type name="varchar" length="100"/>
+	</column>
+	<column name="name">
+		<type name="varchar" length="100"/>
+	</column>
+	<constraint name="usr_pk" type="pk-constr" table="ricash.usr">
+		<columns names="id" ref-type="src-columns"/>
+	</constraint>
+	<constraint name="login_un" type="uq-constr" table="ricash.usr">
+		<columns names="login" ref-type="src-columns"/>
+	</constraint>
+	<constraint name="email_un" type="uq-constr" table="ricash.usr">
+		<columns names="email" ref-type="src-columns"/>
+	</constraint>
+</table>
+
+<extension name="uuid-ossp">
+	<schema name="ricash"/>
+</extension>
+
+<constraint name="acc_accGroup_fk" type="fk-constr" comparison-type="MATCH FULL"
+	 upd-action="CASCADE" del-action="RESTRICT" ref-table="ricash.&quot;accGroup&quot;" table="ricash.acc">
+	<columns names="group_id" ref-type="src-columns"/>
+	<columns names="id" ref-type="dst-columns"/>
+</constraint>
+
+<constraint name="acc_book_fk" type="fk-constr" comparison-type="MATCH FULL"
+	 upd-action="CASCADE" del-action="CASCADE" ref-table="ricash.book" table="ricash.acc">
+	<columns names="book_id" ref-type="src-columns"/>
+	<columns names="id" ref-type="dst-columns"/>
+</constraint>
+
+<constraint name="usr_book_fk" type="fk-constr" comparison-type="MATCH FULL"
+	 upd-action="CASCADE" del-action="CASCADE" ref-table="ricash.usr" table="ricash.book">
+	<columns names="owner_id" ref-type="src-columns"/>
+	<columns names="id" ref-type="dst-columns"/>
+</constraint>
+
+<relationship name="rel_acc_accGroup" type="relfk"
+	 src-table="ricash.acc"
+	 dst-table="ricash.&quot;accGroup&quot;"
+	 src-required="false" dst-required="false">
+	<label ref-type="name-label">
+		<position x="5.62574" y="-58.9485"/>
+	</label>
+</relationship>
+
+<relationship name="rel_acc_book" type="relfk"
+	 src-table="ricash.acc"
+	 dst-table="ricash.book"
+	 src-required="false" dst-required="false">
+	<label ref-type="src-label">
+		<position x="-3.36" y="3.8"/>
+	</label>
+</relationship>
+
+<relationship name="rel_book_usr" type="relfk"
+	 src-table="ricash.book"
+	 dst-table="ricash.usr"
+	 src-required="false" dst-required="false"/>
+
+</dbmodel>
