@@ -1,4 +1,4 @@
-package com.rslima;
+package com.rslima.ricash;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;

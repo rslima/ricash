@@ -1,5 +1,6 @@
-package com.rslima;
+package com.rslima.ricash;
 
+import com.rslima.ricash.RicashApplication;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.springframework.test.context.web.WebAppConfiguration;
