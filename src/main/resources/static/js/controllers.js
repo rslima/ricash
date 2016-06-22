@@ -4,9 +4,9 @@
 
 "use strict";
 
-var studentControllerModule = angular.module("ricashApp.controllers",[]);
+var studentControllerModule = angular.module('ricashApp.controllers',[]);
 
-studentControllerModule.controller("RicashController", function($rootScope, $scope, $location, $routeParams) {
+studentControllerModule.controller('RicashController', function($rootScope, $scope, $location, $routeParams) {
     $scope.appName = "Ricash";
     $scope.authorName = "Ricardo Lima";
 });
