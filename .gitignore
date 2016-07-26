@@ -1,3 +1,6 @@
 .idea/
 ricash.iml
 target/
+.classpath
+.project
+.settings/
