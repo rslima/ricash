@@ -21,7 +21,14 @@
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<java.version>1.8</java.version>
+
+        <!-- Libraries -->
+        <springfox.version>2.4.0</springfox.version>
+        <postgresql.version>9.4-1201-jdbc41</postgresql.version>
+
+        <!-- Plugins -->
         <flyway.maven.plugin.version>4.0</flyway.maven.plugin.version>
+        <frontend.maven.plugin.version>1.0</frontend.maven.plugin.version>
 	</properties>
 
 	<dependencies>
@@ -64,12 +71,12 @@
 		<dependency>
 			<groupId>io.springfox</groupId>
 			<artifactId>springfox-swagger2</artifactId>
-			<version>2.4.0</version>
+			<version>${springfox.version}</version>
 		</dependency>
 		<dependency>
 			<groupId>io.springfox</groupId>
 			<artifactId>springfox-swagger-ui</artifactId>
-			<version>2.4.0</version>
+			<version>${springfox.version}</version>
 		</dependency>
 		<dependency>
 			<groupId>org.hsqldb</groupId>
@@ -79,18 +86,12 @@
 		<dependency>
 			<groupId>org.postgresql</groupId>
 			<artifactId>postgresql</artifactId>
-			<version>9.4-1201-jdbc41</version>
+			<version>${postgresql.version}</version>
 			<scope>runtime</scope>
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-test</artifactId>
-			<scope>test</scope>
-		</dependency>
-		<dependency>
-			<groupId>org.springframework.restdocs</groupId>
-			<artifactId>spring-restdocs-mockmvc</artifactId>
-			<version>1.0.0.RELEASE</version>
 			<scope>test</scope>
 		</dependency>
         <dependency>
@@ -148,6 +149,30 @@
 				<artifactId>flyway-maven-plugin</artifactId>
                 <version>${flyway.maven.plugin.version}</version>
 			</plugin>
+            <plugin>
+                <groupId>com.github.eirslett</groupId>
+                <artifactId>frontend-maven-plugin</artifactId>
+                <version>1.0</version>
+                <executions>
+                    <execution>
+                        <id>install node and npm</id>
+                        <goals>
+                            <goal>install-node-and-npm</goal>
+                        </goals>
+                        <configuration>
+                            <npmVersion>3.9.6</npmVersion>
+                            <nodeVersion>v6.2.2</nodeVersion>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>npm install</id>
+                        <goals>
+                            <goal>npm</goal>
+                        </goals>
+                        <phase>generate-resources</phase>
+                    </execution>
+                </executions>
+            </plugin>
 		</plugins>
 	</build>
 	
