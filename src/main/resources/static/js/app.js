@@ -1,6 +1,3 @@
-/**
- * Created by rslima on 15/02/16.
- */
 "use strict";
 
 angular.module('ricashApp',['ricashApp.controllers', 'ngRoute', 'ngAnimate', 'ui.bootstrap']).
