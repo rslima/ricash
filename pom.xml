@@ -148,6 +148,50 @@
 				<artifactId>flyway-maven-plugin</artifactId>
                 <version>${flyway.maven.plugin.version}</version>
 			</plugin>
+			<plugin>
+                <groupId>org.jooq</groupId>
+                <artifactId>jooq-codegen-maven</artifactId>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>generate</goal>
+                        </goals>
+                    </execution>
+                </executions>
+                <dependencies>
+                    <dependency>
+                        <groupId>org.postgresql</groupId>
+                        <artifactId>postgresql</artifactId>
+                        <version>9.4-1201-jdbc41</version>
+                    </dependency>
+                </dependencies>
+                <configuration>
+                    <jdbc>
+                        <driver>org.postgresql.Driver</driver>
+                        <url>jdbc:postgresql://localhost:5432/ricash</url>
+                        <user>rslima</user>
+                        <password>rslima</password>
+                    </jdbc>
+                    <generator>
+                        <database>
+                            <name>org.jooq.util.postgres.PostgresDatabase</name>
+                            <includes>.*</includes>
+                            <inputSchema>ricash</inputSchema>
+                        </database>
+                        <generate>
+                            <daos>true</daos>
+                            <immutablePojos>true</immutablePojos>
+                            <interfaces>true</interfaces>
+                            <validationAnnotations>true</validationAnnotations>
+                            <springAnnotations>true</springAnnotations>
+                        </generate>
+                        <target>
+                            <packageName>com.rslima.ricash.db</packageName>
+                            <directory>target/generated-sources/jooq</directory>
+                        </target>
+                    </generator>
+                </configuration>
+            </plugin>
 		</plugins>
 	</build>
 	
