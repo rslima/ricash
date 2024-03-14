@@ -1,1 +1,8 @@
+spring:
+  flyway:
+    enabled: on
 
+  datasource:
+    url: jdbc:postgresql://localhost:5432/postgres
+    username: ricash
+    password: secret
