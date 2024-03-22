@@ -16,7 +16,7 @@ export const authCodeFlowConfig: AuthConfig = {
 }
 
 function initializeOAuth(oauthService: OAuthService): Promise<void> {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     oauthService.configure(authCodeFlowConfig);
     oauthService.setupAutomaticSilentRefresh();
     oauthService.loadDiscoveryDocumentAndLogin().then(() => {
