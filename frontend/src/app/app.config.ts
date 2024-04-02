@@ -16,12 +16,14 @@ export const authCodeFlowConfig: AuthConfig = {
 }
 
 function initializeOAuth(oauthService: OAuthService): Promise<void> {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     oauthService.configure(authCodeFlowConfig);
     oauthService.setupAutomaticSilentRefresh();
     oauthService.loadDiscoveryDocumentAndLogin().then(() => {
       resolve();
-    });
+    }).catch(reason => {
+      reject(reason);
+    })
   });
 }
 
