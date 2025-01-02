@@ -1,6 +1,6 @@
 package com.rslima.ricash.ledgers;
 
-import java.math.BigDecimal;
+import java.util.Optional;
 
-public record TransactionEntry(String accountId, BigDecimal amount, String currency) {
+public record TransactionEntry(String accountId, TransactionEntryType type, MonetaryAmount amount, Optional<MonetaryAmount> toAmount) {
 }
