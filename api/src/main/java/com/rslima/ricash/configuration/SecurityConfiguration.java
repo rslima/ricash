@@ -14,8 +14,10 @@ public class SecurityConfiguration {
         return http.
                 authorizeHttpRequests(authorizeRequests ->
                         authorizeRequests
-                                .requestMatchers("/api/v1/users").permitAll()
+
                                 .anyRequest().authenticated())
+                .oauth2Login(login ->
+                        login.loginPage("/oauth2/authorization/keycloak"))
                 .build();
     }
 }

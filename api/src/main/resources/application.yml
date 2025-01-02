@@ -6,3 +6,19 @@ spring:
     url: jdbc:postgresql://localhost:5432/postgres
     username: ricash
     password: secret
+  security:
+    oauth2:
+      client:
+        registration:
+          keycloak:
+            client-id: ricash
+            client-secret: utA2I1EQlip4ArkyE6HWtULYKRX7cmYg
+            scope:
+              - openid
+              - profile
+              - email
+            redirect-uri: http://localhost:8080/login/oauth2/code/keycloak
+        provider:
+          keycloak:
+            issuer-uri: http://localhost:9180/realms/Ricash
+
