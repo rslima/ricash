@@ -12,7 +12,6 @@ spring:
         registration:
           keycloak:
             client-id: ricash
-            client-secret: utA2I1EQlip4ArkyE6HWtULYKRX7cmYg
             scope:
               - openid
               - profile
