@@ -2,7 +2,7 @@ import {APP_INITIALIZER, ApplicationConfig} from '@angular/core';
 import { provideRouter } from '@angular/router';
 
 import { routes } from './app.routes';
-import {provideHttpClient} from "@angular/common/http";
+import { provideHttpClient } from "@angular/common/http";
 import {AuthConfig, OAuthService, provideOAuthClient} from "angular-oauth2-oidc";
 
 
