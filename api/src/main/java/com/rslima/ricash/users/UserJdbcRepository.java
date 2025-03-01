@@ -1,0 +1,206 @@
+package com.rslima.ricash.users;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.jetbrains.annotations.NotNull;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
+import org.springframework.jdbc.core.SimplePropertyRowMapper;
+import org.springframework.jdbc.core.SingleColumnRowMapper;
+import org.springframework.jdbc.core.simple.JdbcClient;
+
+import java.time.Instant;
+import java.util.List;
+import java.util.Optional;
+
+import static java.util.stream.Collectors.groupingBy;
+import static java.util.stream.Collectors.mapping;
+import static java.util.stream.Collectors.toList;
+
+
+@RequiredArgsConstructor
+@Slf4j
+public class UserJdbcRepository implements UserRepository {
+    private final JdbcClient jdbcClient;
+
+    @Override
+    public Page<User> list(@NotNull Pageable pageable) {
+        
+        final String limit;
+        final String offset;
+        
+        if (pageable.isUnpaged()) {
+            limit = "ALL";
+            offset = "0";
+        } else {
+            limit = String.valueOf(pageable.getPageSize());
+            offset = String.valueOf(pageable.getOffset());
+        }
+
+        final var usersList = jdbcClient.sql("""
+                        SELECT
+                            *
+                        FROM
+                            ricash.public.users
+                        ORDER BY
+                            id
+                        limit :limit
+                        offset :offset
+                        """)
+                .param("limit", limit)
+                .param("offset", offset)
+                .query(new SimplePropertyRowMapper<>(UserRow.class))
+                .list();
+
+        final var userIds = usersList.stream().map(UserRow::id).toList();
+
+        final var userLedgers = jdbcClient
+                .sql("""
+                        SELECT
+                            user_id,
+                            id ledger_id
+                        FROM
+                            ricash.public.ledgers
+                        WHERE
+                            user_id in :userIds
+                        """)
+                .param("userIds", userIds)
+                .query(new SimplePropertyRowMapper<>(UserLedger.class))
+                .stream().collect(groupingBy(UserLedger::userId, mapping(UserLedger::ledgerId, toList())));
+
+        final var userRoles = jdbcClient
+                .sql("""
+                        SELECT
+                            user_roles.user_id,
+                            roles.id AS r_id,
+                            roles.name AS role_name,
+                            roles.description,
+                            roles.created_at AS role_created_at
+                        FROM
+                            ricash.public.user_roles
+                        JOIN
+                            ricash.public.roles ON user_roles.role_id = roles.id
+                        WHERE
+                            user_roles.user_id in :userIds
+                        """)
+                .param("userIds", userIds)
+                .query(new SimplePropertyRowMapper<>(RoleAndUserId.class))
+                .stream()
+                .collect(groupingBy(RoleAndUserId::userId, mapping(role -> new Role(
+                        role.rId(),
+                        role.roleName(),
+                        role.description(),
+                        role.roleCreatedAt()), toList())));
+
+
+        final var users = usersList.stream()
+                .map(userRow -> new User(
+                        userRow.id(),
+                        userRow.username(),
+                        userRow.email(),
+                        userRow.password(),
+                        userRow.salt(),
+                        UserStatus.valueOf(userRow.status()),
+                        userRow.createdAt(),
+                        userLedgers.getOrDefault(userRow.id(), List.of()),
+                        userRoles.getOrDefault(userRow.id(), List.of())))
+                .toList();
+
+        final var totalUsers = jdbcClient.sql("SELECT COUNT(*) FROM ricash.public.users").query(Long.class).single();
+
+        return new PageImpl<>(users, pageable, totalUsers);
+    }
+    
+    record UserRow(String id, String username, String email, String password, String salt, String status, Instant createdAt) {}
+    
+    record UserLedger(String userId, String ledgerId) {}
+
+    record RoleAndUserId(String userId, String rId, String roleName, String description, Instant roleCreatedAt) {}
+
+    @Override
+    public Optional<User> findById(String id) {
+
+        final var userRoles = jdbcClient
+                .sql("""
+                     SELECT
+                         users.id u_id,
+                         users.username,
+                         users.password,
+                         users.salt,
+                         users.status,
+                         users.email,
+                         users.created_at user_created_at,
+                         roles.id r_id,
+                         roles.name role_name,
+                         roles.description,
+                         roles.created_at role_created_at
+                     FROM
+                         ricash.public.users
+                     LEFT JOIN
+                             ricash.public.user_roles ON
+                                 users.id = user_roles.user_id
+                     JOIN
+                             ricash.public.roles ON
+                                 user_roles.role_id = roles.id
+                     WHERE
+                         users.id = :id
+                     ORDER BY
+                         users.id""")
+                .param("id", id)
+                .query(new SimplePropertyRowMapper<>(UserRole.class))
+                .list();
+
+        if (userRoles.isEmpty()) {
+            return Optional.empty();
+        }
+
+        final var firstUserRole = userRoles.getFirst();
+
+        final var roles = userRoles.stream()
+                .map(ur -> new Role(
+                        ur.rId(),
+                        ur.roleName(),
+                        ur.description(),
+                        ur.roleCreatedAt()))
+                .toList();
+
+        final var ledgers = jdbcClient
+                .sql("""
+                     SELECT
+                         id
+                     FROM
+                         ricash.public.ledgers
+                     WHERE
+                         user_id = :userId""")
+                .param("userId", id)
+                .query(new SingleColumnRowMapper<>(String.class))
+                .list();
+
+        return Optional.of(new User(
+                firstUserRole.uId(),
+                firstUserRole.username(),
+                firstUserRole.email(),
+                firstUserRole.password(),
+                firstUserRole.salt(),
+                UserStatus.valueOf(firstUserRole.status()),
+                firstUserRole.createdAt(),
+                ledgers,
+                roles));
+    }
+
+    record UserRole(
+            String uId,
+            String username,
+            String password,
+            String salt,
+            String status,
+            String email,
+            Instant createdAt,
+            String rId,
+            String roleName,
+            String description,
+            Instant roleCreatedAt) {}
+
+}
+
