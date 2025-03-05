@@ -37,13 +37,13 @@ public class UserJdbcRepository implements UserRepository {
                                     ricash.public.users
                                 """) :
                         jdbcClient.sql("""
-                                        select
-                                            *
-                                        from
-                                            ricash.public.users
-                                        limit :limit
-                                        offset :offset
-                                        """)
+                                select
+                                    *
+                                from
+                                    ricash.public.users
+                                limit :limit
+                                offset :offset
+                                """)
                                 .param("limit", pageable.getPageSize())
                                 .param("offset", pageable.getOffset());
 
@@ -55,16 +55,15 @@ public class UserJdbcRepository implements UserRepository {
 
         final Map<String, List<String>> userLedgers =
                 !usersList.isEmpty() ?
-                        jdbcClient
-                                .sql("""
-                                        SELECT
-                                            user_id,
-                                            id ledger_id
-                                        FROM
-                                            ricash.public.ledgers
-                                        WHERE
-                                            user_id = any(:userIds)
-                                        """)
+                        jdbcClient.sql("""
+                                SELECT
+                                    user_id,
+                                    id ledger_id
+                                FROM
+                                    ricash.public.ledgers
+                                WHERE
+                                    user_id = any(:userIds)
+                                """)
                                 .param("userIds", userIds)
                                 .query(new SimplePropertyRowMapper<>(UserLedger.class))
                                 .stream().collect(groupingBy(UserLedger::userId, mapping(UserLedger::ledgerId, toList())))
@@ -72,21 +71,20 @@ public class UserJdbcRepository implements UserRepository {
 
         final Map<String, List<Role>> userRoles =
                 !usersList.isEmpty() ?
-                        jdbcClient
-                                .sql("""
-                                        SELECT
-                                            user_roles.user_id,
-                                            roles.id AS r_id,
-                                            roles.name AS role_name,
-                                            roles.description,
-                                            roles.created_at AS role_created_at
-                                        FROM
-                                            ricash.public.user_roles
-                                        JOIN
-                                            ricash.public.roles ON user_roles.role_id = roles.id
-                                        WHERE
-                                            user_roles.user_id = any(:userIds)
-                                        """)
+                        jdbcClient.sql("""
+                                SELECT
+                                    user_roles.user_id,
+                                    roles.id AS r_id,
+                                    roles.name AS role_name,
+                                    roles.description,
+                                    roles.created_at AS role_created_at
+                                FROM
+                                    ricash.public.user_roles
+                                JOIN
+                                    ricash.public.roles ON user_roles.role_id = roles.id
+                                WHERE
+                                    user_roles.user_id = any(:userIds)
+                                """)
                                 .param("userIds", userIds)
                                 .query(new SimplePropertyRowMapper<>(RoleAndUserId.class))
                                 .stream()
@@ -129,8 +127,7 @@ public class UserJdbcRepository implements UserRepository {
     @Override
     public Optional<User> findById(String id) {
 
-        final var userRoles = jdbcClient
-                .sql("""
+        final var userRoles = jdbcClient.sql("""
                         SELECT
                             users.id u_id,
                             users.username,
@@ -154,7 +151,8 @@ public class UserJdbcRepository implements UserRepository {
                         WHERE
                             users.id = :id
                         ORDER BY
-                            users.id""")
+                            users.id
+                        """)
                 .param("id", id)
                 .query(new SimplePropertyRowMapper<>(UserRole.class))
                 .list();
@@ -180,7 +178,8 @@ public class UserJdbcRepository implements UserRepository {
                         FROM
                             ricash.public.ledgers
                         WHERE
-                            user_id = :userId""")
+                            user_id = :userId
+                        """)
                 .param("userId", id)
                 .query(new SingleColumnRowMapper<>(String.class))
                 .list();
