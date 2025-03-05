@@ -12,6 +12,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static java.util.stream.Collectors.groupingBy;
@@ -26,72 +27,75 @@ public class UserJdbcRepository implements UserRepository {
 
     @Override
     public Page<User> list(@NotNull Pageable pageable) {
-        
-        final String limit;
-        final String offset;
-        
-        if (pageable.isUnpaged()) {
-            limit = "ALL";
-            offset = "0";
-        } else {
-            limit = String.valueOf(pageable.getPageSize());
-            offset = String.valueOf(pageable.getOffset());
-        }
 
-        final var usersList = jdbcClient.sql("""
-                        SELECT
-                            *
-                        FROM
-                            ricash.public.users
-                        ORDER BY
-                            id
-                        limit :limit
-                        offset :offset
-                        """)
-                .param("limit", limit)
-                .param("offset", offset)
+        final var querySpec =
+                pageable.isUnpaged() ?
+                        jdbcClient.sql("""
+                                select
+                                    *
+                                from
+                                    ricash.public.users
+                                """) :
+                        jdbcClient.sql("""
+                                        select
+                                            *
+                                        from
+                                            ricash.public.users
+                                        limit :limit
+                                        offset :offset
+                                        """)
+                                .param("limit", pageable.getPageSize())
+                                .param("offset", pageable.getOffset());
+
+        final var usersList = querySpec
                 .query(new SimplePropertyRowMapper<>(UserRow.class))
                 .list();
 
         final var userIds = usersList.stream().map(UserRow::id).toList();
 
-        final var userLedgers = jdbcClient
-                .sql("""
-                        SELECT
-                            user_id,
-                            id ledger_id
-                        FROM
-                            ricash.public.ledgers
-                        WHERE
-                            user_id in :userIds
-                        """)
-                .param("userIds", userIds)
-                .query(new SimplePropertyRowMapper<>(UserLedger.class))
-                .stream().collect(groupingBy(UserLedger::userId, mapping(UserLedger::ledgerId, toList())));
+        final Map<String, List<String>> userLedgers =
+                !usersList.isEmpty() ?
+                        jdbcClient
+                                .sql("""
+                                        SELECT
+                                            user_id,
+                                            id ledger_id
+                                        FROM
+                                            ricash.public.ledgers
+                                        WHERE
+                                            user_id = any(:userIds)
+                                        """)
+                                .param("userIds", userIds)
+                                .query(new SimplePropertyRowMapper<>(UserLedger.class))
+                                .stream().collect(groupingBy(UserLedger::userId, mapping(UserLedger::ledgerId, toList())))
+                        : Map.of();
 
-        final var userRoles = jdbcClient
-                .sql("""
-                        SELECT
-                            user_roles.user_id,
-                            roles.id AS r_id,
-                            roles.name AS role_name,
-                            roles.description,
-                            roles.created_at AS role_created_at
-                        FROM
-                            ricash.public.user_roles
-                        JOIN
-                            ricash.public.roles ON user_roles.role_id = roles.id
-                        WHERE
-                            user_roles.user_id in :userIds
-                        """)
-                .param("userIds", userIds)
-                .query(new SimplePropertyRowMapper<>(RoleAndUserId.class))
-                .stream()
-                .collect(groupingBy(RoleAndUserId::userId, mapping(role -> new Role(
-                        role.rId(),
-                        role.roleName(),
-                        role.description(),
-                        role.roleCreatedAt()), toList())));
+        final Map<String, List<Role>> userRoles =
+                !usersList.isEmpty() ?
+                        jdbcClient
+                                .sql("""
+                                        SELECT
+                                            user_roles.user_id,
+                                            roles.id AS r_id,
+                                            roles.name AS role_name,
+                                            roles.description,
+                                            roles.created_at AS role_created_at
+                                        FROM
+                                            ricash.public.user_roles
+                                        JOIN
+                                            ricash.public.roles ON user_roles.role_id = roles.id
+                                        WHERE
+                                            user_roles.user_id = any(:userIds)
+                                        """)
+                                .param("userIds", userIds)
+                                .query(new SimplePropertyRowMapper<>(RoleAndUserId.class))
+                                .stream()
+                                .collect(groupingBy(RoleAndUserId::userId, mapping(role -> new Role(
+                                        role.rId(),
+                                        role.roleName(),
+                                        role.description(),
+                                        role.roleCreatedAt()), toList()))) :
+                        Map.of();
 
 
         final var users = usersList.stream()
@@ -111,42 +115,46 @@ public class UserJdbcRepository implements UserRepository {
 
         return new PageImpl<>(users, pageable, totalUsers);
     }
-    
-    record UserRow(String id, String username, String email, String password, String salt, String status, Instant createdAt) {}
-    
-    record UserLedger(String userId, String ledgerId) {}
 
-    record RoleAndUserId(String userId, String rId, String roleName, String description, Instant roleCreatedAt) {}
+    record UserRow(String id, String username, String email, String password, String salt, String status,
+                   Instant createdAt) {
+    }
+
+    record UserLedger(String userId, String ledgerId) {
+    }
+
+    record RoleAndUserId(String userId, String rId, String roleName, String description, Instant roleCreatedAt) {
+    }
 
     @Override
     public Optional<User> findById(String id) {
 
         final var userRoles = jdbcClient
                 .sql("""
-                     SELECT
-                         users.id u_id,
-                         users.username,
-                         users.password,
-                         users.salt,
-                         users.status,
-                         users.email,
-                         users.created_at user_created_at,
-                         roles.id r_id,
-                         roles.name role_name,
-                         roles.description,
-                         roles.created_at role_created_at
-                     FROM
-                         ricash.public.users
-                     LEFT JOIN
-                             ricash.public.user_roles ON
-                                 users.id = user_roles.user_id
-                     JOIN
-                             ricash.public.roles ON
-                                 user_roles.role_id = roles.id
-                     WHERE
-                         users.id = :id
-                     ORDER BY
-                         users.id""")
+                        SELECT
+                            users.id u_id,
+                            users.username,
+                            users.password,
+                            users.salt,
+                            users.status,
+                            users.email,
+                            users.created_at user_created_at,
+                            roles.id r_id,
+                            roles.name role_name,
+                            roles.description,
+                            roles.created_at role_created_at
+                        FROM
+                            ricash.public.users
+                        LEFT JOIN
+                                ricash.public.user_roles ON
+                                    users.id = user_roles.user_id
+                        JOIN
+                                ricash.public.roles ON
+                                    user_roles.role_id = roles.id
+                        WHERE
+                            users.id = :id
+                        ORDER BY
+                            users.id""")
                 .param("id", id)
                 .query(new SimplePropertyRowMapper<>(UserRole.class))
                 .list();
@@ -167,12 +175,12 @@ public class UserJdbcRepository implements UserRepository {
 
         final var ledgers = jdbcClient
                 .sql("""
-                     SELECT
-                         id
-                     FROM
-                         ricash.public.ledgers
-                     WHERE
-                         user_id = :userId""")
+                        SELECT
+                            id
+                        FROM
+                            ricash.public.ledgers
+                        WHERE
+                            user_id = :userId""")
                 .param("userId", id)
                 .query(new SingleColumnRowMapper<>(String.class))
                 .list();
@@ -200,7 +208,8 @@ public class UserJdbcRepository implements UserRepository {
             String rId,
             String roleName,
             String description,
-            Instant roleCreatedAt) {}
+            Instant roleCreatedAt) {
+    }
 
 }
 

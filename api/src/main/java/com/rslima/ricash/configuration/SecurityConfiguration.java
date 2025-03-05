@@ -6,6 +6,8 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.web.SecurityFilterChain;
 
+import static org.springframework.http.HttpMethod.GET;
+
 @EnableWebSecurity
 @Configuration
 public class SecurityConfiguration {
@@ -14,10 +16,12 @@ public class SecurityConfiguration {
         return http.
                 authorizeHttpRequests(authorizeRequests ->
                         authorizeRequests
-
+                                .requestMatchers(GET,"/").permitAll()
                                 .anyRequest().authenticated())
                 .oauth2Login(login ->
-                        login.loginPage("/oauth2/authorization/keycloak"))
+                        login.loginPage("/oauth2/authorization/keycloak")
+                                .defaultSuccessUrl("/api/v1/users"))
+
                 .build();
     }
 }

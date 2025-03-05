@@ -21,7 +21,10 @@ public class UserController {
     }
 
     @GetMapping
-    Page<User> listUsers(@RequestParam Pageable pageable) {
+    Page<User> listUsers(@RequestParam(required = false) Pageable pageable) {
+        if (pageable == null) {
+            pageable = Pageable.unpaged();
+        }
         return userService.listUsers(pageable);
     }
 
