@@ -2,6 +2,8 @@ package com.rslima.ricash.users;
 
 import com.toedter.spring.hateoas.jsonapi.JsonApiError;
 import com.toedter.spring.hateoas.jsonapi.JsonApiErrors;
+import org.jetbrains.annotations.NotNull;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.hateoas.EntityModel;
 import org.springframework.hateoas.PagedModel;
@@ -36,6 +38,10 @@ public class UserController {
 
         var userResources = userService.listUsers(pageable).map(this::toUserResource);
 
+        return buildPagedUserResponse(page, size, userResources);
+    }
+
+    private static @NotNull PagedModel<EntityModel<UserResource>> buildPagedUserResponse(int page, int size, Page<EntityModel<UserResource>> userResources) {
         var entityModels = PagedModel.of(userResources.getContent(),
                 new PagedModel.PageMetadata(
                         userResources.getSize(),
@@ -44,15 +50,14 @@ public class UserController {
                         userResources.getTotalPages()));
 
         entityModels.add(linkTo(methodOn(UserController.class).listUsers(page, size)).withSelfRel());
-        entityModels.add(linkTo(methodOn(UserController.class).listUsers(0, 20)).withRel("first"));
-        entityModels.add(linkTo(methodOn(UserController.class).listUsers(userResources.getTotalPages() - 1, 20)).withRel("last"));
+        entityModels.add(linkTo(methodOn(UserController.class).listUsers(0, size)).withRel("first"));
+        entityModels.add(linkTo(methodOn(UserController.class).listUsers(userResources.getTotalPages() - 1, size)).withRel("last"));
         if (userResources.hasNext()) {
-            entityModels.add(linkTo(methodOn(UserController.class).listUsers(userResources.getNumber() + 1, 20)).withRel("next"));
+            entityModels.add(linkTo(methodOn(UserController.class).listUsers(userResources.getNumber() + 1, size)).withRel("next"));
         }
         if (userResources.hasPrevious()) {
-            entityModels.add(linkTo(methodOn(UserController.class).listUsers(userResources.getNumber() - 1, 20)).withRel("prev"));
+            entityModels.add(linkTo(methodOn(UserController.class).listUsers(userResources.getNumber() - 1, size)).withRel("prev"));
         }
-
         return entityModels;
     }
 
