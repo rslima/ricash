@@ -3,7 +3,6 @@ package com.rslima.ricash.users;
 import com.toedter.spring.hateoas.jsonapi.JsonApiError;
 import com.toedter.spring.hateoas.jsonapi.JsonApiErrors;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.hateoas.CollectionModel;
 import org.springframework.hateoas.EntityModel;
 import org.springframework.hateoas.PagedModel;
 import org.springframework.http.ResponseEntity;
@@ -29,15 +28,33 @@ public class UserController {
     }
 
     @GetMapping
-    CollectionModel<?> listUsers(
+    PagedModel<?> listUsers(
             @RequestParam(name = "page[number]", required = false, defaultValue = "0") int page,
             @RequestParam(name = "page[size]", required = false, defaultValue = "20") int size) {
 
         final var pageable = PageRequest.of(page, size);
 
         var userResources = userService.listUsers(pageable).map(this::toUserResource);
-        CollectionModel<EntityModel<UserResource>> entityModels = PagedModel.of(userResources);
+        var entityModels = PagedModel.of(userResources.getContent(),
+                new PagedModel.PageMetadata(
+                        userResources.getSize(),
+                        userResources.getNumber(),
+                        userResources.getTotalElements(),
+                        userResources.getTotalPages()));
+
         entityModels.add(linkTo(methodOn(UserController.class).listUsers(page, size)).withSelfRel());
+        entityModels.add(linkTo(methodOn(UserController.class).listUsers(0, 20)).withRel("first"));
+        entityModels.add(linkTo(methodOn(UserController.class).listUsers(userResources.getTotalPages() - 1, 20)).withRel("last"));
+        if (userResources.hasNext()) {
+            entityModels.add(linkTo(methodOn(UserController.class).listUsers(userResources.getNumber() + 1, 20)).withRel("next"));
+        }
+        if (userResources.hasPrevious()) {
+            entityModels.add(linkTo(methodOn(UserController.class).listUsers(userResources.getNumber() - 1, 20)).withRel("prev"));
+        }
+
+
+
+
         return entityModels;
     }
 
