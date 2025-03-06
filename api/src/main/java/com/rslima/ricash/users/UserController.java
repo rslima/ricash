@@ -28,13 +28,14 @@ public class UserController {
     }
 
     @GetMapping
-    PagedModel<?> listUsers(
+    PagedModel<EntityModel<UserResource>> listUsers(
             @RequestParam(name = "page[number]", required = false, defaultValue = "0") int page,
             @RequestParam(name = "page[size]", required = false, defaultValue = "20") int size) {
 
         final var pageable = PageRequest.of(page, size);
 
         var userResources = userService.listUsers(pageable).map(this::toUserResource);
+
         var entityModels = PagedModel.of(userResources.getContent(),
                 new PagedModel.PageMetadata(
                         userResources.getSize(),
@@ -51,9 +52,6 @@ public class UserController {
         if (userResources.hasPrevious()) {
             entityModels.add(linkTo(methodOn(UserController.class).listUsers(userResources.getNumber() - 1, 20)).withRel("prev"));
         }
-
-
-
 
         return entityModels;
     }
