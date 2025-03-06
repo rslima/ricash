@@ -16,7 +16,7 @@ public class SecurityConfiguration {
         return http.
                 authorizeHttpRequests(authorizeRequests ->
                         authorizeRequests
-                                .requestMatchers(GET,"/").permitAll()
+                                .requestMatchers(GET,"/index.html").permitAll()
                                 .anyRequest().authenticated())
                 .oauth2Login(login ->
                         login.loginPage("/oauth2/authorization/keycloak")

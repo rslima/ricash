@@ -62,7 +62,7 @@ public class UserJdbcRepository implements UserRepository {
                                 FROM
                                     ricash.public.ledgers
                                 WHERE
-                                    user_id = any(:userIds)
+                                    user_id in (:userIds)
                                 """)
                                 .param("userIds", userIds)
                                 .query(new SimplePropertyRowMapper<>(UserLedger.class))
@@ -83,7 +83,7 @@ public class UserJdbcRepository implements UserRepository {
                                 JOIN
                                     ricash.public.roles ON user_roles.role_id = roles.id
                                 WHERE
-                                    user_roles.user_id = any(:userIds)
+                                    user_roles.user_id in (:userIds)
                                 """)
                                 .param("userIds", userIds)
                                 .query(new SimplePropertyRowMapper<>(RoleAndUserId.class))
@@ -191,7 +191,7 @@ public class UserJdbcRepository implements UserRepository {
                 firstUserRole.password(),
                 firstUserRole.salt(),
                 UserStatus.valueOf(firstUserRole.status()),
-                firstUserRole.createdAt(),
+                firstUserRole.userCreatedAt(),
                 ledgers,
                 roles));
     }
@@ -203,7 +203,7 @@ public class UserJdbcRepository implements UserRepository {
             String salt,
             String status,
             String email,
-            Instant createdAt,
+            Instant userCreatedAt,
             String rId,
             String roleName,
             String description,
