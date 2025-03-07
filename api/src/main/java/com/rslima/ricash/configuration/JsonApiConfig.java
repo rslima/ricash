@@ -10,7 +10,6 @@ import org.springframework.context.annotation.Configuration;
 public class JsonApiConfig {
     @Bean
     public JsonApiConfiguration jsonApiConfiguration(ObjectMapper objectMapper) {
-
         return new JsonApiConfiguration()
                 .withObjectMapperCustomizer(om -> om.registerModule(new JavaTimeModule()));
     }

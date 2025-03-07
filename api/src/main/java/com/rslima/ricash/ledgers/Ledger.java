@@ -1,7 +1,5 @@
 package com.rslima.ricash.ledgers;
 
-import com.rslima.ricash.accounts.Account;
-
 import java.time.Instant;
 import java.util.List;
 

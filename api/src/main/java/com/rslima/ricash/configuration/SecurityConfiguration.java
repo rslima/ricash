@@ -20,7 +20,7 @@ public class SecurityConfiguration {
                                 .anyRequest().authenticated())
                 .oauth2Login(login ->
                         login.loginPage("/oauth2/authorization/keycloak")
-                                .defaultSuccessUrl("/api/v1/users"))
+                                .defaultSuccessUrl("/"))
 
                 .build();
     }
