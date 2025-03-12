@@ -20,6 +20,9 @@ spring:
         provider:
           keycloak:
             issuer-uri: http://localhost:9180/realms/Ricash
+      resourceserver:
+        jwt:
+          issuer-uri: http://localhost:9180/realms/Ricash
   mvc:
     problemdetails:
       enabled: on
