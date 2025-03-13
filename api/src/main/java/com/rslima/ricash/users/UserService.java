@@ -9,4 +9,6 @@ public interface UserService {
     Page<User> listUsers(Pageable pageable);
 
     Optional<User> findUser(String id);
+
+    User createUser(User user);
 }

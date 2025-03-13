@@ -13,6 +13,9 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 import static com.toedter.spring.hateoas.jsonapi.MediaTypes.JSON_API_VALUE;
@@ -41,7 +44,7 @@ public class UserController {
         return buildPagedUserResponse(page, size, userResources);
     }
 
-    private static @NotNull PagedModel<EntityModel<UserResource>> buildPagedUserResponse(int page, int size, Page<EntityModel<UserResource>> userResources) {
+    private @NotNull PagedModel<EntityModel<UserResource>> buildPagedUserResponse(int page, int size, Page<EntityModel<UserResource>> userResources) {
         var entityModels = PagedModel.of(userResources.getContent(),
                 new PagedModel.PageMetadata(
                         userResources.getSize(),
@@ -65,6 +68,14 @@ public class UserController {
     EntityModel<UserResource> getUser(@PathVariable String id) {
         var userResource = userService.findUser(id).map(this::toUserResource);
         return userResource.orElseThrow(() -> new UserNotFoundException(id));
+    }
+
+    @PostMapping
+    public ResponseEntity<EntityModel<UserResource>> createUser(@RequestBody EntityModel<User> userResource) {
+
+        User createdUser = userService.createUser(userResource.getContent());
+        EntityModel<UserResource> createdUserEntity = toUserResource(createdUser);
+        return ResponseEntity.status(HttpStatus.CREATED).body(createdUserEntity);
     }
 
     private EntityModel<UserResource> toUserResource(User u) {
@@ -94,4 +105,6 @@ public class UserController {
                                 .withTitle(NOT_FOUND.getReasonPhrase())
                                 .withDetail(ex.getMessage())));
     }
+    
+    
 }
