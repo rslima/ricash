@@ -22,4 +22,11 @@ public class UserServiceBean implements UserService {
     public Optional<User> findUser(String id) {
         return userRepository.findById(id);
     }
+
+    @Override
+    public User createUser(User user) {
+        return user;
+    }
+
+
 }
