@@ -3,6 +3,9 @@ package com.rslima.ricash.ledgers;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
 import java.time.Instant;
@@ -20,45 +23,47 @@ public class LedgerJdbcRepository implements LedgerRepository {
     private final JdbcClient jdbcClient;
 
     @Override
-    public List<Ledger> listAll(String userId) {
-        final var ledgersAndAccounts = jdbcClient.sql(
-                        """
-                                SELECT
-                                    l.id l_id,
-                                    l.user_id,
-                                    l.name ledger_name,
-                                    l.description ledger_description,
-                                    l.currency ledger_currency,
-                                    l.created_at ledger_created_at,
-                                    a.id account_id,
-                                    a.parent_account_id,
-                                    a.name account_name,
-                                    a.description account_description,
-                                    a.currency account_currency,
-                                    a.status,
-                                    a.type,
-                                    a.created_at account_created_at
-                                FROM
-                                    ledgers l
-                                LEFT JOIN
-                                    public.accounts a
-                                ON
-                                    l.id = a.ledger_id
-                                WHERE
-                                    user_id = :userId""")
+    public Page<Ledger> listUserLedgers(String userId, PageRequest pageRequest) {
+        final var ledgersAndAccounts = jdbcClient.sql("""
+                           SELECT
+                               l.id l_id,
+                               l.user_id,
+                               l.name ledger_name,
+                               l.description ledger_description,
+                               l.currency ledger_currency,
+                               l.created_at ledger_created_at,
+                               a.id account_id,
+                               a.parent_account_id,
+                               a.name account_name,
+                               a.description account_description,
+                               a.currency account_currency,
+                               a.status,
+                               a.type,
+                               a.created_at account_created_at
+                           FROM
+                               ledgers l
+                           LEFT JOIN
+                               public.accounts a
+                           ON
+                               l.id = a.ledger_id
+                           WHERE
+                               user_id = :userId""")
                 .param("userId", userId)
                 .query(LedgerAndAccount.class)
                 .list();
 
         final var dbLedgers = ledgersAndAccounts.stream().map(this::toDBLedgerAndAccount).toList();
 
-        return dbLedgers.stream()
+        List<Ledger> result = dbLedgers.stream()
                 .collect(groupingBy(DBLedgerAndAccount::ledger))
                 .entrySet().stream()
                 .map(e -> Map.entry(e.getKey(), e.getValue().stream().map(DBLedgerAndAccount::account).toList()))
                 .map(e -> Map.entry(e.getKey(), buildAccountForest(e.getValue())))
                 .map(e -> toLedger(e.getKey(), e.getValue()))
                 .toList();
+        return new PageImpl<>(result,
+                pageRequest,
+                result.size());
     }
 
     private DBLedgerAndAccount toDBLedgerAndAccount(LedgerAndAccount la) {

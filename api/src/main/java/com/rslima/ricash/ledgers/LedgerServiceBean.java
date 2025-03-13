@@ -2,8 +2,9 @@ package com.rslima.ricash.ledgers;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 
-import java.util.List;
 import java.util.Optional;
 
 @RequiredArgsConstructor
@@ -12,8 +13,8 @@ public class LedgerServiceBean implements LedgerService {
     private final LedgerRepository ledgerRepository;
 
     @Override
-    public List<Ledger> list(String userId) {
-        return ledgerRepository.listAll(userId);
+    public Page<Ledger> listUserLedgers(String userId, PageRequest pageRequest) {
+        return ledgerRepository.listUserLedgers(userId, pageRequest);
     }
 
     @Override
