@@ -24,6 +24,7 @@ public class LedgerJdbcRepository implements LedgerRepository {
 
     @Override
     public Page<Ledger> listUserLedgers(String userId, PageRequest pageRequest) {
+
         final var ledgersAndAccounts = jdbcClient.sql("""
                            SELECT
                                l.id l_id,
@@ -41,14 +42,21 @@ public class LedgerJdbcRepository implements LedgerRepository {
                                a.type,
                                a.created_at account_created_at
                            FROM
-                               ledgers l
+                               (SELECT
+                                    *
+                                FROM
+                                    ledgers
+                                WHERE
+                                    user_id = :userId
+                                OFFSET :offset
+                                LIMIT :limit) l
                            LEFT JOIN
                                public.accounts a
                            ON
-                               l.id = a.ledger_id
-                           WHERE
-                               user_id = :userId""")
+                               l.id = a.ledger_id""")
                 .param("userId", userId)
+                .param("offset", pageRequest.getOffset())
+                .param("limit", pageRequest.getPageSize())
                 .query(LedgerAndAccount.class)
                 .list();
 
