@@ -1,5 +1,6 @@
 package com.rslima.ricash.ledgers;
 
+import io.vavr.Tuple2;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
@@ -57,15 +58,15 @@ public class LedgerJdbcRepository implements LedgerRepository {
                 .param("userId", userId)
                 .param("offset", pageRequest.getOffset())
                 .param("limit", pageRequest.getPageSize())
-                .query(LedgerAndAccount.class)
+                .query(DBLedgerAndAccount.class)
                 .list();
 
-        final var dbLedgers = ledgersAndAccounts.stream().map(this::toDBLedgerAndAccount).toList();
+        final var dbLedgers = ledgersAndAccounts.stream().map(this::toTupleLedgerAndAccount).toList();
 
         List<Ledger> result = dbLedgers.stream()
-                .collect(groupingBy(DBLedgerAndAccount::ledger))
+                .collect(groupingBy(Tuple2::_1))
                 .entrySet().stream()
-                .map(e -> Map.entry(e.getKey(), e.getValue().stream().map(DBLedgerAndAccount::account).toList()))
+                .map(e -> Map.entry(e.getKey(), e.getValue().stream().map(Tuple2::_2).toList()))
                 .map(e -> Map.entry(e.getKey(), buildAccountForest(e.getValue())))
                 .map(e -> toLedger(e.getKey(), e.getValue()))
                 .toList();
@@ -74,7 +75,30 @@ public class LedgerJdbcRepository implements LedgerRepository {
                 result.size());
     }
 
-    private DBLedgerAndAccount toDBLedgerAndAccount(LedgerAndAccount la) {
+    record DBLedgerAndAccount(String lId, String userId, String ledgerName, String ledgerDescription,
+                              String ledgerCurrency, Instant ledgerCreatedAt,
+                              String accountId, String parentAccountId, String accountName, String accountDescription,
+                              String accountCurrency, String status, String type,
+                              Instant accountCreatedAt) {
+    }
+
+    record DBLedger(String id, String userId, String name, String description, String currency, Instant createdAt) {
+    }
+
+    record DBAccount(String id, String ledgerId, String parentAccountId, String name, String description,
+                     String currency,
+                     String type, String status, Instant createdAt) {
+    }
+
+    private Tuple2<DBLedger, DBAccount> toTupleLedgerAndAccount(DBLedgerAndAccount la) {
+        final var dbLedger = new DBLedger(
+                la.lId(),
+                la.userId(),
+                la.ledgerName(),
+                la.ledgerDescription(),
+                la.ledgerCurrency(),
+                la.ledgerCreatedAt());
+
         final var account = new DBAccount(
                 la.accountId(),
                 la.lId(),
@@ -86,30 +110,8 @@ public class LedgerJdbcRepository implements LedgerRepository {
                 la.status(),
                 la.accountCreatedAt());
 
-        return new DBLedgerAndAccount(
-                new DBLedger(
-                        la.lId(),
-                        la.userId(),
-                        la.ledgerName(),
-                        la.ledgerDescription(),
-                        la.ledgerCurrency(),
-                        la.ledgerCreatedAt()),
-                account);
+        return new Tuple2<>(dbLedger, account);
     }
-
-
-
-    record DBLedgerAndAccount(DBLedger ledger, DBAccount account) {}
-
-
-    record LedgerAndAccount(String lId, String userId, String ledgerName, String ledgerDescription,
-                            String ledgerCurrency, Instant ledgerCreatedAt,
-                            String accountId, String parentAccountId, String accountName, String accountDescription,
-                            String accountCurrency, String status, String type,
-                            Instant accountCreatedAt) {
-    }
-
-
 
     @Override
     public Optional<Ledger> findById(String userId, String id) {
@@ -218,14 +220,5 @@ public class LedgerJdbcRepository implements LedgerRepository {
 
         return accountForest;
     }
-
-    record DBLedger(String id, String userId, String name, String description, String currency, Instant createdAt) {
-    }
-
-    record DBAccount(String id, String ledgerId, String parentAccountId, String name, String description,
-                     String currency,
-                     String type, String status, Instant createdAt) {
-    }
-
 
 }
