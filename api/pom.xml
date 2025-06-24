@@ -192,6 +192,7 @@
                             <artifactId>lombok</artifactId>
                         </exclude>
                     </excludes>
+                    <imageName>rslima/${project.artifactId}</imageName>
                 </configuration>
             </plugin>
         </plugins>
