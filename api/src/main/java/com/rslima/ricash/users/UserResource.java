@@ -1,7 +1,13 @@
 package com.rslima.ricash.users;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.rslima.ricash.ledgers.LedgerResource;
+import com.toedter.spring.hateoas.jsonapi.JsonApiId;
+import com.toedter.spring.hateoas.jsonapi.JsonApiRelationships;
+import com.toedter.spring.hateoas.jsonapi.JsonApiTypeForClass;
 import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import org.springframework.hateoas.EntityModel;
 import org.springframework.hateoas.RepresentationModel;
@@ -11,14 +17,21 @@ import java.util.List;
 
 
 @Data
+@EqualsAndHashCode(callSuper = false)
 @NoArgsConstructor
 @AllArgsConstructor
+@JsonApiTypeForClass("users")
 public class UserResource extends RepresentationModel<UserResource> {
+    @JsonApiId
     private String id;
     private String name;
     private String email;
     private UserStatus status;
     private Instant createdAt;
-    private List<String> ledgers;
-    private List<EntityModel<RoleResource>> roles;
+    @JsonIgnore
+    @JsonApiRelationships("ledgers")
+    private List<LedgerResource> ledgers;
+    @JsonIgnore
+    @JsonApiRelationships("roles")
+    private List<RoleResource>   roles;
 }

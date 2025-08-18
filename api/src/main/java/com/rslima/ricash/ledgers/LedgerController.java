@@ -55,7 +55,7 @@ public class LedgerController {
         return ResponseEntity.status(NOT_FOUND).body(
                 JsonApiErrors.create().withError(
                         JsonApiError.create()
-                                .withStatus(String.valueOf(NOT_FOUND.value()))
+                                .withStatus(Integer.toString(NOT_FOUND.value()))
                                 .withTitle(NOT_FOUND.getReasonPhrase())
                                 .withDetail(ex.getMessage())));
     }
