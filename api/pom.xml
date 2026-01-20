@@ -5,7 +5,7 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.5.7</version>
+        <version>3.5.9</version>
         <relativePath/> <!-- lookup parent from the repository -->
     </parent>
     <groupId>com.rslima</groupId>
@@ -16,7 +16,7 @@
     <properties>
         <java.version>21</java.version>
         <mapstruct-version>1.6.3</mapstruct-version>
-        <vavr.version>0.10.6</vavr.version>
+        <vavr.version>0.10.7</vavr.version>
         <annotations.version>26.0.2</annotations.version>
         <lombok-mapstruct-binding.version>0.2.0</lombok-mapstruct-binding.version>
         <spring-hateoas-jsonapi.version>2.1.4</spring-hateoas-jsonapi.version>
