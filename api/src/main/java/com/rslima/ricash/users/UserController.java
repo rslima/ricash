@@ -28,6 +28,7 @@ import static org.springframework.http.HttpStatus.NOT_FOUND;
 
 @RestController @RequestMapping(value = "/api/v1/users", produces = JSON_API_VALUE) public class UserController {
     private final UserService userService;
+    private final UserMapper userMapper;
 
     public UserController(final UserService userService) {
         this.userService = userService;
@@ -92,6 +93,14 @@ import static org.springframework.http.HttpStatus.NOT_FOUND;
         return ResponseEntity.noContent().build();
     }
 
+    private EntityModel<UserResource> toEntityModel(User user) {
+        UserResource resource = userMapper.toResource(user);
+        EntityModel<UserResource> entityModel = EntityModel.of(resource);
+        entityModel.add(linkTo(methodOn(UserController.class).getUser(null, user.id())).withSelfRel());
+        return entityModel;
+    }
+
+    private PagedModel<EntityModel<UserResource>> buildPagedUserResponse(
             int page,
             int size,
             Page<EntityModel<UserResource>> userResources) {
@@ -129,24 +138,8 @@ import static org.springframework.http.HttpStatus.NOT_FOUND;
         return pagedModel;
     }
 
-    private EntityModel<UserResource> toUserResource(User u) {
-        UserResource content = new UserResource(
-                u.id(),
-                u.name(),
-                u.email(),
-                u.status(),
-                u.createdAt(),
-                u.roles()
-                        .stream()
-                        .map(r -> new RoleResource(r.id(), r.name(), r.description(), r.createdAt()))
-                        .toList());
-
-        EntityModel<UserResource> userResourceEntityModel = EntityModel.of(content);
-        userResourceEntityModel.add(linkTo(methodOn(UserController.class).getUser(u.id())).withSelfRel());
-        return userResourceEntityModel;
-    }
-
-    @ExceptionHandler public ResponseEntity<JsonApiErrors> handleUserNotFoundException(UserNotFoundException ex) {
+    @ExceptionHandler
+    public ResponseEntity<JsonApiErrors> handleUserNotFoundException(UserNotFoundException ex) {
         return ResponseEntity.status(NOT_FOUND)
                 .body(JsonApiErrors.create()
                         .withError(JsonApiError.create()
