@@ -1,6 +1,5 @@
 package com.rslima.ricash.users;
 
-import com.rslima.ricash.ledgers.Ledger;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
@@ -45,33 +44,6 @@ public class UserJdbcRepository implements UserRepository {
 
         final var userIds = usersList.stream().map(UserRow::id).toList();
 
-        final Map<String, List<Ledger>> userLedgers = !usersList.isEmpty() ? jdbcClient.sql("""
-                        SELECT
-                            user_id,
-                            id ledger_id,
-                            name ledger_name,
-                            description ledger_description,
-                            currency ledger_currency,
-                            created_at ledger_created_at
-                        FROM
-                            public.ledgers
-                        WHERE
-                            user_id in (:userIds)
-                        """)
-                .param("userIds", userIds)
-                .query(new SimplePropertyRowMapper<>(UserLedger.class))
-                .stream()
-                .collect(groupingBy(
-                        UserLedger::userId, mapping(
-                                ul -> new Ledger(
-                                        ul.ledgerId(),
-                                        ul.ledgerName(),
-                                        ul.ledgerDescription(),
-                                        ul.ledgerCurrency(),
-                                        ul.ledgerCreatedAt(),
-                                        List.of(),
-                                        List.of()), toList()))) : Map.of();
-
         final Map<String, List<Role>> userRoles = !usersList.isEmpty() ? jdbcClient.sql("""
                         SELECT
                             user_roles.user_id,
@@ -103,7 +75,6 @@ public class UserJdbcRepository implements UserRepository {
                 userRow.salt(),
                 UserStatus.valueOf(userRow.status()),
                 userRow.createdAt(),
-                userLedgers.getOrDefault(userRow.id(), List.of()),
                 userRoles.getOrDefault(userRow.id(), List.of()))).toList();
 
         final var totalUsers = jdbcClient.sql("SELECT COUNT(*) FROM public.users").query(Long.class).single();
@@ -172,19 +143,6 @@ public class UserJdbcRepository implements UserRepository {
                         .map(ur -> new Role(ur.rId(), ur.roleName(), ur.description(), ur.roleCreatedAt()))
                         .toList();
 
-        final var ledgers = jdbcClient.sql("""
-                SELECT
-                    id,
-                    name,
-                    description,
-                    currency,
-                    created_at
-                FROM
-                    public.ledgers
-                WHERE
-                    user_id = :userId
-                """).param("userId", id).query(new SimplePropertyRowMapper<>(SimpleLedger.class)).list();
-
         return Optional.of(new User(
                 firstUserRole.uId(),
                 firstUserRole.username(),
@@ -193,16 +151,6 @@ public class UserJdbcRepository implements UserRepository {
                 firstUserRole.salt(),
                 UserStatus.valueOf(firstUserRole.status()),
                 firstUserRole.userCreatedAt(),
-                ledgers.stream()
-                        .map(sl -> new Ledger(
-                                sl.id(),
-                                sl.name(),
-                                sl.description(),
-                                sl.currency(),
-                                sl.createdAt(),
-                                List.of(),
-                                List.of()))
-                        .toList(),
                 roles));
     }
 

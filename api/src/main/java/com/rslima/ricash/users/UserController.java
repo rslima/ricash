@@ -1,6 +1,5 @@
 package com.rslima.ricash.users;
 
-import com.rslima.ricash.ledgers.LedgerResource;
 import com.toedter.spring.hateoas.jsonapi.JsonApiError;
 import com.toedter.spring.hateoas.jsonapi.JsonApiErrors;
 import org.jetbrains.annotations.NotNull;
@@ -18,8 +17,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-
-import java.util.List;
 
 import static com.toedter.spring.hateoas.jsonapi.MediaTypes.JSON_API_VALUE;
 import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.linkTo;
@@ -94,9 +91,6 @@ import static org.springframework.http.HttpStatus.NOT_FOUND;
                 u.email(),
                 u.status(),
                 u.createdAt(),
-                u.ledgers().stream()
-                        .map(l -> new LedgerResource(l.id(), l.name(), l.description(), l.currency(), l.createdAt(), List.of()))
-                        .toList(),
                 u.roles()
                         .stream()
                         .map(r -> new RoleResource(r.id(), r.name(), r.description(), r.createdAt()))

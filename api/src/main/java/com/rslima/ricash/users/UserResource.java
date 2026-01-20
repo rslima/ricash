@@ -28,9 +28,6 @@ public class UserResource extends RepresentationModel<UserResource> {
     private UserStatus status;
     private Instant createdAt;
     @JsonIgnore
-    @JsonApiRelationships("ledgers")
-    private List<LedgerResource> ledgers;
-    @JsonIgnore
     @JsonApiRelationships("roles")
     private List<RoleResource>   roles;
 }
