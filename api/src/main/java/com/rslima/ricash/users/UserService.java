@@ -10,5 +10,9 @@ public interface UserService {
 
     Optional<User> findUser(String id);
 
-    User createUser(User user);
+    User createUser(CreateUserRequest request);
+
+    User updateUser(String id, UpdateUserRequest request);
+
+    void deleteUser(String id);
 }

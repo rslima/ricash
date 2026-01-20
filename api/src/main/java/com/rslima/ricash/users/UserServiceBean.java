@@ -24,9 +24,23 @@ public class UserServiceBean implements UserService {
     }
 
     @Override
-    public User createUser(User user) {
-        return user;
+    public User createUser(CreateUserRequest request) {
+        log.debug("Creating user with email: {}", request.email());
+        return userRepository.create(request);
     }
 
+    @Override
+    public User updateUser(String id, UpdateUserRequest request) {
+        log.debug("Updating user: {}", id);
+        return userRepository.update(id, request)
+                .orElseThrow(() -> new UserNotFoundException(id));
+    }
 
+    @Override
+    public void deleteUser(String id) {
+        log.debug("Deleting user: {}", id);
+        if (!userRepository.delete(id)) {
+            throw new UserNotFoundException(id);
+        }
+    }
 }

@@ -159,5 +159,64 @@ public class UserJdbcRepository implements UserRepository {
                     Instant roleCreatedAt) {
     }
 
+    @Override
+    public User create(CreateUserRequest request) {
+        final var id = java.util.UUID.randomUUID().toString();
+        final var salt = java.util.UUID.randomUUID().toString();
+        final var now = Instant.now();
+
+        jdbcClient.sql("""
+                INSERT INTO public.users (id, username, email, password, salt, status, created_at)
+                VALUES (:id, :username, :email, :password, :salt, :status, :createdAt)
+                """)
+                .param("id", id)
+                .param("username", request.name())
+                .param("email", request.email())
+                .param("password", request.password())
+                .param("salt", salt)
+                .param("status", UserStatus.ENABLED.name())
+                .param("createdAt", now)
+                .update();
+
+        return new User(id, request.name(), request.email(), request.password(), salt, UserStatus.ENABLED, now,
+                List.of());
+    }
+
+    @Override
+    public Optional<User> update(String id, UpdateUserRequest request) {
+        final var existingUser = findById(id);
+        if (existingUser.isEmpty()) {
+            return Optional.empty();
+        }
+
+        final var user = existingUser.get();
+        final var newName = request.name() != null ? request.name() : user.name();
+        final var newEmail = request.email() != null ? request.email() : user.email();
+        final var newStatus = request.status() != null ? request.status() : user.status();
+
+        jdbcClient.sql("""
+                UPDATE public.users
+                SET username = :username, email = :email, status = :status
+                WHERE id = :id
+                """)
+                .param("id", id)
+                .param("username", newName)
+                .param("email", newEmail)
+                .param("status", newStatus.name())
+                .update();
+
+        return Optional.of(new User(id, newName, newEmail, user.password(), user.salt(), newStatus, user.createdAt(), user.roles()));
+    }
+
+    @Override
+    public boolean delete(String id) {
+        final var rowsAffected = jdbcClient.sql("""
+                DELETE FROM public.users WHERE id = :id
+                """)
+                .param("id", id)
+                .update();
+
+        return rowsAffected > 0;
+    }
 }
 
