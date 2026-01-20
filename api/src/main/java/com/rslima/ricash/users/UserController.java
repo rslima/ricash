@@ -45,9 +45,9 @@ public class UserController {
 
         log.debug("User {} listing users, page={}, size={}", principal.getName(), page, size);
         final var pageable = PageRequest.of(page, size);
-        var userResources = userService.listUsers(pageable).map(this::toEntityModel);
+        var userResources = userService.listUsers(pageable).map(user -> toEntityModel(user, principal));
 
-        return buildPagedUserResponse(page, size, userResources);
+        return buildPagedUserResponse(page, size, userResources, principal);
     }
 
     @GetMapping("/{id}")
@@ -57,7 +57,7 @@ public class UserController {
 
         log.debug("User {} fetching user {}", principal.getName(), id);
         return userService.findUser(id)
-                .map(this::toEntityModel)
+                .map(user -> toEntityModel(user, principal))
                 .orElseThrow(() -> new UserNotFoundException(id));
     }
 
@@ -68,7 +68,7 @@ public class UserController {
 
         log.debug("User {} creating new user with email {}", principal.getName(), request.email());
         User createdUser = userService.createUser(request);
-        EntityModel<UserResource> createdUserEntity = toEntityModel(createdUser);
+        EntityModel<UserResource> createdUserEntity = toEntityModel(createdUser, principal);
 
         return ResponseEntity.status(HttpStatus.CREATED).body(createdUserEntity);
     }
@@ -81,7 +81,7 @@ public class UserController {
 
         log.debug("User {} updating user {}", principal.getName(), id);
         User updatedUser = userService.updateUser(id, request);
-        EntityModel<UserResource> updatedUserEntity = toEntityModel(updatedUser);
+        EntityModel<UserResource> updatedUserEntity = toEntityModel(updatedUser, principal);
 
         return ResponseEntity.ok(updatedUserEntity);
     }
@@ -97,17 +97,18 @@ public class UserController {
         return ResponseEntity.noContent().build();
     }
 
-    private EntityModel<UserResource> toEntityModel(User user) {
+    private EntityModel<UserResource> toEntityModel(User user, JwtAuthenticationToken principal) {
         UserResource resource = userMapper.toResource(user);
         EntityModel<UserResource> entityModel = EntityModel.of(resource);
-        entityModel.add(linkTo(methodOn(UserController.class).getUser(null, user.id())).withSelfRel());
+        entityModel.add(linkTo(methodOn(UserController.class).getUser(principal, user.id())).withSelfRel());
         return entityModel;
     }
 
     private PagedModel<EntityModel<UserResource>> buildPagedUserResponse(
             int page,
             int size,
-            Page<EntityModel<UserResource>> userResources) {
+            Page<EntityModel<UserResource>> userResources,
+            JwtAuthenticationToken principal) {
 
         var pagedModel = PagedModel.of(
                 userResources.getContent(),
@@ -117,24 +118,24 @@ public class UserController {
                         userResources.getTotalElements(),
                         userResources.getTotalPages()));
 
-        pagedModel.add(linkTo(methodOn(UserController.class).listUsers(null, page, size)).withSelfRel());
-        pagedModel.add(linkTo(methodOn(UserController.class).listUsers(null, 0, size)).withRel("first"));
+        pagedModel.add(linkTo(methodOn(UserController.class).listUsers(principal, page, size)).withSelfRel());
+        pagedModel.add(linkTo(methodOn(UserController.class).listUsers(principal, 0, size)).withRel("first"));
 
         if (userResources.getTotalPages() > 0) {
             pagedModel.add(linkTo(methodOn(UserController.class).listUsers(
-                    null,
+                    principal,
                     userResources.getTotalPages() - 1,
                     size)).withRel("last"));
         }
         if (userResources.hasNext()) {
             pagedModel.add(linkTo(methodOn(UserController.class).listUsers(
-                    null,
+                    principal,
                     userResources.getNumber() + 1,
                     size)).withRel("next"));
         }
         if (userResources.hasPrevious()) {
             pagedModel.add(linkTo(methodOn(UserController.class).listUsers(
-                    null,
+                    principal,
                     userResources.getNumber() - 1,
                     size)).withRel("prev"));
         }
