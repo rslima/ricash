@@ -1,6 +1,8 @@
 package com.rslima.ricash.ledgers;
 
-public class LedgerNotFoundException extends RuntimeException {
+import com.rslima.ricash.exceptions.EntityNotFoundException;
+
+public class LedgerNotFoundException extends EntityNotFoundException {
     public LedgerNotFoundException(String ledger) {
         super("Ledger not found: " + ledger);
     }
