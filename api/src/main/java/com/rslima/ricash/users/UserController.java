@@ -2,7 +2,9 @@ package com.rslima.ricash.users;
 
 import com.toedter.spring.hateoas.jsonapi.JsonApiError;
 import com.toedter.spring.hateoas.jsonapi.JsonApiErrors;
-import org.jetbrains.annotations.NotNull;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.hateoas.EntityModel;
@@ -26,13 +28,14 @@ import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.linkTo;
 import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.methodOn;
 import static org.springframework.http.HttpStatus.NOT_FOUND;
 
-@RestController @RequestMapping(value = "/api/v1/users", produces = JSON_API_VALUE) public class UserController {
+@RestController
+@RequestMapping(value = "/api/v1/users", produces = JSON_API_VALUE)
+@RequiredArgsConstructor
+@Slf4j
+public class UserController {
+
     private final UserService userService;
     private final UserMapper userMapper;
-
-    public UserController(final UserService userService) {
-        this.userService = userService;
-    }
 
     @GetMapping
     public PagedModel<EntityModel<UserResource>> listUsers(
@@ -40,6 +43,7 @@ import static org.springframework.http.HttpStatus.NOT_FOUND;
             @RequestParam(name = "page[number]", required = false, defaultValue = "0") int page,
             @RequestParam(name = "page[size]", required = false, defaultValue = "20") int size) {
 
+        log.debug("User {} listing users, page={}, size={}", principal.getName(), page, size);
         final var pageable = PageRequest.of(page, size);
         var userResources = userService.listUsers(pageable).map(this::toEntityModel);
 
@@ -147,6 +151,4 @@ import static org.springframework.http.HttpStatus.NOT_FOUND;
                                 .withTitle(NOT_FOUND.getReasonPhrase())
                                 .withDetail(ex.getMessage())));
     }
-
-
 }
