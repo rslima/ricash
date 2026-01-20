@@ -91,14 +91,6 @@ public class UserJdbcRepository implements UserRepository {
                    Instant createdAt) {
     }
 
-    record UserLedger(String userId,
-                      String ledgerId,
-                      String ledgerName,
-                      String ledgerDescription,
-                      String ledgerCurrency,
-                      Instant ledgerCreatedAt) {
-    }
-
     record RoleAndUserId(String userId, String rId, String roleName, String description, Instant roleCreatedAt) {
     }
 
@@ -165,9 +157,6 @@ public class UserJdbcRepository implements UserRepository {
                     String roleName,
                     String description,
                     Instant roleCreatedAt) {
-    }
-
-    record SimpleLedger(String id, String name, String description, String currency, Instant createdAt) {
     }
 
 }

@@ -1,7 +1,6 @@
 package com.rslima.ricash.users;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
-import com.rslima.ricash.ledgers.LedgerResource;
 import com.toedter.spring.hateoas.jsonapi.JsonApiId;
 import com.toedter.spring.hateoas.jsonapi.JsonApiRelationships;
 import com.toedter.spring.hateoas.jsonapi.JsonApiTypeForClass;
