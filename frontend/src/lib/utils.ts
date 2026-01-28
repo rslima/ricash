@@ -1,8 +1,13 @@
 import { type ClassValue, clsx } from "clsx"
 import { twMerge } from "tailwind-merge"
+import slugifyLib from "slugify"
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
+}
+
+export function slugify(input: string): string {
+  return slugifyLib(input, { lower: true, strict: true })
 }
 
 export function formatCurrency(amount: number, currency: string = "USD"): string {
