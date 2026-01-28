@@ -45,6 +45,7 @@ export interface UserAttributes {
 export type UserResource = JsonApiResource<"users", UserAttributes>
 
 export interface LedgerAttributes {
+  slug: string
   name: string
   description: string | null
   currency: string

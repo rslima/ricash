@@ -5,19 +5,14 @@ export async function getLedgers(params?: PaginationParams): Promise<JsonApiList
   return apiClient.get("/ledgers", params as Record<string, string | number | undefined>)
 }
 
-export async function getLedger(id: string): Promise<JsonApiResponse<LedgerResource>> {
-  return apiClient.get(`/ledgers/${id}`)
+export async function getLedger(slug: string): Promise<JsonApiResponse<LedgerResource>> {
+  return apiClient.get(`/ledgers/${slug}`)
 }
 
 export interface CreateLedgerData {
-  data: {
-    type: "ledgers"
-    attributes: {
-      name: string
-      description?: string
-      currency: string
-    }
-  }
+  name: string
+  description?: string
+  currency: string
 }
 
 export async function createLedger(data: CreateLedgerData): Promise<JsonApiResponse<LedgerResource>> {

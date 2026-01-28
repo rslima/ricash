@@ -2,34 +2,29 @@ import { apiClient } from "./client"
 import type { JsonApiListResponse, JsonApiResponse, AccountResource, PaginationParams } from "./types"
 
 export async function getAccounts(
-  ledgerId: string,
+  ledgerSlug: string,
   params?: PaginationParams
 ): Promise<JsonApiListResponse<AccountResource>> {
-  return apiClient.get(`/ledgers/${ledgerId}/accounts`, params as Record<string, string | number | undefined>)
+  return apiClient.get(`/ledgers/${ledgerSlug}/accounts`, params as Record<string, string | number | undefined>)
 }
 
-export async function getAccount(ledgerId: string, accountId: string): Promise<JsonApiResponse<AccountResource>> {
-  return apiClient.get(`/ledgers/${ledgerId}/accounts/${accountId}`)
+export async function getAccount(ledgerSlug: string, accountId: string): Promise<JsonApiResponse<AccountResource>> {
+  return apiClient.get(`/ledgers/${ledgerSlug}/accounts/${accountId}`)
 }
 
 export interface CreateAccountData {
-  data: {
-    type: "accounts"
-    attributes: {
-      name: string
-      type: "ASSET" | "LIABILITY" | "EQUITY" | "INCOME" | "EXPENSE"
-      currency: string
-      description?: string
-      parentAccountId?: string
-    }
-  }
+  name: string
+  type: "ASSET" | "LIABILITY" | "EQUITY" | "INCOME" | "EXPENSE"
+  currency: string
+  description?: string
+  parentAccountId?: string
 }
 
 export async function createAccount(
-  ledgerId: string,
+  ledgerSlug: string,
   data: CreateAccountData
 ): Promise<JsonApiResponse<AccountResource>> {
-  return apiClient.post(`/ledgers/${ledgerId}/accounts`, data)
+  return apiClient.post(`/ledgers/${ledgerSlug}/accounts`, data)
 }
 
 export interface UpdateAccountData {
@@ -44,13 +39,13 @@ export interface UpdateAccountData {
 }
 
 export async function updateAccount(
-  ledgerId: string,
+  ledgerSlug: string,
   accountId: string,
   data: UpdateAccountData
 ): Promise<JsonApiResponse<AccountResource>> {
-  return apiClient.patch(`/ledgers/${ledgerId}/accounts/${accountId}`, data)
+  return apiClient.patch(`/ledgers/${ledgerSlug}/accounts/${accountId}`, data)
 }
 
-export async function deleteAccount(ledgerId: string, accountId: string): Promise<void> {
-  return apiClient.delete(`/ledgers/${ledgerId}/accounts/${accountId}`)
+export async function deleteAccount(ledgerSlug: string, accountId: string): Promise<void> {
+  return apiClient.delete(`/ledgers/${ledgerSlug}/accounts/${accountId}`)
 }
