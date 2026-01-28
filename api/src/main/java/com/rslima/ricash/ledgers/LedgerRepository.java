@@ -9,4 +9,6 @@ public interface LedgerRepository {
     Page<Ledger> listUserLedgers(String userId, PageRequest pageRequest);
 
     Optional<Ledger> findById(String userId, String id);
+
+    Ledger create(Ledger ledger);
 }

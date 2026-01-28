@@ -165,6 +165,23 @@ public class LedgerJdbcRepository implements LedgerRepository {
         return Optional.empty();
     }
 
+    @Override
+    public Ledger create(Ledger ledger) {
+        jdbcClient.sql("""
+                        INSERT INTO ledgers (id, user_id, name, description, currency, created_at)
+                        VALUES (:id, :userId, :name, :description, :currency, :createdAt)
+                        """)
+                .param("id", ledger.id())
+                .param("userId", ledger.userId())
+                .param("name", ledger.name())
+                .param("description", ledger.description())
+                .param("currency", ledger.currency())
+                .param("createdAt", ledger.createdAt())
+                .update();
+
+        return ledger;
+    }
+
     private static @NotNull Function<DBLedger, Ledger> toLedger(List<Account> accountForest) {
         return dbLedger1 -> toLedger(dbLedger1, accountForest);
     }
@@ -172,6 +189,7 @@ public class LedgerJdbcRepository implements LedgerRepository {
     private static @NotNull Ledger toLedger(DBLedger dbLedger, List<Account> accountForest) {
         return new Ledger(
                 dbLedger.id(),
+                dbLedger.userId(),
                 dbLedger.name(),
                 dbLedger.description(),
                 dbLedger.currency(),

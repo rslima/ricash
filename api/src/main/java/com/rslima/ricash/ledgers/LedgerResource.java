@@ -1,6 +1,7 @@
 package com.rslima.ricash.ledgers;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.rslima.ricash.users.UserResource;
 import com.toedter.spring.hateoas.jsonapi.JsonApiId;
 import com.toedter.spring.hateoas.jsonapi.JsonApiRelationships;
 import com.toedter.spring.hateoas.jsonapi.JsonApiTypeForClass;
@@ -21,6 +22,9 @@ public class LedgerResource extends RepresentationModel<LedgerResource> {
     private String        description;
     private String        currency;
     private Instant       createdAt;
+    @JsonApiRelationships("user")
+    @JsonIgnore
+    private UserResource  user;
     @JsonApiRelationships("accounts")
     @JsonIgnore
     private List<AccountResource> accounts;

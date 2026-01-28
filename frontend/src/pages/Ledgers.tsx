@@ -4,6 +4,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import {
   Table,
   TableBody,
@@ -12,8 +14,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { useAuth } from "@/contexts/AuthContext"
-import { getLedgers, deleteLedger } from "@/api/ledgers"
+import { getLedgers, deleteLedger, createLedger } from "@/api/ledgers"
 import type { LedgerResource } from "@/api/types"
 import { formatDate } from "@/lib/utils"
 import { Plus, Trash2, BookOpen, MoreHorizontal } from "lucide-react"
@@ -28,6 +38,13 @@ export function Ledgers() {
   const { isAuthenticated } = useAuth()
   const [ledgers, setLedgers] = useState<LedgerResource[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
+  const [isCreating, setIsCreating] = useState(false)
+  const [formData, setFormData] = useState({
+    name: "",
+    description: "",
+    currency: "USD",
+  })
 
   const fetchLedgers = async () => {
     if (!isAuthenticated) {
@@ -60,6 +77,31 @@ export function Ledgers() {
     }
   }
 
+  const handleCreate = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setIsCreating(true)
+
+    try {
+      const response = await createLedger({
+        data: {
+          type: "ledgers",
+          attributes: {
+            name: formData.name,
+            description: formData.description || undefined,
+            currency: formData.currency,
+          },
+        },
+      })
+      setLedgers([...ledgers, response.data])
+      setIsCreateDialogOpen(false)
+      setFormData({ name: "", description: "", currency: "USD" })
+    } catch (error) {
+      console.error("Failed to create ledger:", error)
+    } finally {
+      setIsCreating(false)
+    }
+  }
+
   if (!isAuthenticated) {
     return (
       <div className="flex flex-col items-center justify-center h-full">
@@ -84,11 +126,73 @@ export function Ledgers() {
             Manage your financial ledgers
           </p>
         </div>
-        <Button>
+        <Button onClick={() => setIsCreateDialogOpen(true)}>
           <Plus className="mr-2 h-4 w-4" />
           New Ledger
         </Button>
       </div>
+
+      <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create New Ledger</DialogTitle>
+            <DialogDescription>
+              A ledger is a collection of accounts for tracking your finances.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleCreate}>
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label htmlFor="name">Name</Label>
+                <Input
+                  id="name"
+                  value={formData.name}
+                  onChange={(e) =>
+                    setFormData({ ...formData, name: e.target.value })
+                  }
+                  placeholder="Personal Finance"
+                  required
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="currency">Currency</Label>
+                <Input
+                  id="currency"
+                  value={formData.currency}
+                  onChange={(e) =>
+                    setFormData({ ...formData, currency: e.target.value })
+                  }
+                  placeholder="USD"
+                  required
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="description">Description (optional)</Label>
+                <Input
+                  id="description"
+                  value={formData.description}
+                  onChange={(e) =>
+                    setFormData({ ...formData, description: e.target.value })
+                  }
+                  placeholder="Track personal income and expenses"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsCreateDialogOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isCreating}>
+                {isCreating ? "Creating..." : "Create Ledger"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       <Card>
         <CardHeader>
@@ -167,7 +271,7 @@ export function Ledgers() {
               <p className="text-sm text-muted-foreground mb-4">
                 Create your first ledger to start tracking your finances
               </p>
-              <Button>
+              <Button onClick={() => setIsCreateDialogOpen(true)}>
                 <Plus className="mr-2 h-4 w-4" />
                 Create Ledger
               </Button>
