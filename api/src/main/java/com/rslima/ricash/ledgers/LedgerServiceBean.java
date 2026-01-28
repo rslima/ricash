@@ -14,6 +14,7 @@ import java.util.Optional;
 @Slf4j
 public class LedgerServiceBean implements LedgerService {
     private final LedgerRepository ledgerRepository;
+    private final SlugService slugService;
 
     @Override
     public Page<Ledger> listUserLedgers(String userId, PageRequest pageRequest) {
@@ -21,15 +22,19 @@ public class LedgerServiceBean implements LedgerService {
     }
 
     @Override
-    public Optional<Ledger> find(String userId, String id) {
-        return ledgerRepository.findById(userId, id);
+    public Optional<Ledger> findBySlug(String userId, String slug) {
+        return ledgerRepository.findBySlug(userId, slug);
     }
 
     @Override
     public Ledger create(String userId, CreateLedgerRequest request) {
+        final var baseSlug = slugService.slugify(request.name());
+        final var slug = generateUniqueSlug(userId, baseSlug);
+
         final var ledger = new Ledger(
                 UuidCreator.getTimeOrderedEpoch().toString(),
                 userId,
+                slug,
                 request.name(),
                 request.description(),
                 request.currency(),
@@ -38,5 +43,17 @@ public class LedgerServiceBean implements LedgerService {
                 List.of()
         );
         return ledgerRepository.create(ledger);
+    }
+
+    private String generateUniqueSlug(String userId, String baseSlug) {
+        String slug = baseSlug;
+        int counter = 1;
+
+        while (ledgerRepository.existsBySlug(userId, slug)) {
+            slug = baseSlug + "-" + counter;
+            counter++;
+        }
+
+        return slug;
     }
 }

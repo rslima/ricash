@@ -53,11 +53,11 @@ public class LedgerController {
         return principal.getName();
     }
 
-    @GetMapping("/{ledgerId}")
-    public EntityModel<LedgerResource> getLedger(@PathVariable final String ledgerId,
+    @GetMapping("/{slug}")
+    public EntityModel<LedgerResource> getLedger(@PathVariable final String slug,
                                                   JwtAuthenticationToken principal) {
-        final var ledger = ledgerService.find(getUserId(principal), ledgerId)
-                .orElseThrow(() -> new LedgerNotFoundException(ledgerId));
+        final var ledger = ledgerService.findBySlug(getUserId(principal), slug)
+                .orElseThrow(() -> new LedgerNotFoundException(slug));
 
         return toEntityModel(ledger, principal);
     }
@@ -71,14 +71,14 @@ public class LedgerController {
         EntityModel<LedgerResource> entityModel = toEntityModel(createdLedger, principal);
 
         return ResponseEntity
-                .created(linkTo(methodOn(LedgerController.class).getLedger(createdLedger.id(), principal)).toUri())
+                .created(linkTo(methodOn(LedgerController.class).getLedger(createdLedger.slug(), principal)).toUri())
                 .body(entityModel);
     }
 
     private EntityModel<LedgerResource> toEntityModel(Ledger ledger, JwtAuthenticationToken principal) {
         LedgerResource resource = ledgerMapper.toResource(ledger);
         EntityModel<LedgerResource> entityModel = EntityModel.of(resource);
-        entityModel.add(linkTo(methodOn(LedgerController.class).getLedger(ledger.id(), principal)).withSelfRel());
+        entityModel.add(linkTo(methodOn(LedgerController.class).getLedger(ledger.slug(), principal)).withSelfRel());
         return entityModel;
     }
 

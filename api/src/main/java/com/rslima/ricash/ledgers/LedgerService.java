@@ -7,6 +7,6 @@ import java.util.Optional;
 
 public interface LedgerService {
     Page<Ledger> listUserLedgers(String userId, PageRequest pageRequest);
-    Optional<Ledger> find(String userId, String id);
+    Optional<Ledger> findBySlug(String userId, String slug);
     Ledger create(String userId, CreateLedgerRequest request);
 }

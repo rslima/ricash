@@ -9,6 +9,8 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
+import java.math.BigDecimal;
+import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -30,18 +32,20 @@ public class LedgerJdbcRepository implements LedgerRepository {
                            SELECT
                                l.id l_id,
                                l.user_id,
+                               l.slug ledger_slug,
                                l.name ledger_name,
                                l.description ledger_description,
                                l.currency ledger_currency,
                                l.created_at ledger_created_at,
-                               a.id account_id,
-                               a.parent_account_id,
-                               a.name account_name,
-                               a.description account_description,
-                               a.currency account_currency,
-                               a.status,
-                               a.type,
-                               a.created_at account_created_at
+                               ab.account_id,
+                               ab.parent_account_id,
+                               ab.account_name,
+                               ab.account_description,
+                               ab.account_currency,
+                               ab.status,
+                               ab.type,
+                               ab.account_balance,
+                               ab.account_created_at
                            FROM
                                (SELECT
                                     *
@@ -52,9 +56,33 @@ public class LedgerJdbcRepository implements LedgerRepository {
                                 OFFSET :offset
                                 LIMIT :limit) l
                            LEFT JOIN
-                               public.accounts a
+                               (SELECT
+                                   a.id AS account_id,
+                                   a.ledger_id,
+                                   a.parent_account_id,
+                                   a.name AS account_name,
+                                   a.description AS account_description,
+                                   a.currency AS account_currency,
+                                   a.status,
+                                   a.type,
+                                   a.created_at AS account_created_at,
+                                   COALESCE(
+                                       CASE
+                                           WHEN a.type IN ('ASSET', 'EXPENSE') THEN
+                                               SUM(CASE WHEN te.type = 'DEBIT' THEN te.amount ELSE 0 END) -
+                                               SUM(CASE WHEN te.type = 'CREDIT' THEN te.amount ELSE 0 END)
+                                           ELSE
+                                               SUM(CASE WHEN te.type = 'CREDIT' THEN te.amount ELSE 0 END) -
+                                               SUM(CASE WHEN te.type = 'DEBIT' THEN te.amount ELSE 0 END)
+                                       END,
+                                       0
+                                   ) AS account_balance
+                               FROM accounts a
+                               LEFT JOIN transaction_entries te ON a.id = te.account_id
+                               GROUP BY a.id, a.ledger_id, a.parent_account_id, a.name, a.description,
+                                        a.currency, a.status, a.type, a.created_at) ab
                            ON
-                               l.id = a.ledger_id""")
+                               l.id = ab.ledger_id""")
                 .param("userId", userId)
                 .param("offset", pageRequest.getOffset())
                 .param("limit", pageRequest.getPageSize())
@@ -66,7 +94,10 @@ public class LedgerJdbcRepository implements LedgerRepository {
         List<Ledger> result = dbLedgers.stream()
                 .collect(groupingBy(Tuple2::_1))
                 .entrySet().stream()
-                .map(e -> Map.entry(e.getKey(), e.getValue().stream().map(Tuple2::_2).toList()))
+                .map(e -> Map.entry(e.getKey(), e.getValue().stream()
+                        .map(Tuple2::_2)
+                        .filter(account -> account.id() != null)
+                        .toList()))
                 .map(e -> Map.entry(e.getKey(), buildAccountForest(e.getValue())))
                 .map(e -> toLedger(e.getKey(), e.getValue()))
                 .toList();
@@ -75,25 +106,26 @@ public class LedgerJdbcRepository implements LedgerRepository {
                 result.size());
     }
 
-    record DBLedgerAndAccount(String lId, String userId, String ledgerName, String ledgerDescription,
+    record DBLedgerAndAccount(String lId, String userId, String ledgerSlug, String ledgerName, String ledgerDescription,
                               String ledgerCurrency, Instant ledgerCreatedAt,
                               String accountId, String parentAccountId, String accountName, String accountDescription,
-                              String accountCurrency, String status, String type,
+                              String accountCurrency, String status, String type, BigDecimal accountBalance,
                               Instant accountCreatedAt) {
     }
 
-    record DBLedger(String id, String userId, String name, String description, String currency, Instant createdAt) {
+    record DBLedger(String id, String userId, String slug, String name, String description, String currency, Instant createdAt) {
     }
 
     record DBAccount(String id, String ledgerId, String parentAccountId, String name, String description,
                      String currency,
-                     String type, String status, Instant createdAt) {
+                     String type, String status, BigDecimal balance, Instant createdAt) {
     }
 
     private Tuple2<DBLedger, DBAccount> toTupleLedgerAndAccount(DBLedgerAndAccount la) {
         final var dbLedger = new DBLedger(
                 la.lId(),
                 la.userId(),
+                la.ledgerSlug(),
                 la.ledgerName(),
                 la.ledgerDescription(),
                 la.ledgerCurrency(),
@@ -108,6 +140,7 @@ public class LedgerJdbcRepository implements LedgerRepository {
                 la.accountCurrency(),
                 la.type(),
                 la.status(),
+                la.accountBalance(),
                 la.accountCreatedAt());
 
         return new Tuple2<>(dbLedger, account);
@@ -120,6 +153,7 @@ public class LedgerJdbcRepository implements LedgerRepository {
                         SELECT
                             id,
                             user_id,
+                            slug,
                             name,
                             description,
                             currency,
@@ -138,19 +172,34 @@ public class LedgerJdbcRepository implements LedgerRepository {
         if (dbLedger.isPresent()) {
             final var dbLedgerAccounts = jdbcClient.sql("""
                             SELECT
-                                id,
-                                ledger_id,
-                                parent_account_id,
-                                name,
-                                description,
-                                currency,
-                                type,
-                                status,
-                                created_at
+                                a.id,
+                                a.ledger_id,
+                                a.parent_account_id,
+                                a.name,
+                                a.description,
+                                a.currency,
+                                a.type,
+                                a.status,
+                                COALESCE(
+                                    CASE
+                                        WHEN a.type IN ('ASSET', 'EXPENSE') THEN
+                                            SUM(CASE WHEN te.type = 'DEBIT' THEN te.amount ELSE 0 END) -
+                                            SUM(CASE WHEN te.type = 'CREDIT' THEN te.amount ELSE 0 END)
+                                        ELSE
+                                            SUM(CASE WHEN te.type = 'CREDIT' THEN te.amount ELSE 0 END) -
+                                            SUM(CASE WHEN te.type = 'DEBIT' THEN te.amount ELSE 0 END)
+                                    END,
+                                    0
+                                ) AS balance,
+                                a.created_at
                             FROM
-                                accounts
+                                accounts a
+                            LEFT JOIN
+                                transaction_entries te ON a.id = te.account_id
                             WHERE
-                                ledger_id = :id
+                                a.ledger_id = :id
+                            GROUP BY a.id, a.ledger_id, a.parent_account_id, a.name, a.description,
+                                     a.currency, a.type, a.status, a.created_at
                             """)
                     .param("id", id)
                     .query(DBAccount.class)
@@ -166,20 +215,98 @@ public class LedgerJdbcRepository implements LedgerRepository {
     }
 
     @Override
+    public Optional<Ledger> findBySlug(String userId, String slug) {
+        final var dbLedger = jdbcClient.sql("""
+                        SELECT
+                            id,
+                            user_id,
+                            slug,
+                            name,
+                            description,
+                            currency,
+                            created_at
+                        FROM
+                            ledgers
+                        WHERE
+                            user_id = :userId AND
+                            slug = :slug
+                        """)
+                .param("userId", userId)
+                .param("slug", slug)
+                .query(DBLedger.class)
+                .optional();
+
+        if (dbLedger.isPresent()) {
+            final var id = dbLedger.get().id();
+            final var dbLedgerAccounts = jdbcClient.sql("""
+                            SELECT
+                                a.id,
+                                a.ledger_id,
+                                a.parent_account_id,
+                                a.name,
+                                a.description,
+                                a.currency,
+                                a.type,
+                                a.status,
+                                COALESCE(
+                                    CASE
+                                        WHEN a.type IN ('ASSET', 'EXPENSE') THEN
+                                            SUM(CASE WHEN te.type = 'DEBIT' THEN te.amount ELSE 0 END) -
+                                            SUM(CASE WHEN te.type = 'CREDIT' THEN te.amount ELSE 0 END)
+                                        ELSE
+                                            SUM(CASE WHEN te.type = 'CREDIT' THEN te.amount ELSE 0 END) -
+                                            SUM(CASE WHEN te.type = 'DEBIT' THEN te.amount ELSE 0 END)
+                                    END,
+                                    0
+                                ) AS balance,
+                                a.created_at
+                            FROM
+                                accounts a
+                            LEFT JOIN
+                                transaction_entries te ON a.id = te.account_id
+                            WHERE
+                                a.ledger_id = :id
+                            GROUP BY a.id, a.ledger_id, a.parent_account_id, a.name, a.description,
+                                     a.currency, a.type, a.status, a.created_at
+                            """)
+                    .param("id", id)
+                    .query(DBAccount.class)
+                    .list();
+
+            final var accountForest = buildAccountForest(dbLedgerAccounts);
+            return dbLedger.map(toLedger(accountForest));
+        }
+
+        return Optional.empty();
+    }
+
+    @Override
     public Ledger create(Ledger ledger) {
         jdbcClient.sql("""
-                        INSERT INTO ledgers (id, user_id, name, description, currency, created_at)
-                        VALUES (:id, :userId, :name, :description, :currency, :createdAt)
+                        INSERT INTO ledgers (id, user_id, slug, name, description, currency, created_at)
+                        VALUES (:id, :userId, :slug, :name, :description, :currency, :createdAt)
                         """)
                 .param("id", ledger.id())
                 .param("userId", ledger.userId())
+                .param("slug", ledger.slug())
                 .param("name", ledger.name())
                 .param("description", ledger.description())
                 .param("currency", ledger.currency())
-                .param("createdAt", ledger.createdAt())
+                .param("createdAt", Timestamp.from(ledger.createdAt()))
                 .update();
 
         return ledger;
+    }
+
+    @Override
+    public boolean existsBySlug(String userId, String slug) {
+        return jdbcClient.sql("""
+                        SELECT COUNT(*) FROM ledgers WHERE user_id = :userId AND slug = :slug
+                        """)
+                .param("userId", userId)
+                .param("slug", slug)
+                .query(Long.class)
+                .single() > 0;
     }
 
     private static @NotNull Function<DBLedger, Ledger> toLedger(List<Account> accountForest) {
@@ -190,6 +317,7 @@ public class LedgerJdbcRepository implements LedgerRepository {
         return new Ledger(
                 dbLedger.id(),
                 dbLedger.userId(),
+                dbLedger.slug(),
                 dbLedger.name(),
                 dbLedger.description(),
                 dbLedger.currency(),
@@ -206,6 +334,7 @@ public class LedgerJdbcRepository implements LedgerRepository {
                 dbAccount.currency(),
                 AccountType.valueOf(dbAccount.type()),
                 AccountStatus.valueOf(dbAccount.status()),
+                dbAccount.balance() != null ? dbAccount.balance() : BigDecimal.ZERO,
                 dbAccount.createdAt(),
                 new ArrayList<>());
     }

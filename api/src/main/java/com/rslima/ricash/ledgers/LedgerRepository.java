@@ -10,5 +10,9 @@ public interface LedgerRepository {
 
     Optional<Ledger> findById(String userId, String id);
 
+    Optional<Ledger> findBySlug(String userId, String slug);
+
     Ledger create(Ledger ledger);
+
+    boolean existsBySlug(String userId, String slug);
 }
