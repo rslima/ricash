@@ -18,6 +18,7 @@ import java.util.List;
 public class LedgerResource extends RepresentationModel<LedgerResource> {
     @JsonApiId
     private String        id;
+    private String        slug;
     private String        name;
     private String        description;
     private String        currency;

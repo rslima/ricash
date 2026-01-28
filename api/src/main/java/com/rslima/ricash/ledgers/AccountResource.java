@@ -10,6 +10,7 @@ import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import org.springframework.hateoas.RepresentationModel;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 
@@ -26,6 +27,7 @@ public class AccountResource extends RepresentationModel<AccountResource> {
     private String currency;
     private AccountType type;
     private AccountStatus status;
+    private BigDecimal balance;
     private Instant createdAt;
     @JsonApiRelationships("subaccounts")
     @JsonIgnore
