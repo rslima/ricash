@@ -4,6 +4,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import {
   Table,
   TableBody,
@@ -13,13 +15,28 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { useAuth } from "@/contexts/AuthContext"
-import { getAccounts, deleteAccount } from "@/api/accounts"
+import { getAccounts, deleteAccount, createAccount } from "@/api/accounts"
 import { getLedgers } from "@/api/ledgers"
 import type { AccountResource, LedgerResource } from "@/api/types"
 import { formatCurrency } from "@/lib/utils"
@@ -33,13 +50,23 @@ const accountTypeColors: Record<string, "default" | "secondary" | "destructive" 
   EXPENSE: "destructive",
 }
 
+type AccountType = "ASSET" | "LIABILITY" | "EQUITY" | "INCOME" | "EXPENSE"
+
 export function Accounts() {
-  const { ledgerId } = useParams<{ ledgerId?: string }>()
+  const { ledgerSlug } = useParams<{ ledgerSlug?: string }>()
   const { isAuthenticated } = useAuth()
   const [accounts, setAccounts] = useState<AccountResource[]>([])
   const [ledgers, setLedgers] = useState<LedgerResource[]>([])
-  const [selectedLedgerId, setSelectedLedgerId] = useState<string | null>(ledgerId || null)
+  const [selectedLedgerSlug, setSelectedLedgerSlug] = useState<string | null>(ledgerSlug || null)
   const [isLoading, setIsLoading] = useState(true)
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
+  const [isCreating, setIsCreating] = useState(false)
+  const [formData, setFormData] = useState({
+    name: "",
+    description: "",
+    currency: "USD",
+    type: "ASSET" as AccountType,
+  })
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -50,37 +77,59 @@ export function Accounts() {
     getLedgers()
       .then((response) => {
         setLedgers(response.data)
-        if (!selectedLedgerId && response.data.length > 0) {
-          setSelectedLedgerId(response.data[0].id)
+        if (!selectedLedgerSlug && response.data.length > 0) {
+          setSelectedLedgerSlug(response.data[0].attributes.slug)
         }
       })
       .catch(console.error)
   }, [isAuthenticated])
 
   useEffect(() => {
-    if (!selectedLedgerId || !isAuthenticated) {
+    if (!selectedLedgerSlug || !isAuthenticated) {
       setIsLoading(false)
       return
     }
 
     setIsLoading(true)
-    getAccounts(selectedLedgerId)
+    getAccounts(selectedLedgerSlug)
       .then((response) => {
         setAccounts(response.data)
       })
       .catch(console.error)
       .finally(() => setIsLoading(false))
-  }, [selectedLedgerId, isAuthenticated])
+  }, [selectedLedgerSlug, isAuthenticated])
 
   const handleDelete = async (accountId: string) => {
-    if (!selectedLedgerId) return
+    if (!selectedLedgerSlug) return
     if (!confirm("Are you sure you want to delete this account?")) return
 
     try {
-      await deleteAccount(selectedLedgerId, accountId)
+      await deleteAccount(selectedLedgerSlug, accountId)
       setAccounts(accounts.filter((a) => a.id !== accountId))
     } catch (error) {
       console.error("Failed to delete account:", error)
+    }
+  }
+
+  const handleCreate = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!selectedLedgerSlug) return
+    setIsCreating(true)
+
+    try {
+      const response = await createAccount(selectedLedgerSlug, {
+        name: formData.name,
+        description: formData.description || undefined,
+        currency: formData.currency,
+        type: formData.type,
+      })
+      setAccounts([...accounts, response.data])
+      setIsCreateDialogOpen(false)
+      setFormData({ name: "", description: "", currency: "USD", type: "ASSET" })
+    } catch (error) {
+      console.error("Failed to create account:", error)
+    } finally {
+      setIsCreating(false)
     }
   }
 
@@ -99,7 +148,7 @@ export function Accounts() {
     )
   }
 
-  const selectedLedger = ledgers.find((l) => l.id === selectedLedgerId)
+  const selectedLedger = ledgers.find((l) => l.attributes.slug === selectedLedgerSlug)
 
   return (
     <div className="space-y-6">
@@ -110,20 +159,102 @@ export function Accounts() {
             Manage accounts within your ledgers
           </p>
         </div>
-        <Button disabled={!selectedLedgerId}>
+        <Button disabled={!selectedLedgerSlug} onClick={() => setIsCreateDialogOpen(true)}>
           <Plus className="mr-2 h-4 w-4" />
           New Account
         </Button>
       </div>
+
+      <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create New Account</DialogTitle>
+            <DialogDescription>
+              Add a new account to track your assets, liabilities, income, or expenses.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleCreate}>
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label htmlFor="name">Name</Label>
+                <Input
+                  id="name"
+                  value={formData.name}
+                  onChange={(e) =>
+                    setFormData({ ...formData, name: e.target.value })
+                  }
+                  placeholder="Checking Account"
+                  required
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="type">Type</Label>
+                <Select
+                  value={formData.type}
+                  onValueChange={(value: AccountType) =>
+                    setFormData({ ...formData, type: value })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select account type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ASSET">Asset</SelectItem>
+                    <SelectItem value="LIABILITY">Liability</SelectItem>
+                    <SelectItem value="EQUITY">Equity</SelectItem>
+                    <SelectItem value="INCOME">Income</SelectItem>
+                    <SelectItem value="EXPENSE">Expense</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="currency">Currency</Label>
+                <Input
+                  id="currency"
+                  value={formData.currency}
+                  onChange={(e) =>
+                    setFormData({ ...formData, currency: e.target.value })
+                  }
+                  placeholder="USD"
+                  required
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="description">Description (optional)</Label>
+                <Input
+                  id="description"
+                  value={formData.description}
+                  onChange={(e) =>
+                    setFormData({ ...formData, description: e.target.value })
+                  }
+                  placeholder="Main checking account for daily expenses"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsCreateDialogOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isCreating}>
+                {isCreating ? "Creating..." : "Create Account"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {ledgers.length > 0 && (
         <div className="flex gap-2 flex-wrap">
           {ledgers.map((ledger) => (
             <Button
               key={ledger.id}
-              variant={selectedLedgerId === ledger.id ? "default" : "outline"}
+              variant={selectedLedgerSlug === ledger.attributes.slug ? "default" : "outline"}
               size="sm"
-              onClick={() => setSelectedLedgerId(ledger.id)}
+              onClick={() => setSelectedLedgerSlug(ledger.attributes.slug)}
             >
               {ledger.attributes.name}
             </Button>
@@ -149,7 +280,7 @@ export function Accounts() {
               <Skeleton className="h-12 w-full" />
               <Skeleton className="h-12 w-full" />
             </div>
-          ) : !selectedLedgerId ? (
+          ) : !selectedLedgerSlug ? (
             <div className="flex flex-col items-center justify-center py-12">
               <Wallet className="h-12 w-12 text-muted-foreground mb-4" />
               <h3 className="text-lg font-semibold">No ledger selected</h3>
@@ -218,7 +349,7 @@ export function Accounts() {
               <p className="text-sm text-muted-foreground mb-4">
                 Create your first account to start tracking
               </p>
-              <Button>
+              <Button onClick={() => setIsCreateDialogOpen(true)}>
                 <Plus className="mr-2 h-4 w-4" />
                 Create Account
               </Button>

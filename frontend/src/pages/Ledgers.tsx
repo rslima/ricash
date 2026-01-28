@@ -83,14 +83,9 @@ export function Ledgers() {
 
     try {
       const response = await createLedger({
-        data: {
-          type: "ledgers",
-          attributes: {
-            name: formData.name,
-            description: formData.description || undefined,
-            currency: formData.currency,
-          },
-        },
+        name: formData.name,
+        description: formData.description || undefined,
+        currency: formData.currency,
       })
       setLedgers([...ledgers, response.data])
       setIsCreateDialogOpen(false)
