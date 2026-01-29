@@ -1,15 +1,19 @@
 import { apiClient } from "./client"
 import type { JsonApiListResponse, JsonApiResponse, TransactionResource, PaginationParams } from "./types"
 
+export interface TransactionFilters extends PaginationParams {
+  accountId?: string
+}
+
 export async function getTransactions(
-  ledgerId: string,
-  params?: PaginationParams
+  ledgerSlug: string,
+  params?: TransactionFilters
 ): Promise<JsonApiListResponse<TransactionResource>> {
   return apiClient.get(`/ledgers/${ledgerId}/transactions`, params as Record<string, string | number | undefined>)
 }
 
 export async function getTransaction(
-  ledgerId: string,
+  ledgerSlug: string,
   transactionId: string
 ): Promise<JsonApiResponse<TransactionResource>> {
   return apiClient.get(`/ledgers/${ledgerId}/transactions/${transactionId}`)
@@ -22,14 +26,9 @@ export interface TransactionEntryInput {
 }
 
 export interface CreateTransactionData {
-  data: {
-    type: "transactions"
-    attributes: {
-      date: string
-      description: string
-      entries: TransactionEntryInput[]
-    }
-  }
+  date: string
+  description: string
+  entries: TransactionEntryInput[]
 }
 
 export async function createTransaction(
@@ -40,15 +39,9 @@ export async function createTransaction(
 }
 
 export interface UpdateTransactionData {
-  data: {
-    type: "transactions"
-    id: string
-    attributes: {
-      date?: string
-      description?: string
-      entries?: TransactionEntryInput[]
-    }
-  }
+  date: string
+  description: string
+  entries: TransactionEntryInput[]
 }
 
 export async function updateTransaction(
