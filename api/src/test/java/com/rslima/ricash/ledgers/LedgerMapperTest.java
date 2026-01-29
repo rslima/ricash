@@ -80,6 +80,7 @@ class LedgerMapperTest {
     void toResource_mapsAccounts() {
         var account = new Account(
                 "account-id",
+                "checking",
                 "Checking",
                 "Main checking",
                 "USD",
@@ -87,6 +88,7 @@ class LedgerMapperTest {
                 AccountStatus.ACTIVE,
                 BigDecimal.ZERO,
                 Instant.now(),
+                null,
                 List.of()
         );
         var ledger = new Ledger(
@@ -112,6 +114,7 @@ class LedgerMapperTest {
     void toResource_mapsNestedAccounts() {
         var subAccount = new Account(
                 "sub-account-id",
+                "sub-account",
                 "Sub Account",
                 "Sub description",
                 "USD",
@@ -119,10 +122,12 @@ class LedgerMapperTest {
                 AccountStatus.ACTIVE,
                 BigDecimal.ZERO,
                 Instant.now(),
+                "account-id",
                 List.of()
         );
         var account = new Account(
                 "account-id",
+                "parent-account",
                 "Parent Account",
                 "Parent description",
                 "USD",
@@ -130,6 +135,7 @@ class LedgerMapperTest {
                 AccountStatus.ACTIVE,
                 BigDecimal.ZERO,
                 Instant.now(),
+                null,
                 List.of(subAccount)
         );
         var ledger = new Ledger(
@@ -156,6 +162,7 @@ class LedgerMapperTest {
         var now = Instant.now();
         var account = new Account(
                 "account-id",
+                "checking",
                 "Checking",
                 "Main checking account",
                 "USD",
@@ -163,6 +170,7 @@ class LedgerMapperTest {
                 AccountStatus.ACTIVE,
                 BigDecimal.valueOf(100.50),
                 now,
+                null,
                 List.of()
         );
 
@@ -180,8 +188,8 @@ class LedgerMapperTest {
 
     @Test
     void toAccountResources_mapsListOfAccounts() {
-        var account1 = new Account("id-1", "Account 1", "Desc 1", "USD", AccountType.ASSET, AccountStatus.ACTIVE, BigDecimal.ZERO, Instant.now(), List.of());
-        var account2 = new Account("id-2", "Account 2", "Desc 2", "EUR", AccountType.LIABILITY, AccountStatus.INACTIVE, BigDecimal.ZERO, Instant.now(), List.of());
+        var account1 = new Account("id-1", "account-1", "Account 1", "Desc 1", "USD", AccountType.ASSET, AccountStatus.ACTIVE, BigDecimal.ZERO, Instant.now(), null, List.of());
+        var account2 = new Account("id-2", "account-2", "Account 2", "Desc 2", "EUR", AccountType.LIABILITY, AccountStatus.INACTIVE, BigDecimal.ZERO, Instant.now(), null, List.of());
 
         var result = mapper.toAccountResources(List.of(account1, account2));
 

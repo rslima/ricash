@@ -1,5 +1,5 @@
 with recursive tree as (
-    select id, name, parent_id, 1 as level from account where parent_id is null
+    select id, name::text, accounts.parent_account_id, 1 as level from accounts where parent_account_id is null
     union all
-    select account.id, tree.name || ':' || account.name, account.parent_id, (tree.level + 1) as level from account join tree on account.parent_id = tree.id
+    select accounts.id, (tree.name || ':' || accounts.name)::text, accounts.parent_account_id, (tree.level + 1) as level from accounts join tree on accounts.parent_account_id = tree.id
 ) select * from tree;

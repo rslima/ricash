@@ -7,6 +7,7 @@ vi.mock("./client", () => ({
   apiClient: {
     get: vi.fn(),
     post: vi.fn(),
+    put: vi.fn(),
     patch: vi.fn(),
     delete: vi.fn(),
   },
@@ -16,6 +17,7 @@ const mockLedger: LedgerResource = {
   type: "ledgers",
   id: "ledger-1",
   attributes: {
+    slug: "personal-finance",
     name: "Personal Finance",
     description: "My personal ledger",
     currency: "USD",
@@ -127,21 +129,16 @@ describe("updateLedger", () => {
     const mockResponse: JsonApiResponse<LedgerResource> = {
       data: mockLedger,
     }
-    vi.mocked(apiClient.patch).mockResolvedValueOnce(mockResponse)
+    vi.mocked(apiClient.put).mockResolvedValueOnce(mockResponse)
 
     const updateData = {
-      data: {
-        type: "ledgers" as const,
-        id: "ledger-1",
-        attributes: {
-          name: "Updated Name",
-        },
-      },
+      name: "Updated Name",
+      description: "Updated description",
     }
 
-    await updateLedger("ledger-1", updateData)
+    await updateLedger("personal-finance", updateData)
 
-    expect(apiClient.patch).toHaveBeenCalledWith("/ledgers/ledger-1", updateData)
+    expect(apiClient.put).toHaveBeenCalledWith("/ledgers/personal-finance", updateData)
   })
 })
 

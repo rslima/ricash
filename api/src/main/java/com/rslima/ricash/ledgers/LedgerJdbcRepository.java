@@ -29,6 +29,18 @@ public class LedgerJdbcRepository implements LedgerRepository {
     public Page<Ledger> listUserLedgers(String userId, PageRequest pageRequest) {
 
         final var ledgersAndAccounts = jdbcClient.sql("""
+                           WITH RECURSIVE account_tree AS (
+                               -- Base case: each account includes itself
+                               SELECT id, id as root_id, ledger_id
+                               FROM accounts
+
+                               UNION ALL
+
+                               -- Recursive case: find children and link them to the same root
+                               SELECT a.id, at.root_id, a.ledger_id
+                               FROM accounts a
+                               INNER JOIN account_tree at ON a.parent_account_id = at.id
+                           )
                            SELECT
                                l.id l_id,
                                l.user_id,
@@ -39,6 +51,7 @@ public class LedgerJdbcRepository implements LedgerRepository {
                                l.created_at ledger_created_at,
                                ab.account_id,
                                ab.parent_account_id,
+                               ab.account_slug,
                                ab.account_name,
                                ab.account_description,
                                ab.account_currency,
@@ -60,6 +73,7 @@ public class LedgerJdbcRepository implements LedgerRepository {
                                    a.id AS account_id,
                                    a.ledger_id,
                                    a.parent_account_id,
+                                   a.slug AS account_slug,
                                    a.name AS account_name,
                                    a.description AS account_description,
                                    a.currency AS account_currency,
@@ -78,8 +92,9 @@ public class LedgerJdbcRepository implements LedgerRepository {
                                        0
                                    ) AS account_balance
                                FROM accounts a
-                               LEFT JOIN transaction_entries te ON a.id = te.account_id
-                               GROUP BY a.id, a.ledger_id, a.parent_account_id, a.name, a.description,
+                               LEFT JOIN account_tree at ON at.root_id = a.id AND at.ledger_id = a.ledger_id
+                               LEFT JOIN transaction_entries te ON at.id = te.account_id
+                               GROUP BY a.id, a.ledger_id, a.parent_account_id, a.slug, a.name, a.description,
                                         a.currency, a.status, a.type, a.created_at) ab
                            ON
                                l.id = ab.ledger_id""")
@@ -108,7 +123,7 @@ public class LedgerJdbcRepository implements LedgerRepository {
 
     record DBLedgerAndAccount(String lId, String userId, String ledgerSlug, String ledgerName, String ledgerDescription,
                               String ledgerCurrency, Instant ledgerCreatedAt,
-                              String accountId, String parentAccountId, String accountName, String accountDescription,
+                              String accountId, String parentAccountId, String accountSlug, String accountName, String accountDescription,
                               String accountCurrency, String status, String type, BigDecimal accountBalance,
                               Instant accountCreatedAt) {
     }
@@ -116,7 +131,7 @@ public class LedgerJdbcRepository implements LedgerRepository {
     record DBLedger(String id, String userId, String slug, String name, String description, String currency, Instant createdAt) {
     }
 
-    record DBAccount(String id, String ledgerId, String parentAccountId, String name, String description,
+    record DBAccount(String id, String ledgerId, String parentAccountId, String slug, String name, String description,
                      String currency,
                      String type, String status, BigDecimal balance, Instant createdAt) {
     }
@@ -135,6 +150,7 @@ public class LedgerJdbcRepository implements LedgerRepository {
                 la.accountId(),
                 la.lId(),
                 la.parentAccountId(),
+                la.accountSlug(),
                 la.accountName(),
                 la.accountDescription(),
                 la.accountCurrency(),
@@ -171,10 +187,25 @@ public class LedgerJdbcRepository implements LedgerRepository {
 
         if (dbLedger.isPresent()) {
             final var dbLedgerAccounts = jdbcClient.sql("""
+                            WITH RECURSIVE account_tree AS (
+                                -- Base case: each account includes itself
+                                SELECT id, id as root_id
+                                FROM accounts
+                                WHERE ledger_id = :id
+
+                                UNION ALL
+
+                                -- Recursive case: find children and link them to the same root
+                                SELECT a.id, at.root_id
+                                FROM accounts a
+                                INNER JOIN account_tree at ON a.parent_account_id = at.id
+                                WHERE a.ledger_id = :id
+                            )
                             SELECT
                                 a.id,
                                 a.ledger_id,
                                 a.parent_account_id,
+                                a.slug,
                                 a.name,
                                 a.description,
                                 a.currency,
@@ -195,10 +226,12 @@ public class LedgerJdbcRepository implements LedgerRepository {
                             FROM
                                 accounts a
                             LEFT JOIN
-                                transaction_entries te ON a.id = te.account_id
+                                account_tree at ON at.root_id = a.id
+                            LEFT JOIN
+                                transaction_entries te ON at.id = te.account_id
                             WHERE
                                 a.ledger_id = :id
-                            GROUP BY a.id, a.ledger_id, a.parent_account_id, a.name, a.description,
+                            GROUP BY a.id, a.ledger_id, a.parent_account_id, a.slug, a.name, a.description,
                                      a.currency, a.type, a.status, a.created_at
                             """)
                     .param("id", id)
@@ -239,10 +272,25 @@ public class LedgerJdbcRepository implements LedgerRepository {
         if (dbLedger.isPresent()) {
             final var id = dbLedger.get().id();
             final var dbLedgerAccounts = jdbcClient.sql("""
+                            WITH RECURSIVE account_tree AS (
+                                -- Base case: each account includes itself
+                                SELECT id, id as root_id
+                                FROM accounts
+                                WHERE ledger_id = :id
+
+                                UNION ALL
+
+                                -- Recursive case: find children and link them to the same root
+                                SELECT a.id, at.root_id
+                                FROM accounts a
+                                INNER JOIN account_tree at ON a.parent_account_id = at.id
+                                WHERE a.ledger_id = :id
+                            )
                             SELECT
                                 a.id,
                                 a.ledger_id,
                                 a.parent_account_id,
+                                a.slug,
                                 a.name,
                                 a.description,
                                 a.currency,
@@ -263,10 +311,12 @@ public class LedgerJdbcRepository implements LedgerRepository {
                             FROM
                                 accounts a
                             LEFT JOIN
-                                transaction_entries te ON a.id = te.account_id
+                                account_tree at ON at.root_id = a.id
+                            LEFT JOIN
+                                transaction_entries te ON at.id = te.account_id
                             WHERE
                                 a.ledger_id = :id
-                            GROUP BY a.id, a.ledger_id, a.parent_account_id, a.name, a.description,
+                            GROUP BY a.id, a.ledger_id, a.parent_account_id, a.slug, a.name, a.description,
                                      a.currency, a.type, a.status, a.created_at
                             """)
                     .param("id", id)
@@ -344,6 +394,7 @@ public class LedgerJdbcRepository implements LedgerRepository {
     private static @NotNull Account toAccount(DBAccount dbAccount) {
         return new Account(
                 dbAccount.id(),
+                dbAccount.slug(),
                 dbAccount.name(),
                 dbAccount.description(),
                 dbAccount.currency(),
@@ -351,6 +402,7 @@ public class LedgerJdbcRepository implements LedgerRepository {
                 AccountStatus.valueOf(dbAccount.status()),
                 dbAccount.balance() != null ? dbAccount.balance() : BigDecimal.ZERO,
                 dbAccount.createdAt(),
+                dbAccount.parentAccountId(),
                 new ArrayList<>());
     }
 

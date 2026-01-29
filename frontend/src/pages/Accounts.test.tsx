@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { render, screen, waitFor, within } from "@testing-library/react"
+import { render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { BrowserRouter } from "react-router-dom"
 import { Accounts } from "./Accounts"
@@ -42,6 +42,7 @@ const mockAccount: AccountResource = {
   type: "accounts",
   id: "account-1",
   attributes: {
+    slug: "checking-account",
     name: "Checking Account",
     type: "ASSET",
     currency: "USD",
@@ -151,7 +152,7 @@ describe("Accounts", () => {
       })
 
       expect(screen.getByText("ASSET")).toBeInTheDocument()
-      expect(screen.getByText("$1,000.50")).toBeInTheDocument()
+      expect(screen.getByText(/US\$\s*1\.000,50/)).toBeInTheDocument()
     })
 
     it("shows empty state when no accounts in ledger", async () => {

@@ -24,50 +24,50 @@ describe("cn", () => {
 })
 
 describe("formatCurrency", () => {
-  it("formats USD currency", () => {
-    expect(formatCurrency(1234.56, "USD")).toBe("$1,234.56")
+  it("formats BRL currency with Brazilian format", () => {
+    expect(formatCurrency(1234.56, "BRL")).toMatch(/R\$\s*1\.234,56/)
   })
 
-  it("formats EUR currency", () => {
-    expect(formatCurrency(1234.56, "EUR")).toContain("1,234.56")
+  it("formats USD currency with Brazilian format", () => {
+    expect(formatCurrency(1234.56, "USD")).toMatch(/US\$\s*1\.234,56/)
   })
 
-  it("defaults to USD", () => {
-    expect(formatCurrency(100)).toBe("$100.00")
+  it("defaults to BRL", () => {
+    expect(formatCurrency(100)).toMatch(/R\$\s*100,00/)
   })
 
   it("handles zero", () => {
-    expect(formatCurrency(0, "USD")).toBe("$0.00")
+    expect(formatCurrency(0, "BRL")).toMatch(/R\$\s*0,00/)
   })
 
   it("handles negative numbers", () => {
-    expect(formatCurrency(-50.25, "USD")).toBe("-$50.25")
+    expect(formatCurrency(-50.25, "BRL")).toMatch(/-R\$\s*50,25/)
   })
 
   it("handles large numbers", () => {
-    expect(formatCurrency(1000000, "USD")).toBe("$1,000,000.00")
+    expect(formatCurrency(1000000, "BRL")).toMatch(/R\$\s*1\.000\.000,00/)
   })
 })
 
 describe("formatDate", () => {
-  it("formats date string with timezone", () => {
+  it("formats date string with Brazilian format", () => {
     // Use ISO format with time to avoid timezone issues
     const result = formatDate("2024-01-15T12:00:00Z")
     expect(result).toContain("2024")
-    expect(result).toContain("Jan")
+    expect(result).toContain("jan")
     expect(result).toContain("15")
   })
 
-  it("formats Date object", () => {
+  it("formats Date object with Brazilian format", () => {
     // Month is 0-indexed, so 0 = January
     const result = formatDate(new Date(2024, 0, 15, 12, 0, 0))
-    expect(result).toBe("Jan 15, 2024")
+    expect(result).toBe("15 de jan. de 2024")
   })
 
-  it("formats ISO date string", () => {
+  it("formats ISO date string with Brazilian format", () => {
     const result = formatDate("2024-06-30T12:00:00Z")
     expect(result).toContain("2024")
-    expect(result).toContain("Jun")
+    expect(result).toContain("jun")
   })
 })
 
