@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo } from "react"
 import { useParams, Link } from "react-router-dom"
+import { useTranslation } from "react-i18next"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -117,9 +118,10 @@ interface AccountRowProps {
   onEdit: (account: AccountResource) => void
   onDelete: (accountId: string) => void
   ledgerSlug: string
+  t: (key: string) => string
 }
 
-function AccountRow({ node, depth, expandedIds, onToggleExpand, onEdit, onDelete, ledgerSlug }: AccountRowProps) {
+function AccountRow({ node, depth, expandedIds, onToggleExpand, onEdit, onDelete, ledgerSlug, t }: AccountRowProps) {
   const { account, children } = node
   const hasChildren = children.length > 0
   const isExpanded = expandedIds.has(account.id)
@@ -168,14 +170,14 @@ function AccountRow({ node, depth, expandedIds, onToggleExpand, onEdit, onDelete
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={() => onEdit(account)}>
                 <Pencil className="mr-2 h-4 w-4" />
-                Edit
+                {t("common.edit")}
               </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={() => onDelete(account.id)}
                 className="text-destructive"
               >
                 <Trash2 className="mr-2 h-4 w-4" />
-                Delete
+                {t("common.delete")}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -192,6 +194,7 @@ function AccountRow({ node, depth, expandedIds, onToggleExpand, onEdit, onDelete
             onEdit={onEdit}
             onDelete={onDelete}
             ledgerSlug={ledgerSlug}
+            t={t}
           />
         ))}
     </>
@@ -199,6 +202,7 @@ function AccountRow({ node, depth, expandedIds, onToggleExpand, onEdit, onDelete
 }
 
 export function Accounts() {
+  const { t } = useTranslation()
   const { ledgerSlug } = useParams<{ ledgerSlug?: string }>()
   const { isAuthenticated } = useAuth()
   const [accounts, setAccounts] = useState<AccountResource[]>([])
@@ -322,8 +326,8 @@ export function Accounts() {
     const childCount = getAllDescendantIds(accountId).length - 1
 
     const message = childCount > 0
-      ? `Are you sure you want to delete this account and its ${childCount} child account(s)?`
-      : "Are you sure you want to delete this account?"
+      ? t("accounts.confirmDeleteWithChildren", { count: childCount })
+      : t("accounts.confirmDelete")
 
     if (!confirm(message)) return
 
@@ -335,9 +339,9 @@ export function Accounts() {
     } catch (error) {
       console.error("Failed to delete account:", error)
       if (error instanceof ApiError && error.status === 409) {
-        alert("Cannot delete this account because it or one of its child accounts has associated transactions. Please delete the transactions first.")
+        alert(t("accounts.cannotDeleteWithTransactions"))
       } else {
-        alert("Failed to delete account. Please try again.")
+        alert(t("accounts.deleteFailed"))
       }
     }
   }
@@ -423,9 +427,9 @@ export function Accounts() {
       <div className="flex flex-col items-center justify-center h-full">
         <Card className="w-full max-w-md">
           <CardHeader className="text-center">
-            <CardTitle>Sign in Required</CardTitle>
+            <CardTitle>{t("auth.signInRequired")}</CardTitle>
             <CardDescription>
-              Please sign in to view your accounts
+              {t("auth.pleaseSignIn", { resource: t("nav.accounts").toLowerCase() })}
             </CardDescription>
           </CardHeader>
         </Card>
@@ -458,29 +462,29 @@ export function Accounts() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight">Accounts</h2>
+          <h2 className="text-2xl font-bold tracking-tight">{t("accounts.title")}</h2>
           <p className="text-muted-foreground">
-            Manage accounts within your ledgers
+            {t("accounts.subtitle")}
           </p>
         </div>
         <Button disabled={!selectedLedgerSlug} onClick={() => setIsCreateDialogOpen(true)}>
           <Plus className="mr-2 h-4 w-4" />
-          New Account
+          {t("accounts.newAccount")}
         </Button>
       </div>
 
       <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Create New Account</DialogTitle>
+            <DialogTitle>{t("accounts.createAccount")}</DialogTitle>
             <DialogDescription>
-              Add a new account to track your assets, liabilities, income, or expenses.
+              {t("accounts.createDescription")}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleCreate}>
             <div className="grid gap-4 py-4">
               <div className="grid gap-2">
-                <Label htmlFor="name">Name</Label>
+                <Label htmlFor="name">{t("common.name")}</Label>
                 <Input
                   id="name"
                   value={formData.name}
@@ -492,7 +496,7 @@ export function Accounts() {
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="type">Type</Label>
+                <Label htmlFor="type">{t("common.type")}</Label>
                 <Select
                   value={formData.type}
                   onValueChange={(value: AccountType) =>
@@ -500,19 +504,19 @@ export function Accounts() {
                   }
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Select account type" />
+                    <SelectValue placeholder={t("common.type")} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="ASSET">Asset</SelectItem>
-                    <SelectItem value="LIABILITY">Liability</SelectItem>
-                    <SelectItem value="EQUITY">Equity</SelectItem>
-                    <SelectItem value="INCOME">Income</SelectItem>
-                    <SelectItem value="EXPENSE">Expense</SelectItem>
+                    <SelectItem value="ASSET">{t("accounts.types.ASSET")}</SelectItem>
+                    <SelectItem value="LIABILITY">{t("accounts.types.LIABILITY")}</SelectItem>
+                    <SelectItem value="EQUITY">{t("accounts.types.EQUITY")}</SelectItem>
+                    <SelectItem value="INCOME">{t("accounts.types.INCOME")}</SelectItem>
+                    <SelectItem value="EXPENSE">{t("accounts.types.EXPENSE")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="parentAccount">Parent Account (optional)</Label>
+                <Label htmlFor="parentAccount">{t("accounts.parentAccount")} ({t("common.optional")})</Label>
                 <Select
                   value={formData.parentAccountId}
                   onValueChange={(value) =>
@@ -520,10 +524,10 @@ export function Accounts() {
                   }
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Select parent account" />
+                    <SelectValue placeholder={t("accounts.parentAccount")} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="none">None</SelectItem>
+                    <SelectItem value="none">{t("common.none")}</SelectItem>
                     {flattenTreeWithDepth(accountTree).map(({ account, depth }) => (
                       <SelectItem key={account.id} value={account.id}>
                         <span style={{ paddingLeft: `${depth * 16}px` }}>
@@ -536,7 +540,7 @@ export function Accounts() {
                 </Select>
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="currency">Currency</Label>
+                <Label htmlFor="currency">{t("common.currency")}</Label>
                 <Input
                   id="currency"
                   value={formData.currency}
@@ -548,7 +552,7 @@ export function Accounts() {
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="description">Description (optional)</Label>
+                <Label htmlFor="description">{t("common.description")} ({t("common.optional")})</Label>
                 <Input
                   id="description"
                   value={formData.description}
@@ -565,10 +569,10 @@ export function Accounts() {
                 variant="outline"
                 onClick={() => setIsCreateDialogOpen(false)}
               >
-                Cancel
+                {t("common.cancel")}
               </Button>
               <Button type="submit" disabled={isCreating}>
-                {isCreating ? "Creating..." : "Create Account"}
+                {isCreating ? t("accounts.creating") : t("accounts.createAccount")}
               </Button>
             </DialogFooter>
           </form>
@@ -578,15 +582,15 @@ export function Accounts() {
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Edit Account</DialogTitle>
+            <DialogTitle>{t("accounts.editAccount")}</DialogTitle>
             <DialogDescription>
-              Update the account details.
+              {t("accounts.editDescription")}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleUpdate}>
             <div className="grid gap-4 py-4">
               <div className="grid gap-2">
-                <Label htmlFor="edit-name">Name</Label>
+                <Label htmlFor="edit-name">{t("common.name")}</Label>
                 <Input
                   id="edit-name"
                   value={editFormData.name}
@@ -598,7 +602,7 @@ export function Accounts() {
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="edit-type">Type</Label>
+                <Label htmlFor="edit-type">{t("common.type")}</Label>
                 <Select
                   value={editFormData.type}
                   onValueChange={(value: AccountType) =>
@@ -606,19 +610,19 @@ export function Accounts() {
                   }
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Select account type" />
+                    <SelectValue placeholder={t("common.type")} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="ASSET">Asset</SelectItem>
-                    <SelectItem value="LIABILITY">Liability</SelectItem>
-                    <SelectItem value="EQUITY">Equity</SelectItem>
-                    <SelectItem value="INCOME">Income</SelectItem>
-                    <SelectItem value="EXPENSE">Expense</SelectItem>
+                    <SelectItem value="ASSET">{t("accounts.types.ASSET")}</SelectItem>
+                    <SelectItem value="LIABILITY">{t("accounts.types.LIABILITY")}</SelectItem>
+                    <SelectItem value="EQUITY">{t("accounts.types.EQUITY")}</SelectItem>
+                    <SelectItem value="INCOME">{t("accounts.types.INCOME")}</SelectItem>
+                    <SelectItem value="EXPENSE">{t("accounts.types.EXPENSE")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="edit-parentAccount">Parent Account (optional)</Label>
+                <Label htmlFor="edit-parentAccount">{t("accounts.parentAccount")} ({t("common.optional")})</Label>
                 <Select
                   value={editFormData.parentAccountId || "none"}
                   onValueChange={(value) =>
@@ -626,10 +630,10 @@ export function Accounts() {
                   }
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Select parent account" />
+                    <SelectValue placeholder={t("accounts.parentAccount")} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="none">None</SelectItem>
+                    <SelectItem value="none">{t("common.none")}</SelectItem>
                     {flattenTreeWithDepth(validParentAccountsForEditTree).map(({ account, depth }) => (
                       <SelectItem key={account.id} value={account.id}>
                         <span style={{ paddingLeft: `${depth * 16}px` }}>
@@ -642,7 +646,7 @@ export function Accounts() {
                 </Select>
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="edit-currency">Currency</Label>
+                <Label htmlFor="edit-currency">{t("common.currency")}</Label>
                 <Input
                   id="edit-currency"
                   value={editFormData.currency}
@@ -654,7 +658,7 @@ export function Accounts() {
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="edit-description">Description (optional)</Label>
+                <Label htmlFor="edit-description">{t("common.description")} ({t("common.optional")})</Label>
                 <Input
                   id="edit-description"
                   value={editFormData.description}
@@ -671,10 +675,10 @@ export function Accounts() {
                 variant="outline"
                 onClick={() => setIsEditDialogOpen(false)}
               >
-                Cancel
+                {t("common.cancel")}
               </Button>
               <Button type="submit" disabled={isUpdating}>
-                {isUpdating ? "Saving..." : "Save Changes"}
+                {isUpdating ? t("accounts.saving") : t("common.save")}
               </Button>
             </DialogFooter>
           </form>
@@ -702,20 +706,20 @@ export function Accounts() {
             <div>
               <CardTitle>
                 {selectedLedger
-                  ? `Accounts in ${selectedLedger.attributes.name}`
-                  : "Select a Ledger"}
+                  ? `${t("accounts.title")} - ${selectedLedger.attributes.name}`
+                  : t("accounts.noLedgerSelected")}
               </CardTitle>
               <CardDescription>
-                Track your assets, liabilities, income, and expenses
+                {t("accounts.subtitle")}
               </CardDescription>
             </div>
             {accounts.length > 0 && (
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" onClick={handleExpandAll}>
-                  Expand All
+                  {t("accounts.expandAll")}
                 </Button>
                 <Button variant="outline" size="sm" onClick={handleCollapseAll}>
-                  Collapse All
+                  {t("accounts.collapseAll")}
                 </Button>
               </div>
             )}
@@ -731,12 +735,12 @@ export function Accounts() {
           ) : !selectedLedgerSlug ? (
             <div className="flex flex-col items-center justify-center py-12">
               <Wallet className="h-12 w-12 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold">No ledger selected</h3>
+              <h3 className="text-lg font-semibold">{t("accounts.noLedgerSelected")}</h3>
               <p className="text-sm text-muted-foreground mb-4">
-                Select a ledger above to view its accounts
+                {t("accounts.selectLedgerDescription")}
               </p>
               <Link to="/ledgers">
-                <Button variant="outline">Go to Ledgers</Button>
+                <Button variant="outline">{t("accounts.goToLedgers")}</Button>
               </Link>
             </div>
           ) : accounts.length > 0 ? (
@@ -783,13 +787,13 @@ export function Accounts() {
           ) : (
             <div className="flex flex-col items-center justify-center py-12">
               <Wallet className="h-12 w-12 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold">No accounts yet</h3>
+              <h3 className="text-lg font-semibold">{t("accounts.noAccounts")}</h3>
               <p className="text-sm text-muted-foreground mb-4">
-                Create your first account to start tracking
+                {t("accounts.noAccountsDescription")}
               </p>
               <Button onClick={() => setIsCreateDialogOpen(true)}>
                 <Plus className="mr-2 h-4 w-4" />
-                Create Account
+                {t("accounts.createAccount")}
               </Button>
             </div>
           )}

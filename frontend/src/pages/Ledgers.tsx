@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
 import { Link } from "react-router-dom"
+import { useTranslation } from "react-i18next"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -35,6 +36,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 
 export function Ledgers() {
+  const { t } = useTranslation()
   const { isAuthenticated } = useAuth()
   const [ledgers, setLedgers] = useState<LedgerResource[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -74,7 +76,7 @@ export function Ledgers() {
   }, [isAuthenticated])
 
   const handleDelete = async (slug: string) => {
-    if (!confirm("Are you sure you want to delete this ledger?")) return
+    if (!confirm(t("ledgers.confirmDelete"))) return
 
     try {
       await deleteLedger(slug)
@@ -140,9 +142,9 @@ export function Ledgers() {
       <div className="flex flex-col items-center justify-center h-full">
         <Card className="w-full max-w-md">
           <CardHeader className="text-center">
-            <CardTitle>Sign in Required</CardTitle>
+            <CardTitle>{t("auth.signInRequired")}</CardTitle>
             <CardDescription>
-              Please sign in to view your ledgers
+              {t("auth.pleaseSignIn", { resource: t("nav.ledgers").toLowerCase() })}
             </CardDescription>
           </CardHeader>
         </Card>
@@ -154,29 +156,29 @@ export function Ledgers() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight">Ledgers</h2>
+          <h2 className="text-2xl font-bold tracking-tight">{t("ledgers.title")}</h2>
           <p className="text-muted-foreground">
-            Manage your financial ledgers
+            {t("ledgers.subtitle")}
           </p>
         </div>
         <Button onClick={() => setIsCreateDialogOpen(true)}>
           <Plus className="mr-2 h-4 w-4" />
-          New Ledger
+          {t("ledgers.newLedger")}
         </Button>
       </div>
 
       <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Create New Ledger</DialogTitle>
+            <DialogTitle>{t("ledgers.createLedger")}</DialogTitle>
             <DialogDescription>
-              A ledger is a collection of accounts for tracking your finances.
+              {t("ledgers.createDescription")}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleCreate}>
             <div className="grid gap-4 py-4">
               <div className="grid gap-2">
-                <Label htmlFor="name">Name</Label>
+                <Label htmlFor="name">{t("common.name")}</Label>
                 <Input
                   id="name"
                   value={formData.name}
@@ -188,7 +190,7 @@ export function Ledgers() {
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="currency">Currency</Label>
+                <Label htmlFor="currency">{t("common.currency")}</Label>
                 <Input
                   id="currency"
                   value={formData.currency}
@@ -200,7 +202,7 @@ export function Ledgers() {
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="description">Description (optional)</Label>
+                <Label htmlFor="description">{t("common.description")} ({t("common.optional")})</Label>
                 <Input
                   id="description"
                   value={formData.description}
@@ -217,10 +219,10 @@ export function Ledgers() {
                 variant="outline"
                 onClick={() => setIsCreateDialogOpen(false)}
               >
-                Cancel
+                {t("common.cancel")}
               </Button>
               <Button type="submit" disabled={isCreating}>
-                {isCreating ? "Creating..." : "Create Ledger"}
+                {isCreating ? t("ledgers.creating") : t("ledgers.createLedger")}
               </Button>
             </DialogFooter>
           </form>
@@ -230,15 +232,15 @@ export function Ledgers() {
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Edit Ledger</DialogTitle>
+            <DialogTitle>{t("ledgers.editLedger")}</DialogTitle>
             <DialogDescription>
-              Update the ledger details.
+              {t("ledgers.editDescription")}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleUpdate}>
             <div className="grid gap-4 py-4">
               <div className="grid gap-2">
-                <Label htmlFor="edit-name">Name</Label>
+                <Label htmlFor="edit-name">{t("common.name")}</Label>
                 <Input
                   id="edit-name"
                   value={editFormData.name}
@@ -250,7 +252,7 @@ export function Ledgers() {
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="edit-description">Description (optional)</Label>
+                <Label htmlFor="edit-description">{t("common.description")} ({t("common.optional")})</Label>
                 <Input
                   id="edit-description"
                   value={editFormData.description}
@@ -267,10 +269,10 @@ export function Ledgers() {
                 variant="outline"
                 onClick={() => setIsEditDialogOpen(false)}
               >
-                Cancel
+                {t("common.cancel")}
               </Button>
               <Button type="submit" disabled={isUpdating}>
-                {isUpdating ? "Saving..." : "Save Changes"}
+                {isUpdating ? t("ledgers.saving") : t("common.save")}
               </Button>
             </DialogFooter>
           </form>
@@ -279,9 +281,9 @@ export function Ledgers() {
 
       <Card>
         <CardHeader>
-          <CardTitle>All Ledgers</CardTitle>
+          <CardTitle>{t("ledgers.title")}</CardTitle>
           <CardDescription>
-            A ledger is a collection of accounts for tracking finances
+            {t("ledgers.createNew")}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -295,10 +297,10 @@ export function Ledgers() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Currency</TableHead>
-                  <TableHead>Description</TableHead>
-                  <TableHead>Created</TableHead>
+                  <TableHead>{t("common.name")}</TableHead>
+                  <TableHead>{t("common.currency")}</TableHead>
+                  <TableHead>{t("common.description")}</TableHead>
+                  <TableHead>{t("common.date")}</TableHead>
                   <TableHead className="w-[70px]"></TableHead>
                 </TableRow>
               </TableHeader>
@@ -335,14 +337,14 @@ export function Ledgers() {
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem onClick={() => handleEdit(ledger)}>
                             <Pencil className="mr-2 h-4 w-4" />
-                            Edit
+                            {t("common.edit")}
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             onClick={() => handleDelete(ledger.attributes.slug)}
                             className="text-destructive"
                           >
                             <Trash2 className="mr-2 h-4 w-4" />
-                            Delete
+                            {t("common.delete")}
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -354,13 +356,13 @@ export function Ledgers() {
           ) : (
             <div className="flex flex-col items-center justify-center py-12">
               <BookOpen className="h-12 w-12 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold">No ledgers yet</h3>
+              <h3 className="text-lg font-semibold">{t("ledgers.noLedgers")}</h3>
               <p className="text-sm text-muted-foreground mb-4">
-                Create your first ledger to start tracking your finances
+                {t("ledgers.noLedgersDescription")}
               </p>
               <Button onClick={() => setIsCreateDialogOpen(true)}>
                 <Plus className="mr-2 h-4 w-4" />
-                Create Ledger
+                {t("ledgers.createLedger")}
               </Button>
             </div>
           )}

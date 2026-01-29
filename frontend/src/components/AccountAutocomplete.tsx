@@ -1,4 +1,5 @@
 import * as React from "react"
+import { useTranslation } from "react-i18next"
 import { Check, ChevronsUpDown, ChevronRight } from "lucide-react"
 
 import { cn } from "@/lib/utils"
@@ -83,8 +84,9 @@ export function AccountAutocomplete({
   accounts,
   value,
   onValueChange,
-  placeholder = "Select account...",
+  placeholder,
 }: AccountAutocompleteProps) {
+  const { t } = useTranslation()
   const [open, setOpen] = React.useState(false)
 
   const breadcrumbs = React.useMemo(() => buildAccountBreadcrumbs(accounts), [accounts])
@@ -101,6 +103,8 @@ export function AccountAutocomplete({
     })
   }, [accounts, breadcrumbs])
 
+  const effectivePlaceholder = placeholder || t("transactions.selectAccount")
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -113,16 +117,16 @@ export function AccountAutocomplete({
           {selectedAccount && selectedBreadcrumb ? (
             <AccountBreadcrumb parts={selectedBreadcrumb} />
           ) : (
-            <span className="text-muted-foreground">{placeholder}</span>
+            <span className="text-muted-foreground">{effectivePlaceholder}</span>
           )}
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-[400px] p-0" align="start">
         <Command>
-          <CommandInput placeholder="Search accounts..." />
+          <CommandInput placeholder={t("transactions.searchAccounts")} />
           <CommandList>
-            <CommandEmpty>No account found.</CommandEmpty>
+            <CommandEmpty>{t("common.noResults")}</CommandEmpty>
             <CommandGroup>
               {sortedAccounts.map((account) => {
                 const accountBreadcrumb = breadcrumbs.get(account.id) || [account.attributes.name]

@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo } from "react"
 import { useParams, Link } from "react-router-dom"
+import { useTranslation } from "react-i18next"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -22,27 +23,28 @@ import { ArrowLeft, ArrowLeftRight, ChevronRight } from "lucide-react"
 
 // Build breadcrumb path for an account
 function buildAccountBreadcrumb(
-  accountId: string,
-  accounts: AccountResource[]
+  targetAccountId: string,
+  accountList: AccountResource[]
 ): string[] {
   const accountMap = new Map<string, AccountResource>()
-  accounts.forEach((account) => {
-    accountMap.set(account.id, account)
+  accountList.forEach((acct: AccountResource) => {
+    accountMap.set(acct.id, acct)
   })
 
   const breadcrumb: string[] = []
-  let currentId: string | undefined = accountId
+  let currentId: string | undefined = targetAccountId
 
   while (currentId && accountMap.has(currentId)) {
-    const account = accountMap.get(currentId)!
-    breadcrumb.unshift(account.attributes.name)
-    currentId = account.attributes.parentAccountId || undefined
+    const acct: AccountResource = accountMap.get(currentId)!
+    breadcrumb.unshift(acct.attributes.name)
+    currentId = acct.attributes.parentAccountId || undefined
   }
 
   return breadcrumb
 }
 
 export function AccountTransactions() {
+  const { t } = useTranslation()
   const { ledgerSlug, accountId } = useParams<{ ledgerSlug: string; accountId: string }>()
   const { isAuthenticated } = useAuth()
   const [transactions, setTransactions] = useState<TransactionResource[]>([])
@@ -89,9 +91,9 @@ export function AccountTransactions() {
       <div className="flex flex-col items-center justify-center h-full">
         <Card className="w-full max-w-md">
           <CardHeader className="text-center">
-            <CardTitle>Sign in Required</CardTitle>
+            <CardTitle>{t("auth.signInRequired")}</CardTitle>
             <CardDescription>
-              Please sign in to view account transactions
+              {t("auth.pleaseSignIn", { resource: t("nav.transactions").toLowerCase() })}
             </CardDescription>
           </CardHeader>
         </Card>
@@ -119,20 +121,20 @@ export function AccountTransactions() {
             ))}
           </div>
           <h2 className="text-2xl font-bold tracking-tight">
-            {account ? `Transactions for ${account.attributes.name}` : "Account Transactions"}
+            {account ? t("accountTransactions.title", { name: account.attributes.name }) : t("transactions.title")}
           </h2>
           <p className="text-muted-foreground">
             {ledger && `${ledger.attributes.name} - `}
-            Showing all transactions involving this account
+            {t("accountTransactions.subtitle")}
           </p>
         </div>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Transactions</CardTitle>
+          <CardTitle>{t("transactions.title")}</CardTitle>
           <CardDescription>
-            {transactions.length} transaction{transactions.length !== 1 ? "s" : ""} found
+            {t("accountTransactions.transactionsFound", { count: transactions.length })}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -146,10 +148,10 @@ export function AccountTransactions() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Description</TableHead>
-                  <TableHead>Entries</TableHead>
-                  <TableHead className="text-right">Amount</TableHead>
+                  <TableHead>{t("common.date")}</TableHead>
+                  <TableHead>{t("common.description")}</TableHead>
+                  <TableHead>{t("transactions.entries")}</TableHead>
+                  <TableHead className="text-right">{t("common.amount")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -190,12 +192,12 @@ export function AccountTransactions() {
           ) : (
             <div className="flex flex-col items-center justify-center py-12">
               <ArrowLeftRight className="h-12 w-12 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold">No transactions yet</h3>
+              <h3 className="text-lg font-semibold">{t("accountTransactions.noTransactions")}</h3>
               <p className="text-sm text-muted-foreground mb-4">
-                This account has no transactions
+                {t("accountTransactions.noTransactionsDescription")}
               </p>
               <Link to={`/ledgers/${ledgerSlug}/transactions`}>
-                <Button variant="outline">Go to Transactions</Button>
+                <Button variant="outline">{t("accountTransactions.goToTransactions")}</Button>
               </Link>
             </div>
           )}

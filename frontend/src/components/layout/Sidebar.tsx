@@ -1,4 +1,5 @@
 import { NavLink } from "react-router-dom"
+import { useTranslation } from "react-i18next"
 import {
   LayoutDashboard,
   BookOpen,
@@ -23,14 +24,15 @@ interface SidebarProps {
 }
 
 const navigation = [
-  { name: "Dashboard", href: "/", icon: LayoutDashboard },
-  { name: "Ledgers", href: "/ledgers", icon: BookOpen },
-  { name: "Accounts", href: "/accounts", icon: Wallet },
-  { name: "Transactions", href: "/transactions", icon: ArrowLeftRight },
-  { name: "Settings", href: "/settings", icon: Settings },
+  { key: "dashboard", href: "/", icon: LayoutDashboard },
+  { key: "ledgers", href: "/ledgers", icon: BookOpen },
+  { key: "accounts", href: "/accounts", icon: Wallet },
+  { key: "transactions", href: "/transactions", icon: ArrowLeftRight },
+  { key: "settings", href: "/settings", icon: Settings },
 ]
 
 export function Sidebar({ collapsed, onToggle }: SidebarProps) {
+  const { t } = useTranslation()
   return (
     <TooltipProvider delayDuration={0}>
       <aside
@@ -61,9 +63,10 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
 
         <nav className="flex-1 space-y-1 p-2">
           {navigation.map((item) => {
+            const name = t(`nav.${item.key}`)
             const NavItem = (
               <NavLink
-                key={item.name}
+                key={item.key}
                 to={item.href}
                 className={({ isActive }) =>
                   cn(
@@ -76,15 +79,15 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                 }
               >
                 <item.icon className="h-5 w-5 shrink-0" />
-                {!collapsed && <span>{item.name}</span>}
+                {!collapsed && <span>{name}</span>}
               </NavLink>
             )
 
             if (collapsed) {
               return (
-                <Tooltip key={item.name}>
+                <Tooltip key={item.key}>
                   <TooltipTrigger asChild>{NavItem}</TooltipTrigger>
-                  <TooltipContent side="right">{item.name}</TooltipContent>
+                  <TooltipContent side="right">{name}</TooltipContent>
                 </Tooltip>
               )
             }

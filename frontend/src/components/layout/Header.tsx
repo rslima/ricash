@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next"
 import { useAuth } from "@/contexts/AuthContext"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
@@ -12,6 +13,7 @@ import {
 import { LogOut, User } from "lucide-react"
 
 export function Header() {
+  const { t } = useTranslation()
   const { user, logout, isAuthenticated, startLogin } = useAuth()
 
   const getInitials = (name: string) => {
@@ -26,7 +28,7 @@ export function Header() {
   return (
     <header className="flex h-14 items-center justify-between border-b border-border bg-background px-6">
       <div className="flex items-center gap-4">
-        <h1 className="text-lg font-semibold">Personal Finance</h1>
+        <h1 className="text-lg font-semibold">Ricash</h1>
       </div>
 
       <div className="flex items-center gap-4">
@@ -51,18 +53,18 @@ export function Header() {
               <DropdownMenuSeparator />
               <DropdownMenuItem>
                 <User className="mr-2 h-4 w-4" />
-                <span>Profile</span>
+                <span>{t("settings.profile")}</span>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={logout}>
                 <LogOut className="mr-2 h-4 w-4" />
-                <span>Log out</span>
+                <span>{t("auth.signOut")}</span>
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         ) : (
           <Button variant="outline" size="sm" onClick={startLogin}>
-            Sign In
+            {t("auth.signIn")}
           </Button>
         )}
       </div>
