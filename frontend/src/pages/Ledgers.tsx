@@ -23,10 +23,10 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { useAuth } from "@/contexts/AuthContext"
-import { getLedgers, deleteLedger, createLedger } from "@/api/ledgers"
+import { getLedgers, deleteLedger, createLedger, updateLedger } from "@/api/ledgers"
 import type { LedgerResource } from "@/api/types"
 import { formatDate } from "@/lib/utils"
-import { Plus, Trash2, BookOpen, MoreHorizontal } from "lucide-react"
+import { Plus, Trash2, BookOpen, MoreHorizontal, Pencil } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -39,11 +39,18 @@ export function Ledgers() {
   const [ledgers, setLedgers] = useState<LedgerResource[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [isCreating, setIsCreating] = useState(false)
+  const [isUpdating, setIsUpdating] = useState(false)
+  const [editingLedger, setEditingLedger] = useState<LedgerResource | null>(null)
   const [formData, setFormData] = useState({
     name: "",
     description: "",
-    currency: "USD",
+    currency: "BRL",
+  })
+  const [editFormData, setEditFormData] = useState({
+    name: "",
+    description: "",
   })
 
   const fetchLedgers = async () => {
@@ -66,12 +73,12 @@ export function Ledgers() {
     fetchLedgers()
   }, [isAuthenticated])
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = async (slug: string) => {
     if (!confirm("Are you sure you want to delete this ledger?")) return
 
     try {
-      await deleteLedger(id)
-      setLedgers(ledgers.filter((l) => l.id !== id))
+      await deleteLedger(slug)
+      setLedgers(ledgers.filter((l) => l.attributes.slug !== slug))
     } catch (error) {
       console.error("Failed to delete ledger:", error)
     }
@@ -89,11 +96,42 @@ export function Ledgers() {
       })
       setLedgers([...ledgers, response.data])
       setIsCreateDialogOpen(false)
-      setFormData({ name: "", description: "", currency: "USD" })
+      setFormData({ name: "", description: "", currency: "BRL" })
     } catch (error) {
       console.error("Failed to create ledger:", error)
     } finally {
       setIsCreating(false)
+    }
+  }
+
+  const handleEdit = (ledger: LedgerResource) => {
+    setEditingLedger(ledger)
+    setEditFormData({
+      name: ledger.attributes.name,
+      description: ledger.attributes.description || "",
+    })
+    setIsEditDialogOpen(true)
+  }
+
+  const handleUpdate = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editingLedger) return
+    setIsUpdating(true)
+
+    try {
+      const response = await updateLedger(editingLedger.attributes.slug, {
+        name: editFormData.name,
+        description: editFormData.description || undefined,
+      })
+      setLedgers(ledgers.map((l) =>
+        l.id === editingLedger.id ? response.data : l
+      ))
+      setIsEditDialogOpen(false)
+      setEditingLedger(null)
+    } catch (error) {
+      console.error("Failed to update ledger:", error)
+    } finally {
+      setIsUpdating(false)
     }
   }
 
@@ -189,6 +227,56 @@ export function Ledgers() {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Ledger</DialogTitle>
+            <DialogDescription>
+              Update the ledger details.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleUpdate}>
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label htmlFor="edit-name">Name</Label>
+                <Input
+                  id="edit-name"
+                  value={editFormData.name}
+                  onChange={(e) =>
+                    setEditFormData({ ...editFormData, name: e.target.value })
+                  }
+                  placeholder="Personal Finance"
+                  required
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-description">Description (optional)</Label>
+                <Input
+                  id="edit-description"
+                  value={editFormData.description}
+                  onChange={(e) =>
+                    setEditFormData({ ...editFormData, description: e.target.value })
+                  }
+                  placeholder="Track personal income and expenses"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsEditDialogOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isUpdating}>
+                {isUpdating ? "Saving..." : "Save Changes"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
       <Card>
         <CardHeader>
           <CardTitle>All Ledgers</CardTitle>
@@ -219,7 +307,7 @@ export function Ledgers() {
                   <TableRow key={ledger.id}>
                     <TableCell>
                       <Link
-                        to={`/ledgers/${ledger.id}`}
+                        to={`/ledgers/${ledger.attributes.slug}/accounts`}
                         className="font-medium hover:underline flex items-center gap-2"
                       >
                         <BookOpen className="h-4 w-4 text-muted-foreground" />
@@ -245,8 +333,12 @@ export function Ledgers() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => handleEdit(ledger)}>
+                            <Pencil className="mr-2 h-4 w-4" />
+                            Edit
+                          </DropdownMenuItem>
                           <DropdownMenuItem
-                            onClick={() => handleDelete(ledger.id)}
+                            onClick={() => handleDelete(ledger.attributes.slug)}
                             className="text-destructive"
                           >
                             <Trash2 className="mr-2 h-4 w-4" />

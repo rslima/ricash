@@ -45,6 +45,15 @@ public class LedgerServiceBean implements LedgerService {
         return ledgerRepository.create(ledger);
     }
 
+    @Override
+    public Ledger update(String userId, String slug, UpdateLedgerRequest request) {
+        // Verify ledger exists
+        ledgerRepository.findBySlug(userId, slug)
+                .orElseThrow(() -> new LedgerNotFoundException(slug));
+
+        return ledgerRepository.update(userId, slug, request.name(), request.description());
+    }
+
     private String generateUniqueSlug(String userId, String baseSlug) {
         String slug = baseSlug;
         int counter = 1;

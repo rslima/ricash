@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -73,6 +74,15 @@ public class LedgerController {
         return ResponseEntity
                 .created(linkTo(methodOn(LedgerController.class).getLedger(createdLedger.slug(), principal)).toUri())
                 .body(entityModel);
+    }
+
+    public EntityModel<LedgerResource> updateLedger(
+            @PathVariable String slug,
+            JwtAuthenticationToken principal,
+            @Valid @RequestBody UpdateLedgerRequest request) {
+
+        Ledger updatedLedger = ledgerService.update(getUserId(principal), slug, request);
+        return toEntityModel(updatedLedger, principal);
     }
 
     private EntityModel<LedgerResource> toEntityModel(Ledger ledger, JwtAuthenticationToken principal) {

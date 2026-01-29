@@ -20,18 +20,14 @@ export async function createLedger(data: CreateLedgerData): Promise<JsonApiRespo
 }
 
 export interface UpdateLedgerData {
-  data: {
-    type: "ledgers"
-    id: string
-    attributes: {
-      name?: string
-      description?: string
-    }
-  }
+  name: string
+  description?: string
 }
 
 export async function updateLedger(id: string, data: UpdateLedgerData): Promise<JsonApiResponse<LedgerResource>> {
   return apiClient.patch(`/ledgers/${id}`, data)
+export async function updateLedger(slug: string, data: UpdateLedgerData): Promise<JsonApiResponse<LedgerResource>> {
+  return apiClient.put(`/ledgers/${slug}`, data)
 }
 
 export async function deleteLedger(id: string): Promise<void> {

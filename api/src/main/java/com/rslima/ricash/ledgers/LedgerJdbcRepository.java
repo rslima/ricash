@@ -299,6 +299,21 @@ public class LedgerJdbcRepository implements LedgerRepository {
     }
 
     @Override
+    public Ledger update(String userId, String slug, String name, String description) {
+        jdbcClient.sql("""
+                        UPDATE ledgers SET name = :name, description = :description
+                        WHERE user_id = :userId AND slug = :slug
+                        """)
+                .param("userId", userId)
+                .param("slug", slug)
+                .param("name", name)
+                .param("description", description)
+                .update();
+
+        return findBySlug(userId, slug).orElseThrow();
+    }
+
+    @Override
     public boolean existsBySlug(String userId, String slug) {
         return jdbcClient.sql("""
                         SELECT COUNT(*) FROM ledgers WHERE user_id = :userId AND slug = :slug

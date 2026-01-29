@@ -9,4 +9,5 @@ public interface LedgerService {
     Page<Ledger> listUserLedgers(String userId, PageRequest pageRequest);
     Optional<Ledger> findBySlug(String userId, String slug);
     Ledger create(String userId, CreateLedgerRequest request);
+    Ledger update(String userId, String slug, UpdateLedgerRequest request);
 }

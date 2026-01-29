@@ -14,5 +14,7 @@ public interface LedgerRepository {
 
     Ledger create(Ledger ledger);
 
+    Ledger update(String userId, String slug, String name, String description);
+
     boolean existsBySlug(String userId, String slug);
 }
