@@ -22,6 +22,7 @@ import java.util.List;
 public class AccountResource extends RepresentationModel<AccountResource> {
     @JsonApiId
     private String id;
+    private String slug;
     private String name;
     private String description;
     private String currency;
@@ -29,6 +30,7 @@ public class AccountResource extends RepresentationModel<AccountResource> {
     private AccountStatus status;
     private BigDecimal balance;
     private Instant createdAt;
+    private String parentAccountId;
     @JsonApiRelationships("subaccounts")
     @JsonIgnore
     private List<AccountResource> subAccounts;

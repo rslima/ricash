@@ -12,10 +12,12 @@ import org.springframework.hateoas.EntityModel;
 import org.springframework.hateoas.PagedModel;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -24,6 +26,7 @@ import org.springframework.web.bind.annotation.RestController;
 import static com.toedter.spring.hateoas.jsonapi.MediaTypes.JSON_API_VALUE;
 import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.linkTo;
 import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.methodOn;
+import static org.springframework.http.HttpStatus.CONFLICT;
 import static org.springframework.http.HttpStatus.NOT_FOUND;
 
 @RestController
@@ -77,6 +80,26 @@ public class AccountController {
         return ResponseEntity
                 .created(linkTo(methodOn(AccountController.class).getAccount(ledgerSlug, createdAccount.id(), principal)).toUri())
                 .body(entityModel);
+    }
+
+    public EntityModel<AccountResource> updateAccount(
+            @PathVariable String ledgerSlug,
+            @PathVariable String accountId,
+            JwtAuthenticationToken principal,
+            @Valid @RequestBody UpdateAccountRequest request) {
+
+        Account updatedAccount = accountService.update(getUserId(principal), ledgerSlug, accountId, request);
+        return toEntityModel(ledgerSlug, updatedAccount, principal);
+    }
+
+    @DeleteMapping("/{accountId}")
+    public ResponseEntity<Void> deleteAccount(
+            @PathVariable String ledgerSlug,
+            @PathVariable String accountId,
+            JwtAuthenticationToken principal) {
+
+        accountService.delete(getUserId(principal), ledgerSlug, accountId);
+        return ResponseEntity.noContent().build();
     }
 
     private EntityModel<AccountResource> toEntityModel(String ledgerSlug, Account account, JwtAuthenticationToken principal) {
@@ -146,6 +169,16 @@ public class AccountController {
                         JsonApiError.create()
                                 .withStatus(Integer.toString(NOT_FOUND.value()))
                                 .withTitle(NOT_FOUND.getReasonPhrase())
+                                .withDetail(ex.getMessage())));
+    }
+
+    @ExceptionHandler(AccountHasTransactionsException.class)
+    public ResponseEntity<JsonApiErrors> handleAccountHasTransactionsException(AccountHasTransactionsException ex) {
+        return ResponseEntity.status(CONFLICT).body(
+                JsonApiErrors.create().withError(
+                        JsonApiError.create()
+                                .withStatus(Integer.toString(CONFLICT.value()))
+                                .withTitle(CONFLICT.getReasonPhrase())
                                 .withDetail(ex.getMessage())));
     }
 }

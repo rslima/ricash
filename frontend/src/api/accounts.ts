@@ -28,14 +28,11 @@ export async function createAccount(
 }
 
 export interface UpdateAccountData {
-  data: {
-    type: "accounts"
-    id: string
-    attributes: {
-      name?: string
-      description?: string
-    }
-  }
+  name: string
+  description?: string
+  type: "ASSET" | "LIABILITY" | "EQUITY" | "INCOME" | "EXPENSE"
+  currency: string
+  parentAccountId?: string | null
 }
 
 export async function updateAccount(

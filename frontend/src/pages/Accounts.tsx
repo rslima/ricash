@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react"
+import { useEffect, useState, useMemo } from "react"
 import { useParams, Link } from "react-router-dom"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -36,11 +37,12 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { useAuth } from "@/contexts/AuthContext"
-import { getAccounts, deleteAccount, createAccount } from "@/api/accounts"
+import { getAccounts, deleteAccount, createAccount, updateAccount } from "@/api/accounts"
+import { ApiError } from "@/api/client"
 import { getLedgers } from "@/api/ledgers"
 import type { AccountResource, LedgerResource } from "@/api/types"
 import { formatCurrency } from "@/lib/utils"
-import { Plus, Trash2, Wallet, MoreHorizontal } from "lucide-react"
+import { Plus, Trash2, Wallet, MoreHorizontal, Pencil, ChevronRight, ChevronDown } from "lucide-react"
 
 const accountTypeColors: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
   ASSET: "default",
@@ -52,6 +54,146 @@ const accountTypeColors: Record<string, "default" | "secondary" | "destructive" 
 
 type AccountType = "ASSET" | "LIABILITY" | "EQUITY" | "INCOME" | "EXPENSE"
 
+interface AccountTreeNode {
+  account: AccountResource
+  children: AccountTreeNode[]
+}
+
+function buildAccountTree(accounts: AccountResource[]): AccountTreeNode[] {
+  const accountMap = new Map<string, AccountTreeNode>()
+  const roots: AccountTreeNode[] = []
+
+  // Create nodes for all accounts
+  accounts.forEach((account) => {
+    accountMap.set(account.id, { account, children: [] })
+  })
+
+  // Build the tree structure
+  accounts.forEach((account) => {
+    const node = accountMap.get(account.id)!
+    const parentId = account.attributes.parentAccountId
+
+    if (parentId && accountMap.has(parentId)) {
+      accountMap.get(parentId)!.children.push(node)
+    } else {
+      roots.push(node)
+    }
+  })
+
+  return roots
+}
+
+interface FlatAccountWithDepth {
+  account: AccountResource
+  depth: number
+}
+
+function flattenTreeWithDepth(
+  nodes: AccountTreeNode[],
+  depth: number = 0
+): FlatAccountWithDepth[] {
+  const result: FlatAccountWithDepth[] = []
+  for (const node of nodes) {
+    result.push({ account: node.account, depth })
+    result.push(...flattenTreeWithDepth(node.children, depth + 1))
+  }
+  return result
+}
+
+interface AccountRowProps {
+  node: AccountTreeNode
+  depth: number
+  expandedIds: Set<string>
+  onToggleExpand: (id: string) => void
+  onEdit: (account: AccountResource) => void
+  onDelete: (accountId: string) => void
+  ledgerSlug: string
+}
+
+function AccountRow({ node, depth, expandedIds, onToggleExpand, onEdit, onDelete, ledgerSlug }: AccountRowProps) {
+  const { account, children } = node
+  const hasChildren = children.length > 0
+  const isExpanded = expandedIds.has(account.id)
+
+  return (
+    <>
+      <TableRow>
+        <TableCell className="font-medium">
+          <div className="flex items-center gap-2" style={{ paddingLeft: `${depth * 24}px` }}>
+            {hasChildren ? (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 p-0"
+                onClick={() => onToggleExpand(account.id)}
+              >
+                {isExpanded ? (
+                  <ChevronDown className="h-4 w-4" />
+                ) : (
+                  <ChevronRight className="h-4 w-4" />
+                )}
+              </Button>
+            ) : (
+              <span className="w-6" />
+            )}
+            <Wallet className="h-4 w-4 text-muted-foreground" />
+            <Link
+              to={`/ledgers/${ledgerSlug}/accounts/${account.id}/transactions`}
+              className="hover:underline hover:text-primary"
+            >
+              {account.attributes.name}
+            </Link>
+          </div>
+        </TableCell>
+        <TableCell>
+          <Badge variant={accountTypeColors[account.attributes.type]}>
+            {account.attributes.type}
+          </Badge>
+        </TableCell>
+        <TableCell>{account.attributes.currency}</TableCell>
+        <TableCell className="text-right font-mono">
+          {formatCurrency(account.attributes.balance, account.attributes.currency)}
+        </TableCell>
+        <TableCell>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon">
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => onEdit(account)}>
+                <Pencil className="mr-2 h-4 w-4" />
+                Edit
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => onDelete(account.id)}
+                className="text-destructive"
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </TableCell>
+      </TableRow>
+      {isExpanded &&
+        children.map((child) => (
+          <AccountRow
+            key={child.account.id}
+            node={child}
+            depth={depth + 1}
+            expandedIds={expandedIds}
+            onToggleExpand={onToggleExpand}
+            onEdit={onEdit}
+            onDelete={onDelete}
+            ledgerSlug={ledgerSlug}
+          />
+        ))}
+    </>
+  )
+}
+
 export function Accounts() {
   const { ledgerSlug } = useParams<{ ledgerSlug?: string }>()
   const { isAuthenticated } = useAuth()
@@ -60,13 +202,27 @@ export function Accounts() {
   const [selectedLedgerSlug, setSelectedLedgerSlug] = useState<string | null>(ledgerSlug || null)
   const [isLoading, setIsLoading] = useState(true)
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [isCreating, setIsCreating] = useState(false)
+  const [isUpdating, setIsUpdating] = useState(false)
+  const [editingAccount, setEditingAccount] = useState<AccountResource | null>(null)
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
   const [formData, setFormData] = useState({
     name: "",
     description: "",
-    currency: "USD",
+    currency: "BRL",
     type: "ASSET" as AccountType,
+    parentAccountId: "",
   })
+  const [editFormData, setEditFormData] = useState({
+    name: "",
+    description: "",
+    type: "ASSET" as AccountType,
+    currency: "BRL",
+    parentAccountId: "",
+  })
+
+  const accountTree = useMemo(() => buildAccountTree(accounts), [accounts])
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -94,20 +250,71 @@ export function Accounts() {
     getAccounts(selectedLedgerSlug)
       .then((response) => {
         setAccounts(response.data)
+        // Expand all accounts by default
+        setExpandedIds(new Set(response.data.map((a) => a.id)))
       })
       .catch(console.error)
       .finally(() => setIsLoading(false))
   }, [selectedLedgerSlug, isAuthenticated])
 
+  const handleToggleExpand = (id: string) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) {
+        next.delete(id)
+      } else {
+        next.add(id)
+      }
+      return next
+    })
+  }
+
+  const handleExpandAll = () => {
+    setExpandedIds(new Set(accounts.map((a) => a.id)))
+  }
+
+  const handleCollapseAll = () => {
+    setExpandedIds(new Set())
+  }
+
+  // Get all descendant IDs of an account (including the account itself)
+  const getAllDescendantIds = (accountId: string): string[] => {
+    const descendants: string[] = [accountId]
+    const findDescendants = (id: string) => {
+      accounts
+        .filter((a) => a.attributes.parentAccountId === id)
+        .forEach((child) => {
+          descendants.push(child.id)
+          findDescendants(child.id)
+        })
+    }
+    findDescendants(accountId)
+    return descendants
+  }
+
   const handleDelete = async (accountId: string) => {
     if (!selectedLedgerSlug) return
-    if (!confirm("Are you sure you want to delete this account?")) return
+
+    const childCount = getAllDescendantIds(accountId).length - 1
+
+    const message = childCount > 0
+      ? `Are you sure you want to delete this account and its ${childCount} child account(s)?`
+      : "Are you sure you want to delete this account?"
+
+    if (!confirm(message)) return
 
     try {
       await deleteAccount(selectedLedgerSlug, accountId)
-      setAccounts(accounts.filter((a) => a.id !== accountId))
+      // Remove the account and all its descendants from state
+      const idsToRemove = new Set(getAllDescendantIds(accountId))
+      setAccounts(accounts.filter((a) => !idsToRemove.has(a.id)))
     } catch (error) {
       console.error("Failed to delete account:", error)
+      if (error instanceof ApiError && error.status === 409) {
+        alert("Cannot delete this account because it or one of its child accounts has associated transactions. Please delete the transactions first.")
+      } else {
+        alert("Failed to delete account. Please try again.")
+      }
     }
   }
 
@@ -122,15 +329,69 @@ export function Accounts() {
         description: formData.description || undefined,
         currency: formData.currency,
         type: formData.type,
+        parentAccountId: formData.parentAccountId || undefined,
       })
       setAccounts([...accounts, response.data])
+      setExpandedIds((prev) => new Set([...prev, response.data.id]))
       setIsCreateDialogOpen(false)
-      setFormData({ name: "", description: "", currency: "USD", type: "ASSET" })
+      setFormData({ name: "", description: "", currency: "BRL", type: "ASSET", parentAccountId: "" })
     } catch (error) {
       console.error("Failed to create account:", error)
     } finally {
       setIsCreating(false)
     }
+  }
+
+  const handleEdit = (account: AccountResource) => {
+    setEditingAccount(account)
+    setEditFormData({
+      name: account.attributes.name,
+      description: account.attributes.description || "",
+      type: account.attributes.type as AccountType,
+      currency: account.attributes.currency,
+      parentAccountId: account.attributes.parentAccountId || "",
+    })
+    setIsEditDialogOpen(true)
+  }
+
+  const handleUpdate = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!selectedLedgerSlug || !editingAccount) return
+    setIsUpdating(true)
+
+    try {
+      const response = await updateAccount(selectedLedgerSlug, editingAccount.id, {
+        name: editFormData.name,
+        description: editFormData.description || undefined,
+        type: editFormData.type,
+        currency: editFormData.currency,
+        parentAccountId: editFormData.parentAccountId || null,
+      })
+      setAccounts(accounts.map((a) =>
+        a.id === editingAccount.id ? response.data : a
+      ))
+      setIsEditDialogOpen(false)
+      setEditingAccount(null)
+    } catch (error) {
+      console.error("Failed to update account:", error)
+    } finally {
+      setIsUpdating(false)
+    }
+  }
+
+  // Get all descendant IDs of an account (for filtering parent options)
+  const getDescendantIds = (accountId: string): Set<string> => {
+    const descendants = new Set<string>()
+    const findDescendants = (id: string) => {
+      accounts
+        .filter((a) => a.attributes.parentAccountId === id)
+        .forEach((child) => {
+          descendants.add(child.id)
+          findDescendants(child.id)
+        })
+    }
+    findDescendants(accountId)
+    return descendants
   }
 
   if (!isAuthenticated) {
@@ -149,6 +410,25 @@ export function Accounts() {
   }
 
   const selectedLedger = ledgers.find((l) => l.attributes.slug === selectedLedgerSlug)
+
+  // Filter valid parent accounts for edit (exclude self and descendants) and build tree
+  const validParentAccountsForEditTree = useMemo(() => {
+    if (!editingAccount) return accountTree
+
+    const excludedIds = new Set([editingAccount.id, ...getDescendantIds(editingAccount.id)])
+
+    // Filter and rebuild tree excluding the account and its descendants
+    const filterTree = (nodes: AccountTreeNode[]): AccountTreeNode[] => {
+      return nodes
+        .filter((node) => !excludedIds.has(node.account.id))
+        .map((node) => ({
+          ...node,
+          children: filterTree(node.children),
+        }))
+    }
+
+    return filterTree(accountTree)
+  }, [accountTree, editingAccount, accounts])
 
   return (
     <div className="space-y-6">
@@ -208,6 +488,30 @@ export function Accounts() {
                 </Select>
               </div>
               <div className="grid gap-2">
+                <Label htmlFor="parentAccount">Parent Account (optional)</Label>
+                <Select
+                  value={formData.parentAccountId}
+                  onValueChange={(value) =>
+                    setFormData({ ...formData, parentAccountId: value === "none" ? "" : value })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select parent account" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    {flattenTreeWithDepth(accountTree).map(({ account, depth }) => (
+                      <SelectItem key={account.id} value={account.id}>
+                        <span style={{ paddingLeft: `${depth * 16}px` }}>
+                          {depth > 0 && "└ "}
+                          {account.attributes.name}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
                 <Label htmlFor="currency">Currency</Label>
                 <Input
                   id="currency"
@@ -247,6 +551,112 @@ export function Accounts() {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Account</DialogTitle>
+            <DialogDescription>
+              Update the account details.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleUpdate}>
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label htmlFor="edit-name">Name</Label>
+                <Input
+                  id="edit-name"
+                  value={editFormData.name}
+                  onChange={(e) =>
+                    setEditFormData({ ...editFormData, name: e.target.value })
+                  }
+                  placeholder="Checking Account"
+                  required
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-type">Type</Label>
+                <Select
+                  value={editFormData.type}
+                  onValueChange={(value: AccountType) =>
+                    setEditFormData({ ...editFormData, type: value })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select account type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ASSET">Asset</SelectItem>
+                    <SelectItem value="LIABILITY">Liability</SelectItem>
+                    <SelectItem value="EQUITY">Equity</SelectItem>
+                    <SelectItem value="INCOME">Income</SelectItem>
+                    <SelectItem value="EXPENSE">Expense</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-parentAccount">Parent Account (optional)</Label>
+                <Select
+                  value={editFormData.parentAccountId || "none"}
+                  onValueChange={(value) =>
+                    setEditFormData({ ...editFormData, parentAccountId: value === "none" ? "" : value })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select parent account" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    {flattenTreeWithDepth(validParentAccountsForEditTree).map(({ account, depth }) => (
+                      <SelectItem key={account.id} value={account.id}>
+                        <span style={{ paddingLeft: `${depth * 16}px` }}>
+                          {depth > 0 && "└ "}
+                          {account.attributes.name}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-currency">Currency</Label>
+                <Input
+                  id="edit-currency"
+                  value={editFormData.currency}
+                  onChange={(e) =>
+                    setEditFormData({ ...editFormData, currency: e.target.value })
+                  }
+                  placeholder="BRL"
+                  required
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-description">Description (optional)</Label>
+                <Input
+                  id="edit-description"
+                  value={editFormData.description}
+                  onChange={(e) =>
+                    setEditFormData({ ...editFormData, description: e.target.value })
+                  }
+                  placeholder="Main checking account for daily expenses"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsEditDialogOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isUpdating}>
+                {isUpdating ? "Saving..." : "Save Changes"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
       {ledgers.length > 0 && (
         <div className="flex gap-2 flex-wrap">
           {ledgers.map((ledger) => (
@@ -264,14 +674,28 @@ export function Accounts() {
 
       <Card>
         <CardHeader>
-          <CardTitle>
-            {selectedLedger
-              ? `Accounts in ${selectedLedger.attributes.name}`
-              : "Select a Ledger"}
-          </CardTitle>
-          <CardDescription>
-            Track your assets, liabilities, income, and expenses
-          </CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>
+                {selectedLedger
+                  ? `Accounts in ${selectedLedger.attributes.name}`
+                  : "Select a Ledger"}
+              </CardTitle>
+              <CardDescription>
+                Track your assets, liabilities, income, and expenses
+              </CardDescription>
+            </div>
+            {accounts.length > 0 && (
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={handleExpandAll}>
+                  Expand All
+                </Button>
+                <Button variant="outline" size="sm" onClick={handleCollapseAll}>
+                  Collapse All
+                </Button>
+              </div>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           {isLoading ? (
@@ -303,42 +727,17 @@ export function Accounts() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {accounts.map((account) => (
-                  <TableRow key={account.id}>
-                    <TableCell className="font-medium">
-                      <div className="flex items-center gap-2">
-                        <Wallet className="h-4 w-4 text-muted-foreground" />
-                        {account.attributes.name}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={accountTypeColors[account.attributes.type]}>
-                        {account.attributes.type}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>{account.attributes.currency}</TableCell>
-                    <TableCell className="text-right font-mono">
-                      {formatCurrency(account.attributes.balance, account.attributes.currency)}
-                    </TableCell>
-                    <TableCell>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem
-                            onClick={() => handleDelete(account.id)}
-                            className="text-destructive"
-                          >
-                            <Trash2 className="mr-2 h-4 w-4" />
-                            Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
+                {accountTree.map((node) => (
+                  <AccountRow
+                    key={node.account.id}
+                    node={node}
+                    depth={0}
+                    expandedIds={expandedIds}
+                    onToggleExpand={handleToggleExpand}
+                    onEdit={handleEdit}
+                    onDelete={handleDelete}
+                    ledgerSlug={selectedLedgerSlug!}
+                  />
                 ))}
               </TableBody>
             </Table>

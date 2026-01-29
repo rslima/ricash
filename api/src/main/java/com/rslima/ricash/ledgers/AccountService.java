@@ -11,4 +11,8 @@ public interface AccountService {
     Optional<Account> find(String userId, String ledgerSlug, String accountId);
 
     Account create(String userId, String ledgerSlug, CreateAccountRequest request);
+
+    Account update(String userId, String ledgerSlug, String accountId, UpdateAccountRequest request);
+
+    void delete(String userId, String ledgerSlug, String accountId);
 }
