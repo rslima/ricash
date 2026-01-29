@@ -53,6 +53,8 @@ const accountTypeColors: Record<string, "default" | "secondary" | "destructive" 
 
 type AccountType = "ASSET" | "LIABILITY" | "EQUITY" | "INCOME" | "EXPENSE"
 
+const ACCOUNT_TYPE_ORDER: AccountType[] = ["ASSET", "LIABILITY", "EQUITY", "INCOME", "EXPENSE"]
+
 interface AccountTreeNode {
   account: AccountResource
   children: AccountTreeNode[]
@@ -99,6 +101,14 @@ function flattenTreeWithDepth(
   return result
 }
 
+function countTreeNodes(nodes: AccountTreeNode[]): number {
+  let count = 0
+  for (const node of nodes) {
+    count += 1 + countTreeNodes(node.children)
+  }
+  return count
+}
+
 interface AccountRowProps {
   node: AccountTreeNode
   depth: number
@@ -143,11 +153,6 @@ function AccountRow({ node, depth, expandedIds, onToggleExpand, onEdit, onDelete
               {account.attributes.name}
             </Link>
           </div>
-        </TableCell>
-        <TableCell>
-          <Badge variant={accountTypeColors[account.attributes.type]}>
-            {account.attributes.type}
-          </Badge>
         </TableCell>
         <TableCell>{account.attributes.currency}</TableCell>
         <TableCell className="text-right font-mono">
@@ -222,6 +227,26 @@ export function Accounts() {
   })
 
   const accountTree = useMemo(() => buildAccountTree(accounts), [accounts])
+
+  // Group account trees by type
+  const accountsByType = useMemo(() => {
+    const grouped: Record<AccountType, AccountTreeNode[]> = {
+      ASSET: [],
+      LIABILITY: [],
+      EQUITY: [],
+      INCOME: [],
+      EXPENSE: [],
+    }
+
+    accountTree.forEach((node) => {
+      const type = node.account.attributes.type as AccountType
+      if (grouped[type]) {
+        grouped[type].push(node)
+      }
+    })
+
+    return grouped
+  }, [accountTree])
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -715,31 +740,46 @@ export function Accounts() {
               </Link>
             </div>
           ) : accounts.length > 0 ? (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Currency</TableHead>
-                  <TableHead className="text-right">Balance</TableHead>
-                  <TableHead className="w-[70px]"></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {accountTree.map((node) => (
-                  <AccountRow
-                    key={node.account.id}
-                    node={node}
-                    depth={0}
-                    expandedIds={expandedIds}
-                    onToggleExpand={handleToggleExpand}
-                    onEdit={handleEdit}
-                    onDelete={handleDelete}
-                    ledgerSlug={selectedLedgerSlug!}
-                  />
-                ))}
-              </TableBody>
-            </Table>
+            <div className="space-y-6">
+              {ACCOUNT_TYPE_ORDER.map((type) => {
+                const typeAccounts = accountsByType[type]
+                if (typeAccounts.length === 0) return null
+
+                return (
+                  <div key={type}>
+                    <div className="flex items-center gap-2 mb-3">
+                      <h3 className="text-lg font-semibold">{t(`accounts.typeGroups.${type}`)}</h3>
+                      <Badge variant={accountTypeColors[type]}>{countTreeNodes(typeAccounts)}</Badge>
+                    </div>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>{t("common.name")}</TableHead>
+                          <TableHead>{t("common.currency")}</TableHead>
+                          <TableHead className="text-right">{t("common.balance")}</TableHead>
+                          <TableHead className="w-[70px]"></TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {typeAccounts.map((node) => (
+                          <AccountRow
+                            key={node.account.id}
+                            node={node}
+                            depth={0}
+                            expandedIds={expandedIds}
+                            onToggleExpand={handleToggleExpand}
+                            onEdit={handleEdit}
+                            onDelete={handleDelete}
+                            ledgerSlug={selectedLedgerSlug!}
+                            t={t}
+                          />
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )
+              })}
+            </div>
           ) : (
             <div className="flex flex-col items-center justify-center py-12">
               <Wallet className="h-12 w-12 text-muted-foreground mb-4" />

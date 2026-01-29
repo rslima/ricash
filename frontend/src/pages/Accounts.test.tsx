@@ -151,7 +151,8 @@ describe("Accounts", () => {
         expect(screen.getByText("Checking Account")).toBeInTheDocument()
       })
 
-      expect(screen.getByText("ASSET")).toBeInTheDocument()
+      // Accounts are now grouped by type, so we see the group header
+      expect(screen.getByText("Assets")).toBeInTheDocument()
       expect(screen.getByText(/US\$\s*1\.000,50/)).toBeInTheDocument()
     })
 
@@ -258,10 +259,11 @@ describe("Accounts", () => {
         expect(screen.getByText("Groceries")).toBeInTheDocument()
       })
 
-      expect(screen.getByText("ASSET")).toBeInTheDocument()
-      expect(screen.getByText("LIABILITY")).toBeInTheDocument()
-      expect(screen.getByText("INCOME")).toBeInTheDocument()
-      expect(screen.getByText("EXPENSE")).toBeInTheDocument()
+      // Accounts are now grouped by type with group headers
+      expect(screen.getByText("Assets")).toBeInTheDocument()
+      expect(screen.getByText("Liabilities")).toBeInTheDocument()
+      expect(screen.getByText("Income")).toBeInTheDocument()
+      expect(screen.getByText("Expenses")).toBeInTheDocument()
     })
 
     it("switches between ledgers", async () => {
