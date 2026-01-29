@@ -17,12 +17,22 @@ public class LedgerConfiguration {
     }
 
     @Bean
-    public AccountService accountService(AccountRepository accountRepository, LedgerRepository ledgerRepository) {
-        return new AccountServiceBean(accountRepository, ledgerRepository);
+    public AccountService accountService(AccountRepository accountRepository, LedgerRepository ledgerRepository, SlugService slugService) {
+        return new AccountServiceBean(accountRepository, ledgerRepository, slugService);
     }
 
     @Bean
     public AccountRepository accountRepository(JdbcClient jdbcClient) {
         return new AccountJdbcRepository(jdbcClient);
+    }
+
+    @Bean
+    public TransactionService transactionService(TransactionRepository transactionRepository, LedgerRepository ledgerRepository) {
+        return new TransactionServiceBean(transactionRepository, ledgerRepository);
+    }
+
+    @Bean
+    public TransactionRepository transactionRepository(JdbcClient jdbcClient) {
+        return new TransactionJdbcRepository(jdbcClient);
     }
 }
