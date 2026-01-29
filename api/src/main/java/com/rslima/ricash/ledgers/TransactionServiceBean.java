@@ -85,7 +85,11 @@ public class TransactionServiceBean implements TransactionService {
                 debitEntries
         );
 
-        return transactionRepository.create(ledger.id(), transaction);
+        transactionRepository.create(ledger.id(), transaction);
+
+        // Fetch the created transaction to get account names populated
+        return transactionRepository.findById(ledger.id(), transaction.id())
+                .orElseThrow(() -> new TransactionNotFoundException(transaction.id()));
     }
 
     @Override
@@ -142,7 +146,11 @@ public class TransactionServiceBean implements TransactionService {
                 debitEntries
         );
 
-        return transactionRepository.update(ledger.id(), transaction);
+        transactionRepository.update(ledger.id(), transaction);
+
+        // Fetch the updated transaction to get account names populated
+        return transactionRepository.findById(ledger.id(), transactionId)
+                .orElseThrow(() -> new TransactionNotFoundException(transactionId));
     }
 
     @Override
