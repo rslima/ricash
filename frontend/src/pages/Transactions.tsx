@@ -44,6 +44,7 @@ interface TransactionEntry {
 }
 
 export function Transactions() {
+  const { ledgerSlug } = useParams<{ ledgerSlug?: string }>()
   const { isAuthenticated } = useAuth()
   const [transactions, setTransactions] = useState<TransactionResource[]>([])
   const [ledgers, setLedgers] = useState<LedgerResource[]>([])

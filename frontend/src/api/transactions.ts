@@ -9,14 +9,14 @@ export async function getTransactions(
   ledgerSlug: string,
   params?: TransactionFilters
 ): Promise<JsonApiListResponse<TransactionResource>> {
-  return apiClient.get(`/ledgers/${ledgerId}/transactions`, params as Record<string, string | number | undefined>)
+  return apiClient.get(`/ledgers/${ledgerSlug}/transactions`, params as Record<string, string | number | undefined>)
 }
 
 export async function getTransaction(
   ledgerSlug: string,
   transactionId: string
 ): Promise<JsonApiResponse<TransactionResource>> {
-  return apiClient.get(`/ledgers/${ledgerId}/transactions/${transactionId}`)
+  return apiClient.get(`/ledgers/${ledgerSlug}/transactions/${transactionId}`)
 }
 
 export interface TransactionEntryInput {
@@ -32,10 +32,10 @@ export interface CreateTransactionData {
 }
 
 export async function createTransaction(
-  ledgerId: string,
+  ledgerSlug: string,
   data: CreateTransactionData
 ): Promise<JsonApiResponse<TransactionResource>> {
-  return apiClient.post(`/ledgers/${ledgerId}/transactions`, data)
+  return apiClient.post(`/ledgers/${ledgerSlug}/transactions`, data)
 }
 
 export interface UpdateTransactionData {
@@ -45,13 +45,13 @@ export interface UpdateTransactionData {
 }
 
 export async function updateTransaction(
-  ledgerId: string,
+  ledgerSlug: string,
   transactionId: string,
   data: UpdateTransactionData
 ): Promise<JsonApiResponse<TransactionResource>> {
-  return apiClient.patch(`/ledgers/${ledgerId}/transactions/${transactionId}`, data)
+  return apiClient.put(`/ledgers/${ledgerSlug}/transactions/${transactionId}`, data)
 }
 
-export async function deleteTransaction(ledgerId: string, transactionId: string): Promise<void> {
-  return apiClient.delete(`/ledgers/${ledgerId}/transactions/${transactionId}`)
+export async function deleteTransaction(ledgerSlug: string, transactionId: string): Promise<void> {
+  return apiClient.delete(`/ledgers/${ledgerSlug}/transactions/${transactionId}`)
 }

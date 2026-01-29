@@ -56,6 +56,7 @@ export interface LedgerAttributes {
 export type LedgerResource = JsonApiResource<"ledgers", LedgerAttributes>
 
 export interface AccountAttributes {
+  slug: string
   name: string
   type: "ASSET" | "LIABILITY" | "EQUITY" | "INCOME" | "EXPENSE"
   currency: string

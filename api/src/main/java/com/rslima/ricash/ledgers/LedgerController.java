@@ -76,6 +76,7 @@ public class LedgerController {
                 .body(entityModel);
     }
 
+    @PutMapping("/{slug}")
     public EntityModel<LedgerResource> updateLedger(
             @PathVariable String slug,
             JwtAuthenticationToken principal,

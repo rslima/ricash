@@ -40,7 +40,7 @@ export async function updateAccount(
   accountId: string,
   data: UpdateAccountData
 ): Promise<JsonApiResponse<AccountResource>> {
-  return apiClient.patch(`/ledgers/${ledgerSlug}/accounts/${accountId}`, data)
+  return apiClient.put(`/ledgers/${ledgerSlug}/accounts/${accountId}`, data)
 }
 
 export async function deleteAccount(ledgerSlug: string, accountId: string): Promise<void> {

@@ -24,8 +24,6 @@ export interface UpdateLedgerData {
   description?: string
 }
 
-export async function updateLedger(id: string, data: UpdateLedgerData): Promise<JsonApiResponse<LedgerResource>> {
-  return apiClient.patch(`/ledgers/${id}`, data)
 export async function updateLedger(slug: string, data: UpdateLedgerData): Promise<JsonApiResponse<LedgerResource>> {
   return apiClient.put(`/ledgers/${slug}`, data)
 }

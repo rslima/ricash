@@ -82,6 +82,7 @@ public class AccountController {
                 .body(entityModel);
     }
 
+    @PutMapping("/{accountId}")
     public EntityModel<AccountResource> updateAccount(
             @PathVariable String ledgerSlug,
             @PathVariable String accountId,
