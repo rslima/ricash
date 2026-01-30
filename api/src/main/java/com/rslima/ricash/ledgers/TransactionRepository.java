@@ -20,4 +20,6 @@ public interface TransactionRepository {
     void delete(String ledgerId, String transactionId);
 
     List<String> findDistinctDescriptions(String ledgerId);
+
+    List<Transaction> findTransactionTemplates(String ledgerId);
 }

@@ -17,18 +17,21 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover"
+import type { TransactionResource } from "@/api/types"
 
 interface DescriptionAutocompleteProps {
-  suggestions: string[]
+  templates: TransactionResource[]
   value: string
   onValueChange: (value: string) => void
+  onTemplateSelect?: (template: TransactionResource) => void
   placeholder?: string
 }
 
 export function DescriptionAutocomplete({
-  suggestions,
+  templates,
   value,
   onValueChange,
+  onTemplateSelect,
   placeholder,
 }: DescriptionAutocompleteProps) {
   const { t } = useTranslation()
@@ -40,29 +43,44 @@ export function DescriptionAutocomplete({
     setInputValue(value)
   }, [value])
 
-  // Get unique suggestions, sorted by frequency (most common first)
-  const uniqueSuggestions = React.useMemo(() => {
-    const counts = new Map<string, number>()
-    suggestions.forEach((s) => {
-      counts.set(s, (counts.get(s) || 0) + 1)
+  // Build a map of descriptions to templates for quick lookup
+  const templateMap = React.useMemo(() => {
+    const map = new Map<string, TransactionResource>()
+    templates.forEach((template) => {
+      map.set(template.attributes.description, template)
     })
-    return [...new Set(suggestions)].sort((a, b) => {
-      const countDiff = (counts.get(b) || 0) - (counts.get(a) || 0)
-      if (countDiff !== 0) return countDiff
-      return a.localeCompare(b)
-    })
-  }, [suggestions])
+    return map
+  }, [templates])
+
+  // Get unique descriptions sorted alphabetically
+  const uniqueDescriptions = React.useMemo(() => {
+    return [...new Set(templates.map((t) => t.attributes.description))].sort((a, b) =>
+      a.localeCompare(b)
+    )
+  }, [templates])
 
   // Filter suggestions based on input
-  const filteredSuggestions = React.useMemo(() => {
-    if (!inputValue) return uniqueSuggestions.slice(0, 10)
+  const filteredDescriptions = React.useMemo(() => {
+    if (!inputValue) return uniqueDescriptions.slice(0, 10)
     const lower = inputValue.toLowerCase()
-    return uniqueSuggestions
+    return uniqueDescriptions
       .filter((s) => s.toLowerCase().includes(lower))
       .slice(0, 10)
-  }, [uniqueSuggestions, inputValue])
+  }, [uniqueDescriptions, inputValue])
 
   const effectivePlaceholder = placeholder || t("common.description")
+
+  const handleSelect = (description: string) => {
+    onValueChange(description)
+    setInputValue(description)
+    setOpen(false)
+
+    // If there's a template for this description, call the callback
+    const template = templateMap.get(description)
+    if (template && onTemplateSelect) {
+      onTemplateSelect(template)
+    }
+  }
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -94,23 +112,19 @@ export function DescriptionAutocomplete({
           <CommandList>
             <CommandEmpty>{t("common.noResults")}</CommandEmpty>
             <CommandGroup>
-              {filteredSuggestions.map((suggestion) => (
+              {filteredDescriptions.map((description) => (
                 <CommandItem
-                  key={suggestion}
-                  value={suggestion}
-                  onSelect={() => {
-                    onValueChange(suggestion)
-                    setInputValue(suggestion)
-                    setOpen(false)
-                  }}
+                  key={description}
+                  value={description}
+                  onSelect={() => handleSelect(description)}
                 >
                   <Check
                     className={cn(
                       "mr-2 h-4 w-4",
-                      value === suggestion ? "opacity-100" : "opacity-0"
+                      value === description ? "opacity-100" : "opacity-0"
                     )}
                   />
-                  <span className="truncate">{suggestion}</span>
+                  <span className="truncate">{description}</span>
                 </CommandItem>
               ))}
             </CommandGroup>

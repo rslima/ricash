@@ -332,4 +332,44 @@ public class TransactionJdbcRepository implements TransactionRepository {
                 .query(String.class)
                 .list();
     }
+
+    @Override
+    public List<Transaction> findTransactionTemplates(String ledgerId) {
+        // Get the most recent transaction for each unique description
+        final var results = jdbcClient.sql("""
+                        WITH latest_transactions AS (
+                            SELECT DISTINCT ON (description)
+                                id, ledger_id, date, description, created_at
+                            FROM transactions
+                            WHERE ledger_id = :ledgerId
+                            ORDER BY description, date DESC, created_at DESC
+                        )
+                        SELECT
+                            t.id AS transaction_id,
+                            t.date,
+                            t.description,
+                            t.created_at,
+                            te.id AS entry_id,
+                            te.account_id,
+                            a.name AS account_name,
+                            te.amount,
+                            te.type,
+                            te.currency,
+                            te.to_amount,
+                            te.to_currency,
+                            te.instrument_id,
+                            te.quantity,
+                            i.symbol AS instrument_symbol
+                        FROM latest_transactions t
+                        LEFT JOIN transaction_entries te ON t.id = te.transaction_id
+                        LEFT JOIN accounts a ON te.account_id = a.id
+                        LEFT JOIN instruments i ON te.instrument_id = i.id
+                        ORDER BY t.description
+                        """)
+                .param("ledgerId", ledgerId)
+                .query(DBTransactionWithEntry.class)
+                .list();
+
+        return groupToTransactions(results);
+    }
 }

@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react"
-import { useParams, Link } from "react-router-dom"
+import { useEffect, useState, useMemo } from "react"
+import { useParams, Link, useLocation } from "react-router-dom"
 import { useTranslation } from "react-i18next"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -39,7 +39,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { useAuth } from "@/contexts/AuthContext"
-import { getTransactions, deleteTransaction, createTransaction, updateTransaction, getTransactionDescriptions, type TransactionEntryInput } from "@/api/transactions"
+import { getTransactions, deleteTransaction, createTransaction, updateTransaction, getTransactionTemplates, type TransactionEntryInput } from "@/api/transactions"
 import { getLedgers } from "@/api/ledgers"
 import { getAccounts } from "@/api/accounts"
 import { getAllInstruments } from "@/api/instruments"
@@ -58,15 +58,28 @@ interface TransactionEntry {
   quantity?: string
 }
 
+interface PrefilledEntry {
+  accountId: string
+  currency: string
+  type: "DEBIT" | "CREDIT"
+}
+
+interface LocationState {
+  createTransaction?: boolean
+  prefilledEntry?: PrefilledEntry
+}
+
 export function Transactions() {
   const { t } = useTranslation()
   const { ledgerSlug } = useParams<{ ledgerSlug?: string }>()
+  const location = useLocation()
   const { isAuthenticated } = useAuth()
+  const locationState = location.state as LocationState | undefined
   const [transactions, setTransactions] = useState<TransactionResource[]>([])
   const [ledgers, setLedgers] = useState<LedgerResource[]>([])
   const [accounts, setAccounts] = useState<AccountResource[]>([])
   const [instruments, setInstruments] = useState<InstrumentResource[]>([])
-  const [pastDescriptions, setPastDescriptions] = useState<string[]>([])
+  const [transactionTemplates, setTransactionTemplates] = useState<TransactionResource[]>([])
   const [selectedLedgerSlug, setSelectedLedgerSlug] = useState<string | null>(ledgerSlug || null)
   const [isLoading, setIsLoading] = useState(true)
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
@@ -86,6 +99,12 @@ export function Transactions() {
   const [editDate, setEditDate] = useState("")
   const [editDescription, setEditDescription] = useState("")
   const [editEntries, setEditEntries] = useState<TransactionEntry[]>([])
+
+  // Compute selected ledger
+  const selectedLedger = useMemo(
+    () => ledgers.find((l) => l.attributes.slug === selectedLedgerSlug),
+    [ledgers, selectedLedgerSlug]
+  )
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -114,17 +133,47 @@ export function Transactions() {
       getTransactions(selectedLedgerSlug),
       getAccounts(selectedLedgerSlug, { "page[size]": 200 }),
       getAllInstruments(selectedLedgerSlug),
-      getTransactionDescriptions(selectedLedgerSlug),
+      getTransactionTemplates(selectedLedgerSlug),
     ])
-      .then(([transactionsResponse, accountsResponse, instrumentsResponse, descriptions]) => {
+      .then(([transactionsResponse, accountsResponse, instrumentsResponse, templates]) => {
         setTransactions(transactionsResponse.data)
         setAccounts(accountsResponse.data)
         setInstruments(instrumentsResponse)
-        setPastDescriptions(descriptions)
+        setTransactionTemplates(templates)
       })
       .catch(console.error)
       .finally(() => setIsLoading(false))
   }, [selectedLedgerSlug, isAuthenticated])
+
+  // Handle navigation state to pre-fill transaction form
+  useEffect(() => {
+    if (locationState?.createTransaction && locationState.prefilledEntry && !isLoading && accounts.length > 0) {
+      const prefilled = locationState.prefilledEntry
+      const defaultCurrency = selectedLedger?.attributes.currency || "BRL"
+
+      // Create entries with the pre-filled account
+      const newEntries: TransactionEntry[] = [
+        {
+          accountId: prefilled.type === "CREDIT" ? prefilled.accountId : "",
+          amount: "",
+          currency: prefilled.type === "CREDIT" ? prefilled.currency : defaultCurrency,
+          type: "CREDIT",
+        },
+        {
+          accountId: prefilled.type === "DEBIT" ? prefilled.accountId : "",
+          amount: "",
+          currency: prefilled.type === "DEBIT" ? prefilled.currency : defaultCurrency,
+          type: "DEBIT",
+        },
+      ]
+
+      setEntries(newEntries)
+      setIsCreateDialogOpen(true)
+
+      // Clear the location state to prevent re-triggering
+      window.history.replaceState({}, document.title)
+    }
+  }, [locationState, isLoading, accounts.length, selectedLedger])
 
   const handleDelete = async (transactionId: string) => {
     if (!selectedLedgerSlug) return
@@ -333,6 +382,26 @@ export function Transactions() {
     }
   }
 
+  // Populate form fields from a template when a description is selected
+  const handleTemplateSelect = (template: TransactionResource, isEdit: boolean) => {
+    const templateEntries: TransactionEntry[] = template.attributes.entries?.map((entry) => ({
+      accountId: entry.accountId || "",
+      amount: entry.amount?.toString() || "",
+      currency: entry.currency || selectedLedger?.attributes.currency || "BRL",
+      toAmount: entry.toAmount?.toString(),
+      toCurrency: entry.toCurrency,
+      type: entry.type || "DEBIT",
+      instrumentId: entry.instrumentId,
+      quantity: entry.quantity?.toString(),
+    })) || []
+
+    if (isEdit) {
+      setEditEntries(templateEntries.length > 0 ? templateEntries : editEntries)
+    } else {
+      setEntries(templateEntries.length > 0 ? templateEntries : entries)
+    }
+  }
+
   // Multi-currency balance validation:
   // Must match backend logic in TransactionServiceBean.validateMultiCurrencyBalance()
   // Group by ORIGINAL currency (entry.currency) and use ORIGINAL amount (entry.amount)
@@ -428,10 +497,13 @@ export function Transactions() {
       })
 
       setTransactions([response.data, ...transactions])
-      // Add new description to cache if not already present
-      if (!pastDescriptions.includes(description)) {
-        setPastDescriptions([...pastDescriptions, description].sort())
-      }
+      // Update template cache with the new transaction (replaces existing template for this description)
+      setTransactionTemplates((prev) => {
+        const filtered = prev.filter((t) => t.attributes.description !== description)
+        return [...filtered, response.data].sort((a, b) =>
+          a.attributes.description.localeCompare(b.attributes.description)
+        )
+      })
       setIsCreateDialogOpen(false)
       resetForm()
     } catch (error) {
@@ -515,7 +587,6 @@ export function Transactions() {
     )
   }
 
-  const selectedLedger = ledgers.find((l) => l.attributes.slug === selectedLedgerSlug)
   const debitTotal = calculateTotal("DEBIT", entries)
   const creditTotal = calculateTotal("CREDIT", entries)
   const editDebitTotal = calculateTotal("DEBIT", editEntries)
@@ -712,9 +783,10 @@ export function Transactions() {
               <Label htmlFor="description" className="text-right">{t("common.description")}</Label>
               <div className="col-span-3">
                 <DescriptionAutocomplete
-                  suggestions={pastDescriptions}
+                  templates={transactionTemplates}
                   value={description}
                   onValueChange={setDescription}
+                  onTemplateSelect={(template) => handleTemplateSelect(template, false)}
                   placeholder={t("common.description")}
                 />
               </div>
@@ -766,9 +838,10 @@ export function Transactions() {
               <Label htmlFor="edit-description" className="text-right">{t("common.description")}</Label>
               <div className="col-span-3">
                 <DescriptionAutocomplete
-                  suggestions={pastDescriptions}
+                  templates={transactionTemplates}
                   value={editDescription}
                   onValueChange={setEditDescription}
+                  onTemplateSelect={(template) => handleTemplateSelect(template, true)}
                   placeholder={t("common.description")}
                 />
               </div>

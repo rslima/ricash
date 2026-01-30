@@ -64,3 +64,8 @@ export async function deleteTransaction(ledgerSlug: string, transactionId: strin
 export async function getTransactionDescriptions(ledgerSlug: string): Promise<string[]> {
   return apiClient.get(`/ledgers/${ledgerSlug}/transactions/descriptions`)
 }
+
+export async function getTransactionTemplates(ledgerSlug: string): Promise<TransactionResource[]> {
+  const response: JsonApiListResponse<TransactionResource> = await apiClient.get(`/ledgers/${ledgerSlug}/transactions/templates`)
+  return response.data
+}

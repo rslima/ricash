@@ -67,6 +67,18 @@ public class TransactionController {
         return transactionService.getDistinctDescriptions(getUserId(principal), ledgerSlug);
     }
 
+    @GetMapping("/templates")
+    public org.springframework.hateoas.CollectionModel<EntityModel<TransactionResource>> getTransactionTemplates(
+            @PathVariable String ledgerSlug,
+            JwtAuthenticationToken principal) {
+        java.util.List<EntityModel<TransactionResource>> resources = transactionService
+                .getTransactionTemplates(getUserId(principal), ledgerSlug)
+                .stream()
+                .map(transaction -> toEntityModel(transaction, ledgerSlug, principal))
+                .toList();
+        return org.springframework.hateoas.CollectionModel.of(resources);
+    }
+
     @GetMapping("/{transactionId}")
     public EntityModel<TransactionResource> getTransaction(
             @PathVariable String ledgerSlug,

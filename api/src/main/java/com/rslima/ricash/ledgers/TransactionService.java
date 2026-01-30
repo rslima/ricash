@@ -20,4 +20,6 @@ public interface TransactionService {
     void delete(String userId, String ledgerSlug, String transactionId);
 
     List<String> getDistinctDescriptions(String userId, String ledgerSlug);
+
+    List<Transaction> getTransactionTemplates(String userId, String ledgerSlug);
 }

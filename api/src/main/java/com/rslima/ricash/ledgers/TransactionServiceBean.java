@@ -260,6 +260,12 @@ public class TransactionServiceBean implements TransactionService {
         return transactionRepository.findDistinctDescriptions(ledger.id());
     }
 
+    @Override
+    public List<Transaction> getTransactionTemplates(String userId, String ledgerSlug) {
+        final var ledger = getLedgerBySlug(userId, ledgerSlug);
+        return transactionRepository.findTransactionTemplates(ledger.id());
+    }
+
     private Ledger getLedgerBySlug(String userId, String ledgerSlug) {
         return ledgerRepository.findBySlug(userId, ledgerSlug)
                 .orElseThrow(() -> new LedgerNotFoundException(ledgerSlug));
