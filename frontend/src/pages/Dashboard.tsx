@@ -61,9 +61,9 @@ export function Dashboard() {
     }
   }, [isAuthenticated])
 
-  // Calculate total balance (sum of leaf ASSET accounts minus leaf LIABILITY accounts)
+  // Calculate total balance by currency (sum of leaf ASSET accounts minus leaf LIABILITY accounts)
   // Leaf accounts are accounts that have no children
-  const totalBalance = useMemo(() => {
+  const totalBalanceByCurrency = useMemo(() => {
     // Find all account IDs that are parents (have children)
     const parentIds = new Set<string>()
     accounts.forEach((account) => {
@@ -72,33 +72,39 @@ export function Dashboard() {
       }
     })
 
-    // Only sum leaf accounts (accounts that are not parents)
-    let balance = 0
+    // Only sum leaf accounts (accounts that are not parents), grouped by currency
+    const balances: Record<string, number> = {}
     accounts.forEach((account) => {
       const isLeaf = !parentIds.has(account.id)
       if (!isLeaf) return
 
       const type = account.attributes.type
+      const currency = account.attributes.currency
       const accountBalance = account.attributes.balance || 0
+
+      if (!balances[currency]) {
+        balances[currency] = 0
+      }
+
       if (type === "ASSET") {
-        balance += accountBalance
+        balances[currency] += accountBalance
       } else if (type === "LIABILITY") {
-        balance -= accountBalance
+        balances[currency] -= accountBalance
       }
     })
-    return balance
+    return balances
   }, [accounts])
 
-  // Calculate monthly income and expenses from transactions
-  const { monthlyIncome, monthlyExpenses } = useMemo(() => {
+  // Calculate monthly income and expenses from transactions, grouped by currency
+  const { monthlyIncomeByCurrency, monthlyExpensesByCurrency } = useMemo(() => {
     const now = new Date()
     const currentMonth = now.getMonth()
     const currentYear = now.getFullYear()
 
-    let income = 0
-    let expenses = 0
+    const income: Record<string, number> = {}
+    const expenses: Record<string, number> = {}
 
-    // We need to look at account types to determine if it's income or expense
+    // We need to look at account types
     const accountTypeMap = new Map<string, string>()
     accounts.forEach((account) => {
       accountTypeMap.set(account.id, account.attributes.type)
@@ -109,19 +115,27 @@ export function Dashboard() {
       if (transactionDate.getMonth() === currentMonth && transactionDate.getFullYear() === currentYear) {
         transaction.attributes.entries?.forEach((entry) => {
           const accountType = accountTypeMap.get(entry.accountId)
+          if (!accountType) return
+
+          // Use toAmount/toCurrency if there was a currency conversion, otherwise use amount/currency
+          const amount = entry.toAmount ?? entry.amount
+          const currency = entry.toCurrency ?? entry.currency
+
           // Income: credit to INCOME account
           if (accountType === "INCOME" && entry.type === "CREDIT") {
-            income += entry.amount
+            if (!income[currency]) income[currency] = 0
+            income[currency] += amount
           }
           // Expense: debit to EXPENSE account
           if (accountType === "EXPENSE" && entry.type === "DEBIT") {
-            expenses += entry.amount
+            if (!expenses[currency]) expenses[currency] = 0
+            expenses[currency] += amount
           }
         })
       }
     })
 
-    return { monthlyIncome: income, monthlyExpenses: expenses }
+    return { monthlyIncomeByCurrency: income, monthlyExpensesByCurrency: expenses }
   }, [transactions, accounts])
 
   if (!isAuthenticated) {
@@ -179,7 +193,16 @@ export function Dashboard() {
             {isLoading ? (
               <Skeleton className="h-8 w-24" />
             ) : (
-              <div className="text-2xl font-bold">{formatCurrency(totalBalance, defaultCurrency)}</div>
+              <div className="space-y-1">
+                {Object.entries(totalBalanceByCurrency).map(([currency, balance]) => (
+                  <div key={currency} className="text-2xl font-bold">
+                    {formatCurrency(balance, currency)}
+                  </div>
+                ))}
+                {Object.keys(totalBalanceByCurrency).length === 0 && (
+                  <div className="text-2xl font-bold">{formatCurrency(0, defaultCurrency)}</div>
+                )}
+              </div>
             )}
             <p className="text-xs text-muted-foreground">{t("dashboard.acrossAllAccounts")}</p>
           </CardContent>
@@ -194,8 +217,15 @@ export function Dashboard() {
             {isLoading ? (
               <Skeleton className="h-8 w-24" />
             ) : (
-              <div className="text-2xl font-bold text-green-600">
-                {formatCurrency(monthlyIncome, defaultCurrency)}
+              <div className="space-y-1">
+                {Object.entries(monthlyIncomeByCurrency).map(([currency, amount]) => (
+                  <div key={currency} className="text-2xl font-bold text-green-600">
+                    {formatCurrency(amount, currency)}
+                  </div>
+                ))}
+                {Object.keys(monthlyIncomeByCurrency).length === 0 && (
+                  <div className="text-2xl font-bold text-green-600">{formatCurrency(0, defaultCurrency)}</div>
+                )}
               </div>
             )}
             <p className="text-xs text-muted-foreground">{t("dashboard.thisMonth")}</p>
@@ -211,8 +241,15 @@ export function Dashboard() {
             {isLoading ? (
               <Skeleton className="h-8 w-24" />
             ) : (
-              <div className="text-2xl font-bold text-red-600">
-                {formatCurrency(monthlyExpenses, defaultCurrency)}
+              <div className="space-y-1">
+                {Object.entries(monthlyExpensesByCurrency).map(([currency, amount]) => (
+                  <div key={currency} className="text-2xl font-bold text-red-600">
+                    {formatCurrency(amount, currency)}
+                  </div>
+                ))}
+                {Object.keys(monthlyExpensesByCurrency).length === 0 && (
+                  <div className="text-2xl font-bold text-red-600">{formatCurrency(0, defaultCurrency)}</div>
+                )}
               </div>
             )}
             <p className="text-xs text-muted-foreground">{t("dashboard.thisMonth")}</p>
