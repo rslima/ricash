@@ -22,7 +22,12 @@ export async function getTransaction(
 export interface TransactionEntryInput {
   accountId: string
   amount: number
+  currency: string
+  toAmount?: number
+  toCurrency?: string
   type: "DEBIT" | "CREDIT"
+  instrumentId?: string
+  quantity?: number
 }
 
 export interface CreateTransactionData {

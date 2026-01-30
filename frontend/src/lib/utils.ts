@@ -18,9 +18,18 @@ export function formatCurrency(amount: number, currency: string = "BRL"): string
 }
 
 export function formatDate(date: string | Date): string {
+  let dateObj: Date
+  if (typeof date === "string") {
+    // Parse date string as local time to avoid timezone issues
+    // "2025-01-30" should be Jan 30 in local time, not UTC
+    const [year, month, day] = date.split("T")[0].split("-").map(Number)
+    dateObj = new Date(year, month - 1, day)
+  } else {
+    dateObj = date
+  }
   return new Intl.DateTimeFormat("pt-BR", {
     year: "numeric",
     month: "short",
     day: "numeric",
-  }).format(new Date(date))
+  }).format(dateObj)
 }
