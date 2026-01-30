@@ -502,6 +502,7 @@ export function Accounts() {
                   onValueChange={(value: AccountType) =>
                     setFormData({ ...formData, type: value })
                   }
+                  disabled={!!formData.parentAccountId}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder={t("common.type")} />
@@ -519,9 +520,17 @@ export function Accounts() {
                 <Label htmlFor="parentAccount">{t("accounts.parentAccount")} ({t("common.optional")})</Label>
                 <Select
                   value={formData.parentAccountId}
-                  onValueChange={(value) =>
-                    setFormData({ ...formData, parentAccountId: value === "none" ? "" : value })
-                  }
+                  onValueChange={(value) => {
+                    const parentId = value === "none" ? "" : value
+                    if (parentId) {
+                      const parentAccount = accounts.find((a) => a.id === parentId)
+                      if (parentAccount) {
+                        setFormData({ ...formData, parentAccountId: parentId, type: parentAccount.attributes.type as AccountType })
+                      }
+                    } else {
+                      setFormData({ ...formData, parentAccountId: parentId })
+                    }
+                  }}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder={t("accounts.parentAccount")} />
@@ -608,6 +617,7 @@ export function Accounts() {
                   onValueChange={(value: AccountType) =>
                     setEditFormData({ ...editFormData, type: value })
                   }
+                  disabled={!!editFormData.parentAccountId}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder={t("common.type")} />
@@ -625,9 +635,17 @@ export function Accounts() {
                 <Label htmlFor="edit-parentAccount">{t("accounts.parentAccount")} ({t("common.optional")})</Label>
                 <Select
                   value={editFormData.parentAccountId || "none"}
-                  onValueChange={(value) =>
-                    setEditFormData({ ...editFormData, parentAccountId: value === "none" ? "" : value })
-                  }
+                  onValueChange={(value) => {
+                    const parentId = value === "none" ? "" : value
+                    if (parentId) {
+                      const parentAccount = accounts.find((a) => a.id === parentId)
+                      if (parentAccount) {
+                        setEditFormData({ ...editFormData, parentAccountId: parentId, type: parentAccount.attributes.type as AccountType })
+                      }
+                    } else {
+                      setEditFormData({ ...editFormData, parentAccountId: parentId })
+                    }
+                  }}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder={t("accounts.parentAccount")} />
