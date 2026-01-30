@@ -9,8 +9,8 @@ Ricash is a personal finance management application with a Spring Boot backend A
 ## Architecture
 
 ### Backend (api/)
-- **Framework**: Spring Boot 3.5.7 with Java 21
-- **Database**: PostgreSQL 17.6 with Flyway migrations
+- **Framework**: Spring Boot 4.0.1 with Java 25
+- **Database**: PostgreSQL 18.1 with Flyway migrations
 - **Security**: OAuth2 Resource Server with JWT authentication via Keycloak
 - **API Format**: JSON:API standard using spring-hateoas-jsonapi
 - **Build Tool**: Maven with Maven Wrapper (./mvnw)
