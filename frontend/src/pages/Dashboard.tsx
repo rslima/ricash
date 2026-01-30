@@ -254,7 +254,7 @@ export function Dashboard() {
                             variant={entry.type === "DEBIT" ? "secondary" : "outline"}
                             className="text-xs"
                           >
-                            {entry.type === "DEBIT" ? "DR" : "CR"}
+                            {entry.type === "DEBIT" ? "DB" : "CR"}
                           </Badge>
                         ))}
                       </div>

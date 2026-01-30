@@ -528,7 +528,7 @@ export function Transactions() {
                             key={idx}
                             variant={entry.type === "DEBIT" ? "secondary" : "outline"}
                           >
-                            {entry.accountName}: {entry.type === "DEBIT" ? "DR" : "CR"}
+                            {entry.accountName}: {entry.type === "DEBIT" ? "DB" : "CR"}
                           </Badge>
                         ))}
                       </div>
