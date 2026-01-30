@@ -40,6 +40,10 @@
     "ledgers": "Livros",
     "accounts": "Contas",
     "transactions": "Transações",
+    "instruments": "Instrumentos",
+    "instrumentPrices": "Preços",
+    "portfolio": "Portfólio",
+    "exchangeRates": "Taxas de Câmbio",
     "settings": "Configurações"
   },
   "dashboard": {
@@ -143,7 +147,14 @@
     "total": "Total",
     "notBalanced": "Transação não está balanceada. Débitos ({{debits}}) devem ser iguais aos créditos ({{credits}}).",
     "selectAccount": "Selecione uma conta...",
-    "searchAccounts": "Buscar contas..."
+    "searchAccounts": "Buscar contas...",
+    "accountCurrency": "Moeda da conta",
+    "convertedTo": "Convertido para",
+    "manualConversion": "Opcional: especifique conversão manual",
+    "autoConversion": "Automático (deixe vazio)",
+    "instrument": "Instrumento",
+    "selectInstrument": "Selecione instrumento...",
+    "quantity": "Quantidade"
   },
   "accountTransactions": {
     "title": "Transações de {{name}}",
@@ -152,6 +163,25 @@
     "noTransactions": "Nenhuma transação ainda",
     "noTransactionsDescription": "Esta conta não possui transações",
     "goToTransactions": "Ir para Transações"
+  },
+  "exchangeRates": {
+    "title": "Taxas de Câmbio",
+    "description": "Visualize o histórico de taxas de câmbio",
+    "rates": "Taxas de Câmbio",
+    "ratesDescription": "Histórico de taxas de câmbio de entradas manuais e APIs externas",
+    "noRates": "Nenhuma taxa de câmbio",
+    "noRatesDescription": "As taxas de câmbio aparecerão aqui quando você criar transações com moedas diferentes",
+    "from": "De",
+    "to": "Para",
+    "rate": "Taxa",
+    "effectiveDate": "Data Efetiva",
+    "source": "Origem",
+    "createdAt": "Criado Em",
+    "newRate": "Nova Taxa",
+    "createRate": "Criar Taxa de Câmbio",
+    "createRateDescription": "Adicione uma taxa de câmbio manual para conversão de moedas",
+    "creating": "Criando...",
+    "confirmDelete": "Tem certeza que deseja excluir esta taxa de câmbio?"
   },
   "settings": {
     "title": "Configurações",
@@ -170,6 +200,75 @@
     "themeDescription": "Escolha seu tema preferido",
     "notSignedIn": "Não conectado",
     "signInToView": "Faça login para ver suas configurações"
+  },
+  "instruments": {
+    "title": "Instrumentos",
+    "description": "Gerencie seus instrumentos financeiros",
+    "newInstrument": "Novo Instrumento",
+    "createInstrument": "Criar Instrumento",
+    "editInstrument": "Editar Instrumento",
+    "createDescription": "Adicione um novo instrumento financeiro para rastrear",
+    "editDescription": "Atualize os detalhes do instrumento",
+    "noInstruments": "Nenhum instrumento ainda",
+    "noInstrumentsDescription": "Crie seu primeiro instrumento para começar a rastrear investimentos",
+    "noLedgerSelected": "Nenhum livro selecionado",
+    "listDescription": "Instrumentos financeiros registrados neste livro",
+    "confirmDelete": "Tem certeza que deseja excluir este instrumento?",
+    "creating": "Criando...",
+    "saving": "Salvando...",
+    "symbol": "Símbolo",
+    "market": "Mercado",
+    "types": {
+      "STOCK": "Ação",
+      "ETF": "ETF",
+      "TREASURY_BOND": "Tesouro Direto",
+      "FIXED_INCOME": "Renda Fixa",
+      "FUND": "Fundo"
+    },
+    "status": {
+      "ACTIVE": "Ativo",
+      "INACTIVE": "Inativo"
+    }
+  },
+  "instrumentPrices": {
+    "title": "Preços de Instrumentos",
+    "description": "Gerencie o histórico de preços dos instrumentos",
+    "newPrice": "Novo Preço",
+    "createPrice": "Adicionar Preço",
+    "createDescription": "Adicione uma cotação para um instrumento",
+    "noPrices": "Nenhum preço ainda",
+    "noPricesDescription": "Adicione cotações para acompanhar o valor do seu portfólio",
+    "noLedgerSelected": "Nenhum livro selecionado",
+    "listDescription": "Histórico de preços dos instrumentos deste livro",
+    "confirmDelete": "Tem certeza que deseja excluir este preço?",
+    "creating": "Criando...",
+    "instrument": "Instrumento",
+    "selectInstrument": "Selecione instrumento...",
+    "price": "Preço",
+    "effectiveDate": "Data Efetiva",
+    "source": "Origem",
+    "createdAt": "Criado Em"
+  },
+  "portfolio": {
+    "title": "Portfólio",
+    "description": "Visualize suas posições e desempenho de investimentos",
+    "noLedgerSelected": "Nenhum livro selecionado",
+    "positions": "Posições",
+    "positionsDescription": "Ativos em carteira e seus valores",
+    "noPositions": "Nenhuma posição ainda",
+    "noPositionsDescription": "Crie transações com instrumentos para ver suas posições aqui",
+    "instrument": "Instrumento",
+    "quantity": "Quantidade",
+    "averageCost": "Custo Médio",
+    "totalCost": "Custo Total",
+    "currentPrice": "Preço Atual",
+    "currentValue": "Valor Atual",
+    "gain": "Ganho/Perda",
+    "unrealizedGain": "Ganho Não Realizado",
+    "investedAmount": "Valor total investido",
+    "marketValue": "Baseado nos últimos preços",
+    "noPrices": "Adicione preços para calcular",
+    "addPrices": "Adicione preços dos instrumentos para ver o desempenho"
   },
   "errors": {
     "generic": "Ocorreu um erro. Por favor, tente novamente.",
