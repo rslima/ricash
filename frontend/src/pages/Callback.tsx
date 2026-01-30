@@ -1,46 +1,29 @@
-import { useEffect, useState } from "react"
-import { useNavigate, useSearchParams } from "react-router-dom"
-import { useAuth } from "@/contexts/AuthContext"
+import { useEffect } from "react"
+import { useNavigate } from "react-router-dom"
+import { useAuth as useOidcAuth } from "react-oidc-context"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Loader2 } from "lucide-react"
 
 export function Callback() {
-  const [searchParams] = useSearchParams()
   const navigate = useNavigate()
-  const { exchangeCodeForToken } = useAuth()
-  const [error, setError] = useState<string | null>(null)
+  const auth = useOidcAuth()
 
   useEffect(() => {
-    const code = searchParams.get("code")
-    const errorParam = searchParams.get("error")
-    const errorDescription = searchParams.get("error_description")
-
-    if (errorParam) {
-      setError(errorDescription || errorParam)
-      return
+    // The library handles the callback automatically
+    // Once authentication is complete, redirect to home
+    if (auth.isAuthenticated) {
+      navigate("/", { replace: true })
     }
+  }, [auth.isAuthenticated, navigate])
 
-    if (!code) {
-      setError("No authorization code received")
-      return
-    }
-
-    exchangeCodeForToken(code).then((success) => {
-      if (success) {
-        navigate("/", { replace: true })
-      } else {
-        setError("Failed to complete authentication")
-      }
-    })
-  }, [searchParams, exchangeCodeForToken, navigate])
-
-  if (error) {
+  // Show error if authentication failed
+  if (auth.error) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center p-4">
         <Card className="w-full max-w-md">
           <CardHeader className="text-center">
             <CardTitle className="text-destructive">Authentication Failed</CardTitle>
-            <CardDescription>{error}</CardDescription>
+            <CardDescription>{auth.error.message}</CardDescription>
           </CardHeader>
           <CardContent className="text-center">
             <button
@@ -55,6 +38,7 @@ export function Callback() {
     )
   }
 
+  // Show loading while processing the callback
   return (
     <div className="flex min-h-screen flex-col items-center justify-center p-4">
       <Card className="w-full max-w-md">
