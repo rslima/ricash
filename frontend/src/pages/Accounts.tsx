@@ -101,11 +101,12 @@ interface AccountRowProps {
   onToggleExpand: (id: string) => void
   onEdit: (account: AccountResource) => void
   onDelete: (accountId: string) => void
+  onCreateChild: (account: AccountResource) => void
   ledgerSlug: string
   t: (key: string) => string
 }
 
-function AccountRow({ node, depth, expandedIds, onToggleExpand, onEdit, onDelete, ledgerSlug, t }: AccountRowProps) {
+function AccountRow({ node, depth, expandedIds, onToggleExpand, onEdit, onDelete, onCreateChild, ledgerSlug, t }: AccountRowProps) {
   const { account, children } = node
   const hasChildren = children.length > 0
   const isExpanded = expandedIds.has(account.id)
@@ -152,6 +153,10 @@ function AccountRow({ node, depth, expandedIds, onToggleExpand, onEdit, onDelete
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => onCreateChild(account)}>
+                <Plus className="mr-2 h-4 w-4" />
+                {t("accounts.createChildAccount")}
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={() => onEdit(account)}>
                 <Pencil className="mr-2 h-4 w-4" />
                 {t("common.edit")}
@@ -177,6 +182,7 @@ function AccountRow({ node, depth, expandedIds, onToggleExpand, onEdit, onDelete
             onToggleExpand={onToggleExpand}
             onEdit={onEdit}
             onDelete={onDelete}
+            onCreateChild={onCreateChild}
             ledgerSlug={ledgerSlug}
             t={t}
           />
@@ -235,6 +241,24 @@ export function Accounts() {
 
     return grouped
   }, [accountTree])
+
+  // Filter valid parent accounts for edit (exclude self and descendants)
+  const validParentAccountsForEdit = useMemo(() => {
+    if (!editingAccount) return accounts
+
+    const excludedIds = new Set<string>([editingAccount.id])
+    const findDescendants = (id: string) => {
+      accounts
+        .filter((a) => a.attributes.parentAccountId === id)
+        .forEach((child) => {
+          excludedIds.add(child.id)
+          findDescendants(child.id)
+        })
+    }
+    findDescendants(editingAccount.id)
+
+    return accounts.filter((a) => !excludedIds.has(a.id))
+  }, [accounts, editingAccount])
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -354,6 +378,17 @@ export function Accounts() {
     }
   }
 
+  const handleCreateChild = (parentAccount: AccountResource) => {
+    setFormData({
+      name: "",
+      description: "",
+      currency: parentAccount.attributes.currency,
+      type: parentAccount.attributes.type as AccountType,
+      parentAccountId: parentAccount.id,
+    })
+    setIsCreateDialogOpen(true)
+  }
+
   const handleEdit = (account: AccountResource) => {
     setEditingAccount(account)
     setEditFormData({
@@ -391,21 +426,6 @@ export function Accounts() {
     }
   }
 
-  // Get all descendant IDs of an account (for filtering parent options)
-  const getDescendantIds = (accountId: string): Set<string> => {
-    const descendants = new Set<string>()
-    const findDescendants = (id: string) => {
-      accounts
-        .filter((a) => a.attributes.parentAccountId === id)
-        .forEach((child) => {
-          descendants.add(child.id)
-          findDescendants(child.id)
-        })
-    }
-    findDescendants(accountId)
-    return descendants
-  }
-
   if (!isAuthenticated) {
     return (
       <div className="flex flex-col items-center justify-center h-full">
@@ -422,14 +442,6 @@ export function Accounts() {
   }
 
   const selectedLedger = ledgers.find((l) => l.attributes.slug === selectedLedgerSlug)
-
-  // Filter valid parent accounts for edit (exclude self and descendants)
-  const validParentAccountsForEdit = useMemo(() => {
-    if (!editingAccount) return accounts
-
-    const excludedIds = new Set([editingAccount.id, ...getDescendantIds(editingAccount.id)])
-    return accounts.filter((a) => !excludedIds.has(a.id))
-  }, [accounts, editingAccount])
 
   return (
     <div className="space-y-6">
@@ -749,6 +761,7 @@ export function Accounts() {
                             onToggleExpand={handleToggleExpand}
                             onEdit={handleEdit}
                             onDelete={handleDelete}
+                            onCreateChild={handleCreateChild}
                             ledgerSlug={selectedLedgerSlug!}
                             t={t}
                           />

@@ -107,6 +107,7 @@
     "parentAccount": "Parent Account",
     "expandAll": "Expand All",
     "collapseAll": "Collapse All",
+    "createChildAccount": "Create Child Account",
     "types": {
       "ASSET": "Asset",
       "LIABILITY": "Liability",

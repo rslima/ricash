@@ -107,6 +107,7 @@
     "parentAccount": "Conta Pai",
     "expandAll": "Expandir Tudo",
     "collapseAll": "Recolher Tudo",
+    "createChildAccount": "Criar Conta Filha",
     "types": {
       "ASSET": "Ativo",
       "LIABILITY": "Passivo",
