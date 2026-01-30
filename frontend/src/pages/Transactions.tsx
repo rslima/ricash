@@ -112,7 +112,7 @@ export function Transactions() {
     setIsLoading(true)
     Promise.all([
       getTransactions(selectedLedgerSlug),
-      getAccounts(selectedLedgerSlug),
+      getAccounts(selectedLedgerSlug, { "page[size]": 200 }),
       getAllInstruments(selectedLedgerSlug),
       getTransactionDescriptions(selectedLedgerSlug),
     ])

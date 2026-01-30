@@ -283,7 +283,7 @@ export function Accounts() {
     }
 
     setIsLoading(true)
-    getAccounts(selectedLedgerSlug)
+    getAccounts(selectedLedgerSlug, { "page[size]": 200 })
       .then((response) => {
         setAccounts(response.data)
         // Expand all accounts by default

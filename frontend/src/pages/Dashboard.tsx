@@ -37,7 +37,7 @@ export function Dashboard() {
             await Promise.all(
               response.data.map(async (ledger) => {
                 const [accountsRes, transactionsRes] = await Promise.all([
-                  getAccounts(ledger.attributes.slug),
+                  getAccounts(ledger.attributes.slug, { "page[size]": 200 }),
                   // Fetch more transactions to have enough for monthly calculations
                   getTransactions(ledger.attributes.slug, { "page[size]": 100 }),
                 ])
