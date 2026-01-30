@@ -163,7 +163,9 @@
     "transactionsFound": "{{count}} transaction(s) found",
     "noTransactions": "No transactions yet",
     "noTransactionsDescription": "This account has no transactions",
-    "goToTransactions": "Go to Transactions"
+    "goToTransactions": "Go to Transactions",
+    "newDebit": "New Debit",
+    "newCredit": "New Credit"
   },
   "exchangeRates": {
     "title": "Exchange Rates",

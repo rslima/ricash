@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from "react"
-import { useParams, Link } from "react-router-dom"
+import { useParams, Link, useNavigate } from "react-router-dom"
 import { useTranslation } from "react-i18next"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -13,13 +13,19 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { useAuth } from "@/contexts/AuthContext"
 import { getTransactions } from "@/api/transactions"
 import { getAccounts } from "@/api/accounts"
 import { getLedgers } from "@/api/ledgers"
 import type { TransactionResource, AccountResource, LedgerResource } from "@/api/types"
 import { formatCurrency, formatDate } from "@/lib/utils"
-import { ArrowLeft, ArrowLeftRight, ChevronRight } from "lucide-react"
+import { ArrowLeft, ArrowLeftRight, ChevronRight, Plus, ChevronDown } from "lucide-react"
 
 // Build breadcrumb path for an account
 function buildAccountBreadcrumb(
@@ -47,6 +53,7 @@ export function AccountTransactions() {
   const { t } = useTranslation()
   const { ledgerSlug, accountId } = useParams<{ ledgerSlug: string; accountId: string }>()
   const { isAuthenticated } = useAuth()
+  const navigate = useNavigate()
   const [transactions, setTransactions] = useState<TransactionResource[]>([])
   const [accounts, setAccounts] = useState<AccountResource[]>([])
   const [ledger, setLedger] = useState<LedgerResource | null>(null)
@@ -61,6 +68,20 @@ export function AccountTransactions() {
     () => (accountId ? buildAccountBreadcrumb(accountId, accounts) : []),
     [accountId, accounts]
   )
+
+  const handleCreateTransaction = (entryType: "DEBIT" | "CREDIT") => {
+    if (!ledgerSlug || !account) return
+    navigate(`/ledgers/${ledgerSlug}/transactions`, {
+      state: {
+        createTransaction: true,
+        prefilledEntry: {
+          accountId: account.id,
+          currency: account.attributes.currency,
+          type: entryType,
+        },
+      },
+    })
+  }
 
   useEffect(() => {
     if (!isAuthenticated || !ledgerSlug || !accountId) {
@@ -103,31 +124,52 @@ export function AccountTransactions() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <Link to={`/ledgers/${ledgerSlug}/accounts`}>
-          <Button variant="outline" size="icon">
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-        </Link>
-        <div>
-          <div className="flex items-center gap-1 text-sm text-muted-foreground mb-1">
-            {breadcrumb.map((part, index) => (
-              <span key={index} className="flex items-center gap-1">
-                {index > 0 && <ChevronRight className="h-3 w-3" />}
-                <span className={index === breadcrumb.length - 1 ? "text-foreground font-medium" : ""}>
-                  {part}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <Link to={`/ledgers/${ledgerSlug}/accounts`}>
+            <Button variant="outline" size="icon">
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+          </Link>
+          <div>
+            <div className="flex items-center gap-1 text-sm text-muted-foreground mb-1">
+              {breadcrumb.map((part, index) => (
+                <span key={index} className="flex items-center gap-1">
+                  {index > 0 && <ChevronRight className="h-3 w-3" />}
+                  <span className={index === breadcrumb.length - 1 ? "text-foreground font-medium" : ""}>
+                    {part}
+                  </span>
                 </span>
-              </span>
-            ))}
+              ))}
+            </div>
+            <h2 className="text-2xl font-bold tracking-tight">
+              {account ? t("accountTransactions.title", { name: account.attributes.name }) : t("transactions.title")}
+            </h2>
+            <p className="text-muted-foreground">
+              {ledger && `${ledger.attributes.name} - `}
+              {t("accountTransactions.subtitle")}
+            </p>
           </div>
-          <h2 className="text-2xl font-bold tracking-tight">
-            {account ? t("accountTransactions.title", { name: account.attributes.name }) : t("transactions.title")}
-          </h2>
-          <p className="text-muted-foreground">
-            {ledger && `${ledger.attributes.name} - `}
-            {t("accountTransactions.subtitle")}
-          </p>
         </div>
+        {account && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button>
+                <Plus className="mr-2 h-4 w-4" />
+                {t("transactions.newTransaction")}
+                <ChevronDown className="ml-2 h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => handleCreateTransaction("DEBIT")}>
+                {t("accountTransactions.newDebit")}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleCreateTransaction("CREDIT")}>
+                {t("accountTransactions.newCredit")}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
       </div>
 
       <Card>

@@ -163,7 +163,9 @@
     "transactionsFound": "{{count}} transação(ões) encontrada(s)",
     "noTransactions": "Nenhuma transação ainda",
     "noTransactionsDescription": "Esta conta não possui transações",
-    "goToTransactions": "Ir para Transações"
+    "goToTransactions": "Ir para Transações",
+    "newDebit": "Novo Débito",
+    "newCredit": "Novo Crédito"
   },
   "exchangeRates": {
     "title": "Taxas de Câmbio",
