@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from "react"
+import { createContext, useContext, useState, useCallback, useEffect, useRef, type ReactNode } from "react"
 import { apiClient } from "@/api/client"
 
 interface User {
@@ -14,7 +14,7 @@ interface AuthContextType {
   accessToken: string | null
   isAuthenticated: boolean
   isLoading: boolean
-  login: (token: string) => void
+  login: (accessToken: string, refreshToken: string) => void
   logout: () => void
   startLogin: () => void
   exchangeCodeForToken: (code: string) => Promise<boolean>
@@ -88,34 +88,139 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null)
   const [accessToken, setAccessToken] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const refreshTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Function to refresh the access token using the refresh token
+  const refreshAccessToken = useCallback(async (): Promise<boolean> => {
+    const refreshToken = localStorage.getItem("refresh_token")
+    if (!refreshToken) {
+      return false
+    }
+
+    try {
+      const tokenUrl = `${KEYCLOAK_URL}/realms/${KEYCLOAK_REALM}/protocol/openid-connect/token`
+      const response = await fetch(tokenUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: new URLSearchParams({
+          grant_type: "refresh_token",
+          client_id: KEYCLOAK_CLIENT_ID,
+          refresh_token: refreshToken,
+        }),
+      })
+
+      if (!response.ok) {
+        console.error("Token refresh failed")
+        return false
+      }
+
+      const data = await response.json()
+
+      // Store the new tokens
+      localStorage.setItem("access_token", data.access_token)
+      if (data.refresh_token) {
+        localStorage.setItem("refresh_token", data.refresh_token)
+      }
+
+      setAccessToken(data.access_token)
+      setUser(extractUserFromToken(data.access_token))
+      apiClient.setAccessToken(data.access_token)
+
+      // Schedule the next refresh
+      scheduleTokenRefresh(data.access_token)
+
+      return true
+    } catch (error) {
+      console.error("Token refresh error:", error)
+      return false
+    }
+  }, [])
+
+  // Schedule token refresh before it expires (refresh 1 minute before expiry)
+  const scheduleTokenRefresh = useCallback((token: string) => {
+    if (refreshTimeoutRef.current) {
+      clearTimeout(refreshTimeoutRef.current)
+    }
+
+    const tokenPayload = parseJwt(token)
+    if (!tokenPayload || !tokenPayload.exp) return
+
+    const expiresAt = (tokenPayload.exp as number) * 1000
+    const now = Date.now()
+    // Refresh 60 seconds before expiry, or immediately if less than 60 seconds left
+    const refreshIn = Math.max(0, expiresAt - now - 60000)
+
+    refreshTimeoutRef.current = setTimeout(async () => {
+      const success = await refreshAccessToken()
+      if (!success) {
+        // If refresh fails, clear tokens and log out
+        localStorage.removeItem("access_token")
+        localStorage.removeItem("refresh_token")
+        setAccessToken(null)
+        setUser(null)
+        apiClient.setAccessToken(null)
+      }
+    }, refreshIn)
+  }, [refreshAccessToken])
 
   useEffect(() => {
-    const storedToken = localStorage.getItem("access_token")
-    if (storedToken) {
-      const tokenPayload = parseJwt(storedToken)
-      if (tokenPayload && tokenPayload.exp) {
-        const isExpired = Date.now() >= (tokenPayload.exp as number) * 1000
-        if (!isExpired) {
-          setAccessToken(storedToken)
-          setUser(extractUserFromToken(storedToken))
-          apiClient.setAccessToken(storedToken)
-        } else {
-          localStorage.removeItem("access_token")
+    const initAuth = async () => {
+      const storedToken = localStorage.getItem("access_token")
+      const storedRefreshToken = localStorage.getItem("refresh_token")
+
+      if (storedToken) {
+        const tokenPayload = parseJwt(storedToken)
+        if (tokenPayload && tokenPayload.exp) {
+          const isExpired = Date.now() >= (tokenPayload.exp as number) * 1000
+          if (!isExpired) {
+            setAccessToken(storedToken)
+            setUser(extractUserFromToken(storedToken))
+            apiClient.setAccessToken(storedToken)
+            scheduleTokenRefresh(storedToken)
+          } else if (storedRefreshToken) {
+            // Access token expired but we have a refresh token, try to refresh
+            const success = await refreshAccessToken()
+            if (!success) {
+              localStorage.removeItem("access_token")
+              localStorage.removeItem("refresh_token")
+            }
+          } else {
+            localStorage.removeItem("access_token")
+          }
         }
       }
+      setIsLoading(false)
     }
-    setIsLoading(false)
-  }, [])
 
-  const login = useCallback((token: string) => {
-    localStorage.setItem("access_token", token)
-    setAccessToken(token)
-    setUser(extractUserFromToken(token))
-    apiClient.setAccessToken(token)
-  }, [])
+    initAuth()
+
+    // Cleanup timeout on unmount
+    return () => {
+      if (refreshTimeoutRef.current) {
+        clearTimeout(refreshTimeoutRef.current)
+      }
+    }
+  }, [scheduleTokenRefresh, refreshAccessToken])
+
+  const login = useCallback((newAccessToken: string, newRefreshToken: string) => {
+    localStorage.setItem("access_token", newAccessToken)
+    localStorage.setItem("refresh_token", newRefreshToken)
+    setAccessToken(newAccessToken)
+    setUser(extractUserFromToken(newAccessToken))
+    apiClient.setAccessToken(newAccessToken)
+    scheduleTokenRefresh(newAccessToken)
+  }, [scheduleTokenRefresh])
 
   const logout = useCallback(() => {
+    // Clear refresh timeout
+    if (refreshTimeoutRef.current) {
+      clearTimeout(refreshTimeoutRef.current)
+    }
+
     localStorage.removeItem("access_token")
+    localStorage.removeItem("refresh_token")
     setAccessToken(null)
     setUser(null)
     apiClient.setAccessToken(null)
@@ -165,7 +270,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       const data = await response.json()
       sessionStorage.removeItem("pkce_code_verifier")
-      login(data.access_token)
+      login(data.access_token, data.refresh_token)
       return true
     } catch (error) {
       console.error("Token exchange error:", error)
