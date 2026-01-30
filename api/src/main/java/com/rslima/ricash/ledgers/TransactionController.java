@@ -60,6 +60,13 @@ public class TransactionController {
         return buildPagedResponse(ledgerSlug, page, size, transactionResources, principal);
     }
 
+    @GetMapping("/descriptions")
+    public java.util.List<String> getDistinctDescriptions(
+            @PathVariable String ledgerSlug,
+            JwtAuthenticationToken principal) {
+        return transactionService.getDistinctDescriptions(getUserId(principal), ledgerSlug);
+    }
+
     @GetMapping("/{transactionId}")
     public EntityModel<TransactionResource> getTransaction(
             @PathVariable String ledgerSlug,

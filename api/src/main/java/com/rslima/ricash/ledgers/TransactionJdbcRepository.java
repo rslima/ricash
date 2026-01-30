@@ -319,4 +319,17 @@ public class TransactionJdbcRepository implements TransactionRepository {
                 entry.instrumentSymbol()
         );
     }
+
+    @Override
+    public List<String> findDistinctDescriptions(String ledgerId) {
+        return jdbcClient.sql("""
+                        SELECT DISTINCT description
+                        FROM transactions
+                        WHERE ledger_id = :ledgerId
+                        ORDER BY description
+                        """)
+                .param("ledgerId", ledgerId)
+                .query(String.class)
+                .list();
+    }
 }

@@ -16,6 +16,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { AccountAutocomplete } from "@/components/AccountAutocomplete"
+import { DescriptionAutocomplete } from "@/components/DescriptionAutocomplete"
 import {
   Table,
   TableBody,
@@ -38,7 +39,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { useAuth } from "@/contexts/AuthContext"
-import { getTransactions, deleteTransaction, createTransaction, updateTransaction, type TransactionEntryInput } from "@/api/transactions"
+import { getTransactions, deleteTransaction, createTransaction, updateTransaction, getTransactionDescriptions, type TransactionEntryInput } from "@/api/transactions"
 import { getLedgers } from "@/api/ledgers"
 import { getAccounts } from "@/api/accounts"
 import { getAllInstruments } from "@/api/instruments"
@@ -65,6 +66,7 @@ export function Transactions() {
   const [ledgers, setLedgers] = useState<LedgerResource[]>([])
   const [accounts, setAccounts] = useState<AccountResource[]>([])
   const [instruments, setInstruments] = useState<InstrumentResource[]>([])
+  const [pastDescriptions, setPastDescriptions] = useState<string[]>([])
   const [selectedLedgerSlug, setSelectedLedgerSlug] = useState<string | null>(ledgerSlug || null)
   const [isLoading, setIsLoading] = useState(true)
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
@@ -112,11 +114,13 @@ export function Transactions() {
       getTransactions(selectedLedgerSlug),
       getAccounts(selectedLedgerSlug),
       getAllInstruments(selectedLedgerSlug),
+      getTransactionDescriptions(selectedLedgerSlug),
     ])
-      .then(([transactionsResponse, accountsResponse, instrumentsResponse]) => {
+      .then(([transactionsResponse, accountsResponse, instrumentsResponse, descriptions]) => {
         setTransactions(transactionsResponse.data)
         setAccounts(accountsResponse.data)
         setInstruments(instrumentsResponse)
+        setPastDescriptions(descriptions)
       })
       .catch(console.error)
       .finally(() => setIsLoading(false))
@@ -424,6 +428,10 @@ export function Transactions() {
       })
 
       setTransactions([response.data, ...transactions])
+      // Add new description to cache if not already present
+      if (!pastDescriptions.includes(description)) {
+        setPastDescriptions([...pastDescriptions, description].sort())
+      }
       setIsCreateDialogOpen(false)
       resetForm()
     } catch (error) {
@@ -702,13 +710,14 @@ export function Transactions() {
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="description" className="text-right">{t("common.description")}</Label>
-              <Input
-                id="description"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder={t("common.description")}
-                className="col-span-3"
-              />
+              <div className="col-span-3">
+                <DescriptionAutocomplete
+                  suggestions={pastDescriptions}
+                  value={description}
+                  onValueChange={setDescription}
+                  placeholder={t("common.description")}
+                />
+              </div>
             </div>
             {renderEntryForm(entries, "CREDIT", false, creditTotal)}
             {renderEntryForm(entries, "DEBIT", false, debitTotal)}
@@ -755,13 +764,14 @@ export function Transactions() {
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="edit-description" className="text-right">{t("common.description")}</Label>
-              <Input
-                id="edit-description"
-                value={editDescription}
-                onChange={(e) => setEditDescription(e.target.value)}
-                placeholder={t("common.description")}
-                className="col-span-3"
-              />
+              <div className="col-span-3">
+                <DescriptionAutocomplete
+                  suggestions={pastDescriptions}
+                  value={editDescription}
+                  onValueChange={setEditDescription}
+                  placeholder={t("common.description")}
+                />
+              </div>
             </div>
             {renderEntryForm(editEntries, "CREDIT", true, editCreditTotal)}
             {renderEntryForm(editEntries, "DEBIT", true, editDebitTotal)}

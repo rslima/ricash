@@ -60,3 +60,7 @@ export async function updateTransaction(
 export async function deleteTransaction(ledgerSlug: string, transactionId: string): Promise<void> {
   return apiClient.delete(`/ledgers/${ledgerSlug}/transactions/${transactionId}`)
 }
+
+export async function getTransactionDescriptions(ledgerSlug: string): Promise<string[]> {
+  return apiClient.get(`/ledgers/${ledgerSlug}/transactions/descriptions`)
+}

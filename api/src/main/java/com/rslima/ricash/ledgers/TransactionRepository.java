@@ -3,6 +3,7 @@ package com.rslima.ricash.ledgers;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 
+import java.util.List;
 import java.util.Optional;
 
 public interface TransactionRepository {
@@ -17,4 +18,6 @@ public interface TransactionRepository {
     Transaction update(String ledgerId, Transaction transaction);
 
     void delete(String ledgerId, String transactionId);
+
+    List<String> findDistinctDescriptions(String ledgerId);
 }
