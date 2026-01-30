@@ -6,6 +6,10 @@ import { Ledgers } from "@/pages/Ledgers"
 import { Accounts } from "@/pages/Accounts"
 import { AccountTransactions } from "@/pages/AccountTransactions"
 import { Transactions } from "@/pages/Transactions"
+import { ExchangeRates } from "@/pages/ExchangeRates"
+import { Instruments } from "@/pages/Instruments"
+import { InstrumentPrices } from "@/pages/InstrumentPrices"
+import { Portfolio } from "@/pages/Portfolio"
 import { Settings } from "@/pages/Settings"
 import { Callback } from "@/pages/Callback"
 
@@ -23,6 +27,13 @@ function App() {
             <Route path="accounts" element={<Accounts />} />
             <Route path="ledgers/:ledgerSlug/transactions" element={<Transactions />} />
             <Route path="transactions" element={<Transactions />} />
+            <Route path="exchange-rates" element={<ExchangeRates />} />
+            <Route path="instruments" element={<Instruments />} />
+            <Route path="ledgers/:ledgerSlug/instruments" element={<Instruments />} />
+            <Route path="instrument-prices" element={<InstrumentPrices />} />
+            <Route path="ledgers/:ledgerSlug/instrument-prices" element={<InstrumentPrices />} />
+            <Route path="portfolio" element={<Portfolio />} />
+            <Route path="ledgers/:ledgerSlug/portfolio" element={<Portfolio />} />
             <Route path="settings" element={<Settings />} />
           </Route>
         </Routes>

@@ -5,6 +5,10 @@ import {
   BookOpen,
   Wallet,
   ArrowLeftRight,
+  TrendingUp,
+  Briefcase,
+  DollarSign,
+  PieChart,
   Settings,
   ChevronLeft,
   ChevronRight,
@@ -28,6 +32,10 @@ const navigation = [
   { key: "ledgers", href: "/ledgers", icon: BookOpen },
   { key: "accounts", href: "/accounts", icon: Wallet },
   { key: "transactions", href: "/transactions", icon: ArrowLeftRight },
+  { key: "instruments", href: "/instruments", icon: Briefcase },
+  { key: "instrumentPrices", href: "/instrument-prices", icon: DollarSign },
+  { key: "portfolio", href: "/portfolio", icon: PieChart },
+  { key: "exchangeRates", href: "/exchange-rates", icon: TrendingUp },
   { key: "settings", href: "/settings", icon: Settings },
 ]
 
