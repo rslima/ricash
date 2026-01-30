@@ -24,6 +24,16 @@ interface AccountAutocompleteProps {
   value: string
   onValueChange: (value: string) => void
   placeholder?: string
+  allowNone?: boolean
+  noneLabel?: string
+}
+
+const ACCOUNT_TYPE_ORDER: Record<string, number> = {
+  ASSET: 0,
+  LIABILITY: 1,
+  EQUITY: 2,
+  INCOME: 3,
+  EXPENSE: 4,
 }
 
 // Build a map of account ID to its breadcrumb path
@@ -85,6 +95,8 @@ export function AccountAutocomplete({
   value,
   onValueChange,
   placeholder,
+  allowNone = false,
+  noneLabel,
 }: AccountAutocompleteProps) {
   const { t } = useTranslation()
   const [open, setOpen] = React.useState(false)
@@ -93,10 +105,18 @@ export function AccountAutocomplete({
 
   const selectedAccount = accounts.find((account) => account.id === value)
   const selectedBreadcrumb = value ? breadcrumbs.get(value) : null
+  const effectiveNoneLabel = noneLabel || t("common.none")
 
-  // Sort accounts by their breadcrumb path for better grouping
+  // Sort accounts by type first, then by breadcrumb path within each type
   const sortedAccounts = React.useMemo(() => {
     return [...accounts].sort((a, b) => {
+      // First sort by account type
+      const typeOrderA = ACCOUNT_TYPE_ORDER[a.attributes.type] ?? 99
+      const typeOrderB = ACCOUNT_TYPE_ORDER[b.attributes.type] ?? 99
+      if (typeOrderA !== typeOrderB) {
+        return typeOrderA - typeOrderB
+      }
+      // Then sort by breadcrumb path within the same type
       const pathA = breadcrumbs.get(a.id)?.join(" > ") || ""
       const pathB = breadcrumbs.get(b.id)?.join(" > ") || ""
       return pathA.localeCompare(pathB)
@@ -116,6 +136,8 @@ export function AccountAutocomplete({
         >
           {selectedAccount && selectedBreadcrumb ? (
             <AccountBreadcrumb parts={selectedBreadcrumb} />
+          ) : allowNone && !value ? (
+            <span>{effectiveNoneLabel}</span>
           ) : (
             <span className="text-muted-foreground">{effectivePlaceholder}</span>
           )}
@@ -128,6 +150,23 @@ export function AccountAutocomplete({
           <CommandList>
             <CommandEmpty>{t("common.noResults")}</CommandEmpty>
             <CommandGroup>
+              {allowNone && (
+                <CommandItem
+                  value={effectiveNoneLabel}
+                  onSelect={() => {
+                    onValueChange("")
+                    setOpen(false)
+                  }}
+                >
+                  <Check
+                    className={cn(
+                      "mr-2 h-4 w-4",
+                      !value ? "opacity-100" : "opacity-0"
+                    )}
+                  />
+                  <span>{effectiveNoneLabel}</span>
+                </CommandItem>
+              )}
               {sortedAccounts.map((account) => {
                 const accountBreadcrumb = breadcrumbs.get(account.id) || [account.attributes.name]
                 return (

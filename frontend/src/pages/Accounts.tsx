@@ -43,6 +43,7 @@ import { getLedgers } from "@/api/ledgers"
 import type { AccountResource, LedgerResource } from "@/api/types"
 import { formatCurrency } from "@/lib/utils"
 import { Plus, Trash2, Wallet, MoreHorizontal, Pencil, ChevronRight, ChevronDown } from "lucide-react"
+import { AccountAutocomplete } from "@/components/AccountAutocomplete"
 
 const accountTypeColors: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
   ASSET: "default",
@@ -83,23 +84,6 @@ function buildAccountTree(accounts: AccountResource[]): AccountTreeNode[] {
   })
 
   return roots
-}
-
-interface FlatAccountWithDepth {
-  account: AccountResource
-  depth: number
-}
-
-function flattenTreeWithDepth(
-  nodes: AccountTreeNode[],
-  depth: number = 0
-): FlatAccountWithDepth[] {
-  const result: FlatAccountWithDepth[] = []
-  for (const node of nodes) {
-    result.push({ account: node.account, depth })
-    result.push(...flattenTreeWithDepth(node.children, depth + 1))
-  }
-  return result
 }
 
 function countTreeNodes(nodes: AccountTreeNode[]): number {
@@ -439,24 +423,13 @@ export function Accounts() {
 
   const selectedLedger = ledgers.find((l) => l.attributes.slug === selectedLedgerSlug)
 
-  // Filter valid parent accounts for edit (exclude self and descendants) and build tree
-  const validParentAccountsForEditTree = useMemo(() => {
-    if (!editingAccount) return accountTree
+  // Filter valid parent accounts for edit (exclude self and descendants)
+  const validParentAccountsForEdit = useMemo(() => {
+    if (!editingAccount) return accounts
 
     const excludedIds = new Set([editingAccount.id, ...getDescendantIds(editingAccount.id)])
-
-    // Filter and rebuild tree excluding the account and its descendants
-    const filterTree = (nodes: AccountTreeNode[]): AccountTreeNode[] => {
-      return nodes
-        .filter((node) => !excludedIds.has(node.account.id))
-        .map((node) => ({
-          ...node,
-          children: filterTree(node.children),
-        }))
-    }
-
-    return filterTree(accountTree)
-  }, [accountTree, editingAccount, accounts])
+    return accounts.filter((a) => !excludedIds.has(a.id))
+  }, [accounts, editingAccount])
 
   return (
     <div className="space-y-6">
@@ -518,35 +491,27 @@ export function Accounts() {
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="parentAccount">{t("accounts.parentAccount")} ({t("common.optional")})</Label>
-                <Select
+                <AccountAutocomplete
+                  accounts={accounts}
                   value={formData.parentAccountId}
                   onValueChange={(value) => {
-                    const parentId = value === "none" ? "" : value
-                    if (parentId) {
-                      const parentAccount = accounts.find((a) => a.id === parentId)
+                    if (value) {
+                      const parentAccount = accounts.find((a) => a.id === value)
                       if (parentAccount) {
-                        setFormData({ ...formData, parentAccountId: parentId, type: parentAccount.attributes.type as AccountType })
+                        setFormData({
+                          ...formData,
+                          parentAccountId: value,
+                          type: parentAccount.attributes.type as AccountType,
+                          currency: parentAccount.attributes.currency,
+                        })
                       }
                     } else {
-                      setFormData({ ...formData, parentAccountId: parentId })
+                      setFormData({ ...formData, parentAccountId: "" })
                     }
                   }}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder={t("accounts.parentAccount")} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">{t("common.none")}</SelectItem>
-                    {flattenTreeWithDepth(accountTree).map(({ account, depth }) => (
-                      <SelectItem key={account.id} value={account.id}>
-                        <span style={{ paddingLeft: `${depth * 16}px` }}>
-                          {depth > 0 && "└ "}
-                          {account.attributes.name}
-                        </span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  placeholder={t("accounts.parentAccount")}
+                  allowNone
+                />
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="currency">{t("common.currency")}</Label>
@@ -633,35 +598,27 @@ export function Accounts() {
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="edit-parentAccount">{t("accounts.parentAccount")} ({t("common.optional")})</Label>
-                <Select
-                  value={editFormData.parentAccountId || "none"}
+                <AccountAutocomplete
+                  accounts={validParentAccountsForEdit}
+                  value={editFormData.parentAccountId}
                   onValueChange={(value) => {
-                    const parentId = value === "none" ? "" : value
-                    if (parentId) {
-                      const parentAccount = accounts.find((a) => a.id === parentId)
+                    if (value) {
+                      const parentAccount = accounts.find((a) => a.id === value)
                       if (parentAccount) {
-                        setEditFormData({ ...editFormData, parentAccountId: parentId, type: parentAccount.attributes.type as AccountType })
+                        setEditFormData({
+                          ...editFormData,
+                          parentAccountId: value,
+                          type: parentAccount.attributes.type as AccountType,
+                          currency: parentAccount.attributes.currency,
+                        })
                       }
                     } else {
-                      setEditFormData({ ...editFormData, parentAccountId: parentId })
+                      setEditFormData({ ...editFormData, parentAccountId: "" })
                     }
                   }}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder={t("accounts.parentAccount")} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">{t("common.none")}</SelectItem>
-                    {flattenTreeWithDepth(validParentAccountsForEditTree).map(({ account, depth }) => (
-                      <SelectItem key={account.id} value={account.id}>
-                        <span style={{ paddingLeft: `${depth * 16}px` }}>
-                          {depth > 0 && "└ "}
-                          {account.attributes.name}
-                        </span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  placeholder={t("accounts.parentAccount")}
+                  allowNone
+                />
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="edit-currency">{t("common.currency")}</Label>
