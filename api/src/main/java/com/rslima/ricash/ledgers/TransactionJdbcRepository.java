@@ -17,6 +17,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
+import java.util.LinkedHashMap;
+
 import static java.util.stream.Collectors.groupingBy;
 
 @RequiredArgsConstructor
@@ -236,8 +238,13 @@ public class TransactionJdbcRepository implements TransactionRepository {
     }
 
     private List<Transaction> groupToTransactions(List<DBTransactionWithEntry> results) {
+        // Use LinkedHashMap to preserve insertion order (which comes from the ORDER BY in SQL)
         return results.stream()
-                .collect(groupingBy(r -> new DBTransaction(r.transactionId(), null, r.date(), r.description(), r.createdAt())))
+                .collect(groupingBy(
+                        r -> new DBTransaction(r.transactionId(), null, r.date(), r.description(), r.createdAt()),
+                        LinkedHashMap::new,
+                        java.util.stream.Collectors.toList()
+                ))
                 .entrySet().stream()
                 .map(e -> {
                     var dbTransaction = e.getKey();
