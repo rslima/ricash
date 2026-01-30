@@ -29,11 +29,15 @@ public class TransactionJdbcRepository implements TransactionRepository {
     record DBTransaction(String id, String ledgerId, LocalDate date, String description, Instant createdAt) {}
 
     record DBTransactionEntry(String id, String transactionId, String accountId, String accountName,
-                               BigDecimal amount, String type, String currency) {}
+                               BigDecimal amount, String type, String currency,
+                               BigDecimal toAmount, String toCurrency,
+                               String instrumentId, BigDecimal quantity, String instrumentSymbol) {}
 
     record DBTransactionWithEntry(String transactionId, LocalDate date, String description, Instant createdAt,
                                    String entryId, String accountId, String accountName,
-                                   BigDecimal amount, String type, String currency) {}
+                                   BigDecimal amount, String type, String currency,
+                                   BigDecimal toAmount, String toCurrency,
+                                   String instrumentId, BigDecimal quantity, String instrumentSymbol) {}
 
     @Override
     public Page<Transaction> listLedgerTransactions(String ledgerId, PageRequest pageRequest) {
@@ -48,13 +52,19 @@ public class TransactionJdbcRepository implements TransactionRepository {
                             a.name AS account_name,
                             te.amount,
                             te.type,
-                            te.currency
+                            te.currency,
+                            te.to_amount,
+                            te.to_currency,
+                            te.instrument_id,
+                            te.quantity,
+                            i.symbol AS instrument_symbol
                         FROM
                             (SELECT * FROM transactions WHERE ledger_id = :ledgerId
                              ORDER BY date DESC, created_at DESC
                              OFFSET :offset LIMIT :limit) t
                         LEFT JOIN transaction_entries te ON t.id = te.transaction_id
                         LEFT JOIN accounts a ON te.account_id = a.id
+                        LEFT JOIN instruments i ON te.instrument_id = i.id
                         ORDER BY t.date DESC, t.created_at DESC
                         """)
                 .param("ledgerId", ledgerId)
@@ -85,7 +95,12 @@ public class TransactionJdbcRepository implements TransactionRepository {
                             a.name AS account_name,
                             te.amount,
                             te.type,
-                            te.currency
+                            te.currency,
+                            te.to_amount,
+                            te.to_currency,
+                            te.instrument_id,
+                            te.quantity,
+                            i.symbol AS instrument_symbol
                         FROM
                             (SELECT DISTINCT t.* FROM transactions t
                              INNER JOIN transaction_entries te ON t.id = te.transaction_id
@@ -94,6 +109,7 @@ public class TransactionJdbcRepository implements TransactionRepository {
                              OFFSET :offset LIMIT :limit) t
                         LEFT JOIN transaction_entries te ON t.id = te.transaction_id
                         LEFT JOIN accounts a ON te.account_id = a.id
+                        LEFT JOIN instruments i ON te.instrument_id = i.id
                         ORDER BY t.date DESC, t.created_at DESC
                         """)
                 .param("ledgerId", ledgerId)
@@ -130,10 +146,16 @@ public class TransactionJdbcRepository implements TransactionRepository {
                             a.name AS account_name,
                             te.amount,
                             te.type,
-                            te.currency
+                            te.currency,
+                            te.to_amount,
+                            te.to_currency,
+                            te.instrument_id,
+                            te.quantity,
+                            i.symbol AS instrument_symbol
                         FROM transactions t
                         LEFT JOIN transaction_entries te ON t.id = te.transaction_id
                         LEFT JOIN accounts a ON te.account_id = a.id
+                        LEFT JOIN instruments i ON te.instrument_id = i.id
                         WHERE t.ledger_id = :ledgerId AND t.id = :transactionId
                         """)
                 .param("ledgerId", ledgerId)
@@ -168,8 +190,8 @@ public class TransactionJdbcRepository implements TransactionRepository {
 
         for (var entry : allEntries) {
             jdbcClient.sql("""
-                            INSERT INTO transaction_entries (id, transaction_id, account_id, amount, type, currency)
-                            VALUES (:id, :transactionId, :accountId, :amount, :type, :currency)
+                            INSERT INTO transaction_entries (id, transaction_id, account_id, amount, type, currency, to_amount, to_currency, instrument_id, quantity)
+                            VALUES (:id, :transactionId, :accountId, :amount, :type, :currency, :toAmount, :toCurrency, :instrumentId, :quantity)
                             """)
                     .param("id", UuidCreator.getTimeOrderedEpoch().toString())
                     .param("transactionId", transaction.id())
@@ -177,6 +199,10 @@ public class TransactionJdbcRepository implements TransactionRepository {
                     .param("amount", entry.amount().amount())
                     .param("type", entry.type().name())
                     .param("currency", entry.amount().currency())
+                    .param("toAmount", entry.convertedAmount() != null ? entry.convertedAmount().amount() : null)
+                    .param("toCurrency", entry.convertedAmount() != null ? entry.convertedAmount().currency() : null)
+                    .param("instrumentId", entry.instrumentId())
+                    .param("quantity", entry.quantity())
                     .update();
         }
 
@@ -208,8 +234,8 @@ public class TransactionJdbcRepository implements TransactionRepository {
 
         for (var entry : allEntries) {
             jdbcClient.sql("""
-                            INSERT INTO transaction_entries (id, transaction_id, account_id, amount, type, currency)
-                            VALUES (:id, :transactionId, :accountId, :amount, :type, :currency)
+                            INSERT INTO transaction_entries (id, transaction_id, account_id, amount, type, currency, to_amount, to_currency, instrument_id, quantity)
+                            VALUES (:id, :transactionId, :accountId, :amount, :type, :currency, :toAmount, :toCurrency, :instrumentId, :quantity)
                             """)
                     .param("id", UuidCreator.getTimeOrderedEpoch().toString())
                     .param("transactionId", transaction.id())
@@ -217,6 +243,10 @@ public class TransactionJdbcRepository implements TransactionRepository {
                     .param("amount", entry.amount().amount())
                     .param("type", entry.type().name())
                     .param("currency", entry.amount().currency())
+                    .param("toAmount", entry.convertedAmount() != null ? entry.convertedAmount().amount() : null)
+                    .param("toCurrency", entry.convertedAmount() != null ? entry.convertedAmount().currency() : null)
+                    .param("instrumentId", entry.instrumentId())
+                    .param("quantity", entry.quantity())
                     .update();
         }
 
@@ -273,11 +303,20 @@ public class TransactionJdbcRepository implements TransactionRepository {
     }
 
     private TransactionEntry toTransactionEntry(DBTransactionWithEntry entry) {
+        MonetaryAmount convertedAmount = null;
+        if (entry.toAmount() != null && entry.toCurrency() != null) {
+            convertedAmount = new MonetaryAmount(entry.toAmount(), entry.toCurrency());
+        }
+
         return new TransactionEntry(
                 entry.accountId(),
                 TransactionEntryType.valueOf(entry.type()),
                 new MonetaryAmount(entry.amount(), entry.currency()),
-                entry.accountName()
+                convertedAmount,
+                entry.accountName(),
+                entry.instrumentId(),
+                entry.quantity(),
+                entry.instrumentSymbol()
         );
     }
 }

@@ -35,6 +35,12 @@ public class TransactionResource extends RepresentationModel<TransactionResource
         private String accountId;
         private String accountName;
         private BigDecimal amount;
+        private String currency;
+        private BigDecimal toAmount;
+        private String toCurrency;
         private String type;
+        private String instrumentId;
+        private BigDecimal quantity;
+        private String instrumentSymbol;
     }
 }

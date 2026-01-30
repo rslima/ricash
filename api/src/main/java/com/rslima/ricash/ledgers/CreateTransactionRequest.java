@@ -18,6 +18,11 @@ public record CreateTransactionRequest(
     public record EntryRequest(
             @NotBlank String accountId,
             @NotNull @Positive BigDecimal amount,
-            @NotNull TransactionEntryType type
+            @NotBlank String currency,
+            @Positive BigDecimal toAmount,
+            String toCurrency,
+            @NotNull TransactionEntryType type,
+            String instrumentId,
+            @Positive BigDecimal quantity
     ) {}
 }

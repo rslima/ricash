@@ -46,7 +46,13 @@ public interface TransactionMapper {
                     entry.accountId(),
                     entry.accountName(),
                     entry.amount().amount(),
-                    entry.type().name()
+                    entry.amount().currency(),
+                    entry.convertedAmount() != null ? entry.convertedAmount().amount() : null,
+                    entry.convertedAmount() != null ? entry.convertedAmount().currency() : null,
+                    entry.type().name(),
+                    entry.instrumentId(),
+                    entry.quantity(),
+                    entry.instrumentSymbol()
             ));
         }
 
@@ -55,7 +61,13 @@ public interface TransactionMapper {
                     entry.accountId(),
                     entry.accountName(),
                     entry.amount().amount(),
-                    entry.type().name()
+                    entry.amount().currency(),
+                    entry.convertedAmount() != null ? entry.convertedAmount().amount() : null,
+                    entry.convertedAmount() != null ? entry.convertedAmount().currency() : null,
+                    entry.type().name(),
+                    entry.instrumentId(),
+                    entry.quantity(),
+                    entry.instrumentSymbol()
             ));
         }
 
