@@ -53,11 +53,35 @@ public class AccountJdbcRepository implements AccountRepository {
                             COALESCE(
                                 CASE
                                     WHEN a.type IN ('ASSET', 'EXPENSE') THEN
-                                        SUM(CASE WHEN te.type = 'DEBIT' THEN te.amount ELSE 0 END) -
-                                        SUM(CASE WHEN te.type = 'CREDIT' THEN te.amount ELSE 0 END)
+                                        SUM(CASE WHEN te.type = 'DEBIT' THEN
+                                            CASE
+                                                WHEN te.to_currency = a.currency THEN te.to_amount
+                                                WHEN te.currency = a.currency THEN te.amount
+                                                ELSE 0
+                                            END
+                                        ELSE 0 END) -
+                                        SUM(CASE WHEN te.type = 'CREDIT' THEN
+                                            CASE
+                                                WHEN te.to_currency = a.currency THEN te.to_amount
+                                                WHEN te.currency = a.currency THEN te.amount
+                                                ELSE 0
+                                            END
+                                        ELSE 0 END)
                                     ELSE
-                                        SUM(CASE WHEN te.type = 'CREDIT' THEN te.amount ELSE 0 END) -
-                                        SUM(CASE WHEN te.type = 'DEBIT' THEN te.amount ELSE 0 END)
+                                        SUM(CASE WHEN te.type = 'CREDIT' THEN
+                                            CASE
+                                                WHEN te.to_currency = a.currency THEN te.to_amount
+                                                WHEN te.currency = a.currency THEN te.amount
+                                                ELSE 0
+                                            END
+                                        ELSE 0 END) -
+                                        SUM(CASE WHEN te.type = 'DEBIT' THEN
+                                            CASE
+                                                WHEN te.to_currency = a.currency THEN te.to_amount
+                                                WHEN te.currency = a.currency THEN te.amount
+                                                ELSE 0
+                                            END
+                                        ELSE 0 END)
                                 END,
                                 0
                             ) AS balance,
@@ -126,11 +150,35 @@ public class AccountJdbcRepository implements AccountRepository {
                             COALESCE(
                                 CASE
                                     WHEN a.type IN ('ASSET', 'EXPENSE') THEN
-                                        SUM(CASE WHEN te.type = 'DEBIT' THEN te.amount ELSE 0 END) -
-                                        SUM(CASE WHEN te.type = 'CREDIT' THEN te.amount ELSE 0 END)
+                                        SUM(CASE WHEN te.type = 'DEBIT' THEN
+                                            CASE
+                                                WHEN te.to_currency = a.currency THEN te.to_amount
+                                                WHEN te.currency = a.currency THEN te.amount
+                                                ELSE 0
+                                            END
+                                        ELSE 0 END) -
+                                        SUM(CASE WHEN te.type = 'CREDIT' THEN
+                                            CASE
+                                                WHEN te.to_currency = a.currency THEN te.to_amount
+                                                WHEN te.currency = a.currency THEN te.amount
+                                                ELSE 0
+                                            END
+                                        ELSE 0 END)
                                     ELSE
-                                        SUM(CASE WHEN te.type = 'CREDIT' THEN te.amount ELSE 0 END) -
-                                        SUM(CASE WHEN te.type = 'DEBIT' THEN te.amount ELSE 0 END)
+                                        SUM(CASE WHEN te.type = 'CREDIT' THEN
+                                            CASE
+                                                WHEN te.to_currency = a.currency THEN te.to_amount
+                                                WHEN te.currency = a.currency THEN te.amount
+                                                ELSE 0
+                                            END
+                                        ELSE 0 END) -
+                                        SUM(CASE WHEN te.type = 'DEBIT' THEN
+                                            CASE
+                                                WHEN te.to_currency = a.currency THEN te.to_amount
+                                                WHEN te.currency = a.currency THEN te.amount
+                                                ELSE 0
+                                            END
+                                        ELSE 0 END)
                                 END,
                                 0
                             ) AS balance,
