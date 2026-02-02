@@ -12,6 +12,8 @@ import { InstrumentPrices } from "@/pages/InstrumentPrices"
 import { Portfolio } from "@/pages/Portfolio"
 import { Settings } from "@/pages/Settings"
 import { Callback } from "@/pages/Callback"
+import { Budget } from "@/pages/Budget"
+import { Envelopes } from "@/pages/Envelopes"
 
 function App() {
   return (
@@ -27,6 +29,10 @@ function App() {
             <Route path="accounts" element={<Accounts />} />
             <Route path="ledgers/:ledgerSlug/transactions" element={<Transactions />} />
             <Route path="transactions" element={<Transactions />} />
+            <Route path="budget" element={<Budget />} />
+            <Route path="ledgers/:ledgerSlug/budget" element={<Budget />} />
+            <Route path="envelopes" element={<Envelopes />} />
+            <Route path="ledgers/:ledgerSlug/envelopes" element={<Envelopes />} />
             <Route path="exchange-rates" element={<ExchangeRates />} />
             <Route path="instruments" element={<Instruments />} />
             <Route path="ledgers/:ledgerSlug/instruments" element={<Instruments />} />

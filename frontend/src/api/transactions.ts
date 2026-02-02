@@ -28,6 +28,7 @@ export interface TransactionEntryInput {
   type: "DEBIT" | "CREDIT"
   instrumentId?: string
   quantity?: number
+  envelopeId?: string
 }
 
 export interface CreateTransactionData {

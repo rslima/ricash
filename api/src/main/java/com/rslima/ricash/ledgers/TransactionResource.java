@@ -42,5 +42,6 @@ public class TransactionResource extends RepresentationModel<TransactionResource
         private String instrumentId;
         private BigDecimal quantity;
         private String instrumentSymbol;
+        private String envelopeId;
     }
 }

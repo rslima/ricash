@@ -31,13 +31,15 @@ public class TransactionJdbcRepository implements TransactionRepository {
     record DBTransactionEntry(String id, String transactionId, String accountId, String accountName,
                                BigDecimal amount, String type, String currency,
                                BigDecimal toAmount, String toCurrency,
-                               String instrumentId, BigDecimal quantity, String instrumentSymbol) {}
+                               String instrumentId, BigDecimal quantity, String instrumentSymbol,
+                               String envelopeId) {}
 
     record DBTransactionWithEntry(String transactionId, LocalDate date, String description, Instant createdAt,
                                    String entryId, String accountId, String accountName,
                                    BigDecimal amount, String type, String currency,
                                    BigDecimal toAmount, String toCurrency,
-                                   String instrumentId, BigDecimal quantity, String instrumentSymbol) {}
+                                   String instrumentId, BigDecimal quantity, String instrumentSymbol,
+                                   String envelopeId) {}
 
     @Override
     public Page<Transaction> listLedgerTransactions(String ledgerId, PageRequest pageRequest) {
@@ -57,7 +59,8 @@ public class TransactionJdbcRepository implements TransactionRepository {
                             te.to_currency,
                             te.instrument_id,
                             te.quantity,
-                            i.symbol AS instrument_symbol
+                            i.symbol AS instrument_symbol,
+                            te.envelope_id
                         FROM
                             (SELECT * FROM transactions WHERE ledger_id = :ledgerId
                              ORDER BY date DESC, created_at DESC
@@ -100,7 +103,8 @@ public class TransactionJdbcRepository implements TransactionRepository {
                             te.to_currency,
                             te.instrument_id,
                             te.quantity,
-                            i.symbol AS instrument_symbol
+                            i.symbol AS instrument_symbol,
+                            te.envelope_id
                         FROM
                             (SELECT DISTINCT t.* FROM transactions t
                              INNER JOIN transaction_entries te ON t.id = te.transaction_id
@@ -151,7 +155,8 @@ public class TransactionJdbcRepository implements TransactionRepository {
                             te.to_currency,
                             te.instrument_id,
                             te.quantity,
-                            i.symbol AS instrument_symbol
+                            i.symbol AS instrument_symbol,
+                            te.envelope_id
                         FROM transactions t
                         LEFT JOIN transaction_entries te ON t.id = te.transaction_id
                         LEFT JOIN accounts a ON te.account_id = a.id
@@ -190,8 +195,8 @@ public class TransactionJdbcRepository implements TransactionRepository {
 
         for (var entry : allEntries) {
             jdbcClient.sql("""
-                            INSERT INTO transaction_entries (id, transaction_id, account_id, amount, type, currency, to_amount, to_currency, instrument_id, quantity)
-                            VALUES (:id, :transactionId, :accountId, :amount, :type, :currency, :toAmount, :toCurrency, :instrumentId, :quantity)
+                            INSERT INTO transaction_entries (id, transaction_id, account_id, amount, type, currency, to_amount, to_currency, instrument_id, quantity, envelope_id)
+                            VALUES (:id, :transactionId, :accountId, :amount, :type, :currency, :toAmount, :toCurrency, :instrumentId, :quantity, :envelopeId)
                             """)
                     .param("id", UuidCreator.getTimeOrderedEpoch().toString())
                     .param("transactionId", transaction.id())
@@ -203,6 +208,7 @@ public class TransactionJdbcRepository implements TransactionRepository {
                     .param("toCurrency", entry.convertedAmount() != null ? entry.convertedAmount().currency() : null)
                     .param("instrumentId", entry.instrumentId())
                     .param("quantity", entry.quantity())
+                    .param("envelopeId", entry.envelopeId())
                     .update();
         }
 
@@ -234,8 +240,8 @@ public class TransactionJdbcRepository implements TransactionRepository {
 
         for (var entry : allEntries) {
             jdbcClient.sql("""
-                            INSERT INTO transaction_entries (id, transaction_id, account_id, amount, type, currency, to_amount, to_currency, instrument_id, quantity)
-                            VALUES (:id, :transactionId, :accountId, :amount, :type, :currency, :toAmount, :toCurrency, :instrumentId, :quantity)
+                            INSERT INTO transaction_entries (id, transaction_id, account_id, amount, type, currency, to_amount, to_currency, instrument_id, quantity, envelope_id)
+                            VALUES (:id, :transactionId, :accountId, :amount, :type, :currency, :toAmount, :toCurrency, :instrumentId, :quantity, :envelopeId)
                             """)
                     .param("id", UuidCreator.getTimeOrderedEpoch().toString())
                     .param("transactionId", transaction.id())
@@ -247,6 +253,7 @@ public class TransactionJdbcRepository implements TransactionRepository {
                     .param("toCurrency", entry.convertedAmount() != null ? entry.convertedAmount().currency() : null)
                     .param("instrumentId", entry.instrumentId())
                     .param("quantity", entry.quantity())
+                    .param("envelopeId", entry.envelopeId())
                     .update();
         }
 
@@ -316,7 +323,8 @@ public class TransactionJdbcRepository implements TransactionRepository {
                 entry.accountName(),
                 entry.instrumentId(),
                 entry.quantity(),
-                entry.instrumentSymbol()
+                entry.instrumentSymbol(),
+                entry.envelopeId()
         );
     }
 
@@ -359,7 +367,8 @@ public class TransactionJdbcRepository implements TransactionRepository {
                             te.to_currency,
                             te.instrument_id,
                             te.quantity,
-                            i.symbol AS instrument_symbol
+                            i.symbol AS instrument_symbol,
+                            te.envelope_id
                         FROM latest_transactions t
                         LEFT JOIN transaction_entries te ON t.id = te.transaction_id
                         LEFT JOIN accounts a ON te.account_id = a.id

@@ -127,6 +127,7 @@ public class TransactionServiceBean implements TransactionService {
         TransactionEntryType type();
         String instrumentId();
         BigDecimal quantity();
+        String envelopeId();
     }
 
     private List<TransactionEntry> processEntries(Ledger ledger, List<? extends Object> requestEntries, java.time.LocalDate transactionDate) {
@@ -145,6 +146,7 @@ public class TransactionServiceBean implements TransactionService {
                     public TransactionEntryType type() { return createEntry.type(); }
                     public String instrumentId() { return createEntry.instrumentId(); }
                     public BigDecimal quantity() { return createEntry.quantity(); }
+                    public String envelopeId() { return createEntry.envelopeId(); }
                 };
             } else if (obj instanceof UpdateTransactionRequest.EntryRequest updateEntry) {
                 requestEntry = new EntryData() {
@@ -156,6 +158,7 @@ public class TransactionServiceBean implements TransactionService {
                     public TransactionEntryType type() { return updateEntry.type(); }
                     public String instrumentId() { return updateEntry.instrumentId(); }
                     public BigDecimal quantity() { return updateEntry.quantity(); }
+                    public String envelopeId() { return updateEntry.envelopeId(); }
                 };
             } else {
                 throw new IllegalArgumentException("Unsupported entry type: " + obj.getClass());
@@ -203,7 +206,8 @@ public class TransactionServiceBean implements TransactionService {
                     account.name(),
                     requestEntry.instrumentId(),
                     requestEntry.quantity(),
-                    null  // instrumentSymbol will be populated by the repository on fetch
+                    null,  // instrumentSymbol will be populated by the repository on fetch
+                    requestEntry.envelopeId()
             ));
         }
 

@@ -90,6 +90,7 @@ export interface TransactionEntry {
   instrumentId?: string
   quantity?: number
   instrumentSymbol?: string
+  envelopeId?: string
 }
 
 export type TransactionResource = JsonApiResource<"transactions", TransactionAttributes>
@@ -151,6 +152,54 @@ export interface InstrumentPositionAttributes {
 }
 
 export type InstrumentPositionResource = JsonApiResource<"positions", InstrumentPositionAttributes>
+
+// Envelope types
+
+export type EnvelopeType = "EXPENSE" | "INCOME"
+export type EnvelopeStatus = "ACTIVE" | "ARCHIVED"
+
+export interface EnvelopeAttributes {
+  name: string
+  description: string | null
+  currency: string
+  type: EnvelopeType
+  status: EnvelopeStatus
+  parentEnvelopeId: string | null
+  createdAt: string
+}
+
+export type EnvelopeResource = JsonApiResource<"envelopes", EnvelopeAttributes>
+
+export interface EnvelopeAllocationAttributes {
+  envelopeId: string
+  periodYear: number
+  periodMonth: number
+  allocatedAmount: number
+  notes: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export type EnvelopeAllocationResource = JsonApiResource<"envelope-allocations", EnvelopeAllocationAttributes>
+
+// Plain JSON types for budget (not JSON:API)
+export interface EnvelopeBalance {
+  envelopeId: string
+  periodYear: number
+  periodMonth: number
+  rollover: number
+  allocated: number
+  spent: number
+  available: number
+}
+
+export interface BudgetSummary {
+  id: string
+  periodYear: number
+  periodMonth: number
+  toBeBudgeted: number
+  envelopeBalances: EnvelopeBalance[]
+}
 
 // Pagination params
 export interface PaginationParams {

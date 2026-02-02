@@ -23,6 +23,7 @@ public record UpdateTransactionRequest(
             String toCurrency,
             @NotNull TransactionEntryType type,
             String instrumentId,
-            @Positive BigDecimal quantity
+            @Positive BigDecimal quantity,
+            String envelopeId
     ) {}
 }

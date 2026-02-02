@@ -43,7 +43,8 @@ import { getTransactions, deleteTransaction, createTransaction, updateTransactio
 import { getLedgers } from "@/api/ledgers"
 import { getAccounts } from "@/api/accounts"
 import { getAllInstruments } from "@/api/instruments"
-import type { TransactionResource, LedgerResource, AccountResource, InstrumentResource } from "@/api/types"
+import { getEnvelopes, getEnvelopeMappings } from "@/api/envelopes"
+import type { TransactionResource, LedgerResource, AccountResource, InstrumentResource, EnvelopeResource } from "@/api/types"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import { Plus, Trash2, ArrowLeftRight, MoreHorizontal, X, Pencil } from "lucide-react"
 
@@ -56,6 +57,7 @@ interface TransactionEntry {
   type: "DEBIT" | "CREDIT"
   instrumentId?: string
   quantity?: string
+  envelopeId?: string
 }
 
 interface PrefilledEntry {
@@ -79,6 +81,8 @@ export function Transactions() {
   const [ledgers, setLedgers] = useState<LedgerResource[]>([])
   const [accounts, setAccounts] = useState<AccountResource[]>([])
   const [instruments, setInstruments] = useState<InstrumentResource[]>([])
+  const [envelopes, setEnvelopes] = useState<EnvelopeResource[]>([])
+  const [envelopeMappings, setEnvelopeMappings] = useState<Record<string, string>>({})
   const [transactionTemplates, setTransactionTemplates] = useState<TransactionResource[]>([])
   const [selectedLedgerSlug, setSelectedLedgerSlug] = useState<string | null>(ledgerSlug || null)
   const [isLoading, setIsLoading] = useState(true)
@@ -134,12 +138,16 @@ export function Transactions() {
       getAccounts(selectedLedgerSlug, { "page[size]": 200 }),
       getAllInstruments(selectedLedgerSlug),
       getTransactionTemplates(selectedLedgerSlug),
+      getEnvelopes(selectedLedgerSlug, { "page[size]": 200 }),
+      getEnvelopeMappings(selectedLedgerSlug),
     ])
-      .then(([transactionsResponse, accountsResponse, instrumentsResponse, templates]) => {
+      .then(([transactionsResponse, accountsResponse, instrumentsResponse, templates, envelopesResponse, mappings]) => {
         setTransactions(transactionsResponse.data)
         setAccounts(accountsResponse.data)
         setInstruments(instrumentsResponse)
         setTransactionTemplates(templates)
+        setEnvelopes(envelopesResponse.data)
+        setEnvelopeMappings(mappings)
       })
       .catch(console.error)
       .finally(() => setIsLoading(false))
@@ -233,6 +241,10 @@ export function Transactions() {
           newEntries[index].toAmount = undefined
           newEntries[index].toCurrency = undefined
         }
+        // Auto-fill envelope from account mapping
+        if (!newEntries[index].envelopeId && envelopeMappings[value]) {
+          newEntries[index].envelopeId = envelopeMappings[value]
+        }
       }
 
       // Auto-update toCurrency when currency changes
@@ -262,6 +274,10 @@ export function Transactions() {
           // Clear conversion fields if same currency
           newEntries[index].toAmount = undefined
           newEntries[index].toCurrency = undefined
+        }
+        // Auto-fill envelope from account mapping
+        if (!newEntries[index].envelopeId && envelopeMappings[value]) {
+          newEntries[index].envelopeId = envelopeMappings[value]
         }
       }
 
@@ -393,6 +409,7 @@ export function Transactions() {
       type: entry.type || "DEBIT",
       instrumentId: entry.instrumentId,
       quantity: entry.quantity?.toString(),
+      envelopeId: entry.envelopeId,
     })) || []
 
     if (isEdit) {
@@ -488,6 +505,7 @@ export function Transactions() {
         type: e.type,
         instrumentId: e.instrumentId || undefined,
         quantity: e.quantity ? parseFloat(e.quantity) : undefined,
+        envelopeId: e.envelopeId || undefined,
       }))
 
       const response = await createTransaction(selectedLedgerSlug, {
@@ -529,6 +547,7 @@ export function Transactions() {
       type: entry.type || "DEBIT",
       instrumentId: entry.instrumentId,
       quantity: entry.quantity?.toString(),
+      envelopeId: entry.envelopeId,
     })) || []
 
     setEditEntries(transactionEntries.length > 0 ? transactionEntries : [
@@ -552,6 +571,7 @@ export function Transactions() {
         type: e.type,
         instrumentId: e.instrumentId || undefined,
         quantity: e.quantity ? parseFloat(e.quantity) : undefined,
+        envelopeId: e.envelopeId || undefined,
       }))
 
       const response = await updateTransaction(selectedLedgerSlug, editingTransaction.id, {
@@ -725,6 +745,30 @@ export function Transactions() {
                           className="w-28 h-8 text-sm"
                         />
                       )}
+                    </div>
+                  </div>
+                )}
+                {/* Envelope selection (optional) */}
+                {envelopes.length > 0 && (
+                  <div className="pl-4 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Label className="text-xs text-muted-foreground w-24">{t("transactions.envelope")}:</Label>
+                      <Select
+                        value={entry.envelopeId || "none"}
+                        onValueChange={(value) => updateEntry(index, "envelopeId", value === "none" ? "" : value, isEdit)}
+                      >
+                        <SelectTrigger className="w-48 h-8 text-sm">
+                          <SelectValue placeholder={t("transactions.selectEnvelope")} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">{t("common.none")}</SelectItem>
+                          {envelopes.map((envelope) => (
+                            <SelectItem key={envelope.id} value={envelope.id}>
+                              {envelope.attributes.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
                 )}

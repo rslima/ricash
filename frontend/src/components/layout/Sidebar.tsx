@@ -12,6 +12,8 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
+  FolderOpen,
+  PiggyBank,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -32,6 +34,8 @@ const navigation = [
   { key: "ledgers", href: "/ledgers", icon: BookOpen },
   { key: "accounts", href: "/accounts", icon: Wallet },
   { key: "transactions", href: "/transactions", icon: ArrowLeftRight },
+  { key: "budget", href: "/budget", icon: PiggyBank },
+  { key: "envelopes", href: "/envelopes", icon: FolderOpen },
   { key: "instruments", href: "/instruments", icon: Briefcase },
   { key: "instrumentPrices", href: "/instrument-prices", icon: DollarSign },
   { key: "portfolio", href: "/portfolio", icon: PieChart },

@@ -40,7 +40,8 @@ import { useAuth } from "@/contexts/AuthContext"
 import { getAccounts, deleteAccount, createAccount, updateAccount } from "@/api/accounts"
 import { ApiError } from "@/api/client"
 import { getLedgers } from "@/api/ledgers"
-import type { AccountResource, LedgerResource } from "@/api/types"
+import { getEnvelopes, getEnvelopeMappings, setEnvelopeAccounts, getEnvelopeAccounts } from "@/api/envelopes"
+import type { AccountResource, LedgerResource, EnvelopeResource } from "@/api/types"
 import { formatCurrency } from "@/lib/utils"
 import { Plus, Trash2, Wallet, MoreHorizontal, Pencil, ChevronRight, ChevronDown } from "lucide-react"
 import { AccountAutocomplete } from "@/components/AccountAutocomplete"
@@ -196,6 +197,8 @@ export function Accounts() {
   const { ledgerSlug } = useParams<{ ledgerSlug?: string }>()
   const { isAuthenticated } = useAuth()
   const [accounts, setAccounts] = useState<AccountResource[]>([])
+  const [envelopes, setEnvelopes] = useState<EnvelopeResource[]>([])
+  const [envelopeMappings, setEnvelopeMappings] = useState<Record<string, string>>({})
   const [ledgers, setLedgers] = useState<LedgerResource[]>([])
   const [selectedLedgerSlug, setSelectedLedgerSlug] = useState<string | null>(ledgerSlug || null)
   const [isLoading, setIsLoading] = useState(true)
@@ -211,6 +214,7 @@ export function Accounts() {
     currency: "BRL",
     type: "ASSET" as AccountType,
     parentAccountId: "",
+    envelopeId: "",
   })
   const [editFormData, setEditFormData] = useState({
     name: "",
@@ -218,6 +222,7 @@ export function Accounts() {
     type: "ASSET" as AccountType,
     currency: "BRL",
     parentAccountId: "",
+    envelopeId: "",
   })
 
   const accountTree = useMemo(() => buildAccountTree(accounts), [accounts])
@@ -283,11 +288,17 @@ export function Accounts() {
     }
 
     setIsLoading(true)
-    getAccounts(selectedLedgerSlug, { "page[size]": 200 })
-      .then((response) => {
-        setAccounts(response.data)
+    Promise.all([
+      getAccounts(selectedLedgerSlug, { "page[size]": 200 }),
+      getEnvelopes(selectedLedgerSlug, { "page[size]": 200 }),
+      getEnvelopeMappings(selectedLedgerSlug),
+    ])
+      .then(([accountsResponse, envelopesResponse, mappingsResponse]) => {
+        setAccounts(accountsResponse.data)
+        setEnvelopes(envelopesResponse.data)
+        setEnvelopeMappings(mappingsResponse)
         // Expand all accounts by default
-        setExpandedIds(new Set(response.data.map((a) => a.id)))
+        setExpandedIds(new Set(accountsResponse.data.map((a) => a.id)))
       })
       .catch(console.error)
       .finally(() => setIsLoading(false))
@@ -367,10 +378,18 @@ export function Accounts() {
         type: formData.type,
         parentAccountId: formData.parentAccountId || undefined,
       })
+
+      // Set envelope mapping if selected
+      if (formData.envelopeId) {
+        const currentAccounts = await getEnvelopeAccounts(selectedLedgerSlug, formData.envelopeId)
+        await setEnvelopeAccounts(selectedLedgerSlug, formData.envelopeId, [...currentAccounts.accountIds, response.data.id])
+        setEnvelopeMappings((prev) => ({ ...prev, [response.data.id]: formData.envelopeId }))
+      }
+
       setAccounts([...accounts, response.data])
       setExpandedIds((prev) => new Set([...prev, response.data.id]))
       setIsCreateDialogOpen(false)
-      setFormData({ name: "", description: "", currency: "BRL", type: "ASSET", parentAccountId: "" })
+      setFormData({ name: "", description: "", currency: "BRL", type: "ASSET", parentAccountId: "", envelopeId: "" })
     } catch (error) {
       console.error("Failed to create account:", error)
     } finally {
@@ -385,6 +404,7 @@ export function Accounts() {
       currency: parentAccount.attributes.currency,
       type: parentAccount.attributes.type as AccountType,
       parentAccountId: parentAccount.id,
+      envelopeId: "",
     })
     setIsCreateDialogOpen(true)
   }
@@ -397,6 +417,7 @@ export function Accounts() {
       type: account.attributes.type as AccountType,
       currency: account.attributes.currency,
       parentAccountId: account.attributes.parentAccountId || "",
+      envelopeId: envelopeMappings[account.id] || "",
     })
     setIsEditDialogOpen(true)
   }
@@ -414,6 +435,40 @@ export function Accounts() {
         currency: editFormData.currency,
         parentAccountId: editFormData.parentAccountId || null,
       })
+
+      // Update envelope mapping
+      const currentEnvelopeId = envelopeMappings[editingAccount.id]
+      const newEnvelopeId = editFormData.envelopeId
+
+      if (currentEnvelopeId !== newEnvelopeId) {
+        // Remove from old envelope
+        if (currentEnvelopeId) {
+          const oldEnvelopeAccounts = await getEnvelopeAccounts(selectedLedgerSlug, currentEnvelopeId)
+          await setEnvelopeAccounts(
+            selectedLedgerSlug,
+            currentEnvelopeId,
+            oldEnvelopeAccounts.accountIds.filter((id) => id !== editingAccount.id)
+          )
+        }
+
+        // Add to new envelope
+        if (newEnvelopeId) {
+          const newEnvelopeAccounts = await getEnvelopeAccounts(selectedLedgerSlug, newEnvelopeId)
+          await setEnvelopeAccounts(selectedLedgerSlug, newEnvelopeId, [...newEnvelopeAccounts.accountIds, editingAccount.id])
+        }
+
+        // Update local state
+        setEnvelopeMappings((prev) => {
+          const updated = { ...prev }
+          if (newEnvelopeId) {
+            updated[editingAccount.id] = newEnvelopeId
+          } else {
+            delete updated[editingAccount.id]
+          }
+          return updated
+        })
+      }
+
       setAccounts(accounts.map((a) =>
         a.id === editingAccount.id ? response.data : a
       ))
@@ -548,6 +603,27 @@ export function Accounts() {
                   placeholder="Main checking account for daily expenses"
                 />
               </div>
+              <div className="grid gap-2">
+                <Label htmlFor="envelope">{t("transactions.envelope")} ({t("common.optional")})</Label>
+                <Select
+                  value={formData.envelopeId || "none"}
+                  onValueChange={(value) =>
+                    setFormData({ ...formData, envelopeId: value === "none" ? "" : value })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={t("transactions.selectEnvelope")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">{t("common.none")}</SelectItem>
+                    {envelopes.map((envelope) => (
+                      <SelectItem key={envelope.id} value={envelope.id}>
+                        {envelope.attributes.name} ({t(`envelopes.types.${envelope.attributes.type}`)})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             <DialogFooter>
               <Button
@@ -654,6 +730,27 @@ export function Accounts() {
                   }
                   placeholder="Main checking account for daily expenses"
                 />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-envelope">{t("transactions.envelope")} ({t("common.optional")})</Label>
+                <Select
+                  value={editFormData.envelopeId || "none"}
+                  onValueChange={(value) =>
+                    setEditFormData({ ...editFormData, envelopeId: value === "none" ? "" : value })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={t("transactions.selectEnvelope")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">{t("common.none")}</SelectItem>
+                    {envelopes.map((envelope) => (
+                      <SelectItem key={envelope.id} value={envelope.id}>
+                        {envelope.attributes.name} ({t(`envelopes.types.${envelope.attributes.type}`)})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
             <DialogFooter>

@@ -84,4 +84,30 @@ public class LedgerConfiguration {
     public ExchangeRateRepository exchangeRateRepository(JdbcClient jdbcClient) {
         return new ExchangeRateJdbcRepository(jdbcClient);
     }
+
+    // Envelope beans
+    @Bean
+    public EnvelopeService envelopeService(
+            EnvelopeRepository envelopeRepository,
+            EnvelopeAllocationRepository allocationRepository,
+            EnvelopeAccountMappingRepository mappingRepository,
+            LedgerRepository ledgerRepository
+    ) {
+        return new EnvelopeServiceBean(envelopeRepository, allocationRepository, mappingRepository, ledgerRepository);
+    }
+
+    @Bean
+    public EnvelopeRepository envelopeRepository(JdbcClient jdbcClient) {
+        return new EnvelopeJdbcRepository(jdbcClient);
+    }
+
+    @Bean
+    public EnvelopeAllocationRepository envelopeAllocationRepository(JdbcClient jdbcClient) {
+        return new EnvelopeAllocationJdbcRepository(jdbcClient);
+    }
+
+    @Bean
+    public EnvelopeAccountMappingRepository envelopeAccountMappingRepository(JdbcClient jdbcClient) {
+        return new EnvelopeAccountMappingJdbcRepository(jdbcClient);
+    }
 }

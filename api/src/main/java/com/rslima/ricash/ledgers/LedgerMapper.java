@@ -18,6 +18,16 @@ public interface LedgerMapper {
 
     List<AccountResource> toAccountResources(List<Account> accounts);
 
+    EnvelopeResource toResource(Envelope envelope);
+
+    List<EnvelopeResource> toEnvelopeResources(List<Envelope> envelopes);
+
+    EnvelopeAllocationResource toResource(EnvelopeAllocation allocation);
+
+    EnvelopeBalanceResource toResource(EnvelopeBalance balance);
+
+    List<EnvelopeBalanceResource> toEnvelopeBalanceResources(List<EnvelopeBalance> balances);
+
     @Named("toUserResource")
     default UserResource toUserResource(String userId) {
         if (userId == null) {

@@ -52,7 +52,8 @@ public interface TransactionMapper {
                     entry.type().name(),
                     entry.instrumentId(),
                     entry.quantity(),
-                    entry.instrumentSymbol()
+                    entry.instrumentSymbol(),
+                    entry.envelopeId()
             ));
         }
 
@@ -67,7 +68,8 @@ public interface TransactionMapper {
                     entry.type().name(),
                     entry.instrumentId(),
                     entry.quantity(),
-                    entry.instrumentSymbol()
+                    entry.instrumentSymbol(),
+                    entry.envelopeId()
             ));
         }
 
