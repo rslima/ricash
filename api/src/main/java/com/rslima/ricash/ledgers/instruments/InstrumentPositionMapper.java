@@ -1,0 +1,9 @@
+package com.rslima.ricash.ledgers.instruments;
+
+import org.mapstruct.Mapper;
+import org.mapstruct.MappingConstants;
+
+@Mapper(componentModel = MappingConstants.ComponentModel.SPRING)
+public interface InstrumentPositionMapper {
+    InstrumentPositionResource toResource(InstrumentPosition position);
+}

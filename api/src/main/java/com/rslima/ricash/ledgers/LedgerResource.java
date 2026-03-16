@@ -11,6 +11,8 @@ import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import org.springframework.hateoas.RepresentationModel;
 
+import com.rslima.ricash.ledgers.accounts.AccountResource;
+
 import java.time.Instant;
 import java.util.List;
 

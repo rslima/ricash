@@ -1,8 +1,15 @@
 package com.rslima.ricash.ledgers;
 
+import com.rslima.ricash.ledgers.accounts.Account;
+import com.rslima.ricash.ledgers.accounts.AccountMapper;
+import com.rslima.ricash.ledgers.accounts.AccountResource;
+import com.rslima.ricash.ledgers.accounts.AccountStatus;
+import com.rslima.ricash.ledgers.accounts.AccountType;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mapstruct.factory.Mappers;
 
+import java.lang.reflect.Field;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
@@ -11,7 +18,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class LedgerMapperTest {
 
-    private final LedgerMapper mapper = Mappers.getMapper(LedgerMapper.class);
+    private final AccountMapper accountMapper = Mappers.getMapper(AccountMapper.class);
+    private LedgerMapper mapper;
+
+    @BeforeEach
+    void setUp() throws Exception {
+        mapper = Mappers.getMapper(LedgerMapper.class);
+        Field field = mapper.getClass().getDeclaredField("accountMapper");
+        field.setAccessible(true);
+        field.set(mapper, accountMapper);
+    }
 
     @Test
     void toResource_mapsAllFields() {
@@ -174,7 +190,7 @@ class LedgerMapperTest {
                 List.of()
         );
 
-        var result = mapper.toResource(account);
+        var result = accountMapper.toResource(account);
 
         assertThat(result.getId()).isEqualTo("account-id");
         assertThat(result.getName()).isEqualTo("Checking");
@@ -191,7 +207,7 @@ class LedgerMapperTest {
         var account1 = new Account("id-1", "account-1", "Account 1", "Desc 1", "USD", AccountType.ASSET, AccountStatus.ACTIVE, BigDecimal.ZERO, Instant.now(), null, List.of());
         var account2 = new Account("id-2", "account-2", "Account 2", "Desc 2", "EUR", AccountType.LIABILITY, AccountStatus.INACTIVE, BigDecimal.ZERO, Instant.now(), null, List.of());
 
-        var result = mapper.toAccountResources(List.of(account1, account2));
+        var result = accountMapper.toAccountResources(List.of(account1, account2));
 
         assertThat(result).hasSize(2);
         assertThat(result.get(0).getName()).isEqualTo("Account 1");
