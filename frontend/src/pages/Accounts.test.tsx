@@ -23,6 +23,13 @@ vi.mock("@/api/ledgers", () => ({
   getLedgers: vi.fn(),
 }))
 
+vi.mock("@/api/envelopes", () => ({
+  getEnvelopes: vi.fn().mockResolvedValue({ data: [] }),
+  getEnvelopeMappings: vi.fn().mockResolvedValue([]),
+  setEnvelopeAccounts: vi.fn(),
+  getEnvelopeAccounts: vi.fn().mockResolvedValue([]),
+}))
+
 import { useAuth } from "@/contexts/AuthContext"
 
 const mockLedger: LedgerResource = {
