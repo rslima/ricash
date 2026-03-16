@@ -106,8 +106,12 @@ describe("Accounts", () => {
 
       renderAccounts()
 
-      expect(screen.getByText("Accounts")).toBeInTheDocument()
-      expect(screen.getByText("Manage accounts within your ledgers")).toBeInTheDocument()
+      expect(screen.getByRole("heading", { name: "Accounts" })).toBeInTheDocument()
+      expect(screen.getAllByText("Manage accounts within your ledgers").length).toBeGreaterThanOrEqual(1)
+
+      await waitFor(() => {
+        expect(screen.getAllByText("No ledger selected").length).toBeGreaterThanOrEqual(1)
+      })
     })
 
     it("shows no ledger selected when there are no ledgers", async () => {
@@ -116,7 +120,7 @@ describe("Accounts", () => {
       renderAccounts()
 
       await waitFor(() => {
-        expect(screen.getByText("No ledger selected")).toBeInTheDocument()
+        expect(screen.getAllByText("No ledger selected").length).toBeGreaterThanOrEqual(1)
       })
     })
 
@@ -189,7 +193,7 @@ describe("Accounts", () => {
       const newAccountButton = screen.getByRole("button", { name: /new account/i })
       await user.click(newAccountButton)
 
-      expect(screen.getByText("Create New Account")).toBeInTheDocument()
+      expect(screen.getByRole("heading", { name: "Create Account" })).toBeInTheDocument()
       expect(screen.getByLabelText("Name")).toBeInTheDocument()
       expect(screen.getByLabelText("Currency")).toBeInTheDocument()
     })
@@ -311,7 +315,7 @@ describe("Accounts", () => {
         expect(screen.getByText("Business Account")).toBeInTheDocument()
       })
 
-      expect(accountsApi.getAccounts).toHaveBeenCalledWith("business")
+      expect(accountsApi.getAccounts).toHaveBeenCalledWith("business", { "page[size]": 200 })
     })
 
     it("disables New Account button when no ledger is selected", async () => {

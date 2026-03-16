@@ -85,7 +85,7 @@ describe("Ledgers", () => {
 
       renderLedgers()
 
-      expect(screen.getByText("Ledgers")).toBeInTheDocument()
+      expect(screen.getByRole("heading", { name: "Ledgers" })).toBeInTheDocument()
     })
 
     it("displays ledgers after loading", async () => {
@@ -132,7 +132,7 @@ describe("Ledgers", () => {
       const newLedgerButton = screen.getByRole("button", { name: /new ledger/i })
       await user.click(newLedgerButton)
 
-      expect(screen.getByText("Create New Ledger")).toBeInTheDocument()
+      expect(screen.getByRole("heading", { name: "Create Ledger" })).toBeInTheDocument()
       expect(screen.getByLabelText("Name")).toBeInTheDocument()
       expect(screen.getByLabelText("Currency")).toBeInTheDocument()
     })
