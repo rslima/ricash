@@ -1,0 +1,7 @@
+do_token            = ""
+do_region           = "nyc3"
+auth0_domain        = "your-tenant.us.auth0.com"
+auth0_client_id     = ""
+auth0_client_secret = ""
+app_domain          = ""
+environment         = "production"

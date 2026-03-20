@@ -23,14 +23,14 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
-const KEYCLOAK_URL = import.meta.env.VITE_KEYCLOAK_URL || "http://localhost:9180"
-const KEYCLOAK_REALM = import.meta.env.VITE_KEYCLOAK_REALM || "Ricash"
-const KEYCLOAK_CLIENT_ID = import.meta.env.VITE_KEYCLOAK_CLIENT_ID || "ricash-frontend"
+const AUTH_AUTHORITY = import.meta.env.VITE_AUTH_AUTHORITY || "http://localhost:9180/realms/Ricash"
+const AUTH_CLIENT_ID = import.meta.env.VITE_AUTH_CLIENT_ID || "ricash-frontend"
+const AUTH_AUDIENCE = import.meta.env.VITE_AUTH_AUDIENCE || ""
 
 // Configure OIDC client
 const oidcConfig = {
-  authority: `${KEYCLOAK_URL}/realms/${KEYCLOAK_REALM}`,
-  client_id: KEYCLOAK_CLIENT_ID,
+  authority: AUTH_AUTHORITY,
+  client_id: AUTH_CLIENT_ID,
   redirect_uri: `${window.location.origin}/callback`,
   post_logout_redirect_uri: window.location.origin,
   response_type: "code",
@@ -51,15 +51,8 @@ const oidcConfig = {
   // Additional settings for better compatibility
   loadUserInfo: true,
 
-  // Metadata (optional - will be fetched from .well-known/openid-configuration)
-  metadata: {
-    issuer: `${KEYCLOAK_URL}/realms/${KEYCLOAK_REALM}`,
-    authorization_endpoint: `${KEYCLOAK_URL}/realms/${KEYCLOAK_REALM}/protocol/openid-connect/auth`,
-    token_endpoint: `${KEYCLOAK_URL}/realms/${KEYCLOAK_REALM}/protocol/openid-connect/token`,
-    userinfo_endpoint: `${KEYCLOAK_URL}/realms/${KEYCLOAK_REALM}/protocol/openid-connect/userinfo`,
-    end_session_endpoint: `${KEYCLOAK_URL}/realms/${KEYCLOAK_REALM}/protocol/openid-connect/logout`,
-    jwks_uri: `${KEYCLOAK_URL}/realms/${KEYCLOAK_REALM}/protocol/openid-connect/certs`,
-  },
+  // Pass audience as extra query param so Auth0 returns an API-scoped access token
+  ...(AUTH_AUDIENCE ? { extraQueryParams: { audience: AUTH_AUDIENCE } } : {}),
 }
 
 // Create user manager instance
@@ -79,7 +72,7 @@ userManager.events.addSilentRenewError((error) => {
 })
 
 userManager.events.addUserLoaded((user) => {
-  console.log("User loaded:", user.profile.preferred_username)
+  console.log("User loaded:", user.profile.preferred_username || user.profile.email)
   // Update API client with new token
   apiClient.setAccessToken(user.access_token)
 })
@@ -97,14 +90,24 @@ function extractAuthUser(oidcUser: User | null | undefined): AuthUser | null {
   if (!oidcUser || !oidcUser.profile) return null
 
   const profile = oidcUser.profile
+
+  // Support both Keycloak (realm_access.roles) and Auth0 (https://ricash.app/roles) claim formats
   const realmAccess = profile.realm_access as { roles?: string[] } | undefined
-  const roles = realmAccess?.roles || []
+  const roles =
+    realmAccess?.roles ||
+    (profile["https://ricash.app/roles"] as string[] | undefined) ||
+    []
+
+  const username =
+    (profile.preferred_username as string) ||
+    (profile.email as string) ||
+    ""
 
   return {
     id: profile.sub || "",
-    username: (profile.preferred_username as string) || "",
+    username,
     email: (profile.email as string) || "",
-    name: (profile.name as string) || (profile.preferred_username as string) || "",
+    name: (profile.name as string) || username,
     roles,
   }
 }
