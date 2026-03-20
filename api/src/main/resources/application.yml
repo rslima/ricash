@@ -1,0 +1,26 @@
+spring:
+  flyway:
+    enabled: on
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/postgres
+    username: ricash
+    password: secret
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://localhost:9180/realms/Ricash
+  mvc:
+    problemdetails:
+      enabled: on
+
+ricash:
+  security:
+    jwt:
+      principal-claim-name: preferred_username
+      authorities-claim-name: realm_access/roles
+      authority-prefix: ""
+      audience: ""
+    cors:
+      allowed-origins: http://localhost:5173,http://localhost:3000
