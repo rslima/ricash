@@ -29,7 +29,7 @@ import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.methodOn;
 import static org.springframework.http.HttpStatus.NOT_FOUND;
 
 @RestController
-@RequestMapping(value = "/api/v1/ledgers", produces = JSON_API_VALUE)
+@RequestMapping(value = "/v1/ledgers", produces = JSON_API_VALUE)
 @RequiredArgsConstructor
 @Slf4j
 public class LedgerController {

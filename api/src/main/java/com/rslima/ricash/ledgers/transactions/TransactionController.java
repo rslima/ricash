@@ -30,7 +30,7 @@ import static org.springframework.http.HttpStatus.BAD_REQUEST;
 import static org.springframework.http.HttpStatus.NOT_FOUND;
 
 @RestController
-@RequestMapping(value = "/api/v1/ledgers/{ledgerSlug}/transactions", produces = JSON_API_VALUE)
+@RequestMapping(value = "/v1/ledgers/{ledgerSlug}/transactions", produces = JSON_API_VALUE)
 @RequiredArgsConstructor
 @Slf4j
 public class TransactionController {

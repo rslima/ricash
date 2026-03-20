@@ -22,7 +22,7 @@ import java.util.Map;
 import static org.springframework.http.HttpStatus.NOT_FOUND;
 
 @RestController
-@RequestMapping(value = "/api/v1/ledgers/{ledgerSlug}")
+@RequestMapping(value = "/v1/ledgers/{ledgerSlug}")
 @RequiredArgsConstructor
 @Slf4j
 public class BudgetController {

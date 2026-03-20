@@ -15,7 +15,7 @@ import java.util.List;
 import static com.toedter.spring.hateoas.jsonapi.MediaTypes.JSON_API_VALUE;
 
 @RestController
-@RequestMapping(value = "/api/v1/ledgers/{ledgerSlug}/portfolio", produces = JSON_API_VALUE)
+@RequestMapping(value = "/v1/ledgers/{ledgerSlug}/portfolio", produces = JSON_API_VALUE)
 @RequiredArgsConstructor
 @Slf4j
 public class PortfolioController {
