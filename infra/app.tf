@@ -65,7 +65,7 @@ resource "digitalocean_app" "ricash" {
 
       github {
         repo           = "rslima/ricash"
-        branch         = "main"
+        branch         = "master"
         deploy_on_push = true
       }
 
