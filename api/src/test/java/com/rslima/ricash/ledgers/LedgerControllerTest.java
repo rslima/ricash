@@ -57,7 +57,7 @@ class LedgerControllerTest {
 
         when(ledgerService.listUserLedgers(any(), any(PageRequest.class))).thenReturn(page);
 
-        mockMvc.perform(get("/api/v1/ledgers")
+        mockMvc.perform(get("/v1/ledgers")
                         .with(jwt().jwt(builder -> builder.claim("preferred_username", USER_ID)))
                         .accept(JSON_API_VALUE))
                 .andExpect(status().isOk())
@@ -74,7 +74,7 @@ class LedgerControllerTest {
 
         when(ledgerService.listUserLedgers(any(), any(PageRequest.class))).thenReturn(page);
 
-        mockMvc.perform(get("/api/v1/ledgers")
+        mockMvc.perform(get("/v1/ledgers")
                         .param("page[number]", "1")
                         .param("page[size]", "10")
                         .with(jwt().jwt(builder -> builder.claim("preferred_username", USER_ID)))
@@ -85,7 +85,7 @@ class LedgerControllerTest {
 
     @Test
     void listLedgers_withoutAuthentication_returnsUnauthorized() throws Exception {
-        mockMvc.perform(get("/api/v1/ledgers")
+        mockMvc.perform(get("/v1/ledgers")
                         .accept(JSON_API_VALUE))
                 .andExpect(status().isUnauthorized());
     }
@@ -96,7 +96,7 @@ class LedgerControllerTest {
 
         when(ledgerService.findBySlug(any(), eq(LEDGER_SLUG))).thenReturn(Optional.of(ledger));
 
-        mockMvc.perform(get("/api/v1/ledgers/{slug}", LEDGER_SLUG)
+        mockMvc.perform(get("/v1/ledgers/{slug}", LEDGER_SLUG)
                         .with(jwt().jwt(builder -> builder.claim("preferred_username", USER_ID)))
                         .accept(JSON_API_VALUE))
                 .andExpect(status().isOk())
@@ -110,7 +110,7 @@ class LedgerControllerTest {
     void getLedger_notFound_returns404() throws Exception {
         when(ledgerService.findBySlug(any(), eq(LEDGER_SLUG))).thenReturn(Optional.empty());
 
-        mockMvc.perform(get("/api/v1/ledgers/{slug}", LEDGER_SLUG)
+        mockMvc.perform(get("/v1/ledgers/{slug}", LEDGER_SLUG)
                         .with(jwt().jwt(builder -> builder.claim("preferred_username", USER_ID)))
                         .accept(JSON_API_VALUE))
                 .andExpect(status().isNotFound())
@@ -120,7 +120,7 @@ class LedgerControllerTest {
 
     @Test
     void getLedger_withoutAuthentication_returnsUnauthorized() throws Exception {
-        mockMvc.perform(get("/api/v1/ledgers/{slug}", LEDGER_SLUG)
+        mockMvc.perform(get("/v1/ledgers/{slug}", LEDGER_SLUG)
                         .accept(JSON_API_VALUE))
                 .andExpect(status().isUnauthorized());
     }
@@ -132,13 +132,13 @@ class LedgerControllerTest {
 
         when(ledgerService.create(any(), any(CreateLedgerRequest.class))).thenReturn(ledger);
 
-        mockMvc.perform(post("/api/v1/ledgers")
+        mockMvc.perform(post("/v1/ledgers")
                         .with(jwt().jwt(builder -> builder.claim("preferred_username", USER_ID)))
                         .contentType("application/json")
                         .accept(JSON_API_VALUE)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
-                .andExpect(header().string("Location", endsWith("/api/v1/ledgers/new-ledger")))
+                .andExpect(header().string("Location", endsWith("/v1/ledgers/new-ledger")))
                 .andExpect(jsonPath("$.data.id", is(LEDGER_ID)))
                 .andExpect(jsonPath("$.data.type", is("ledgers")))
                 .andExpect(jsonPath("$.data.attributes.name", is("New Ledger")));
@@ -148,7 +148,7 @@ class LedgerControllerTest {
     void createLedger_withoutName_returnsBadRequest() throws Exception {
         var request = new CreateLedgerRequest(null, "Description", "EUR");
 
-        mockMvc.perform(post("/api/v1/ledgers")
+        mockMvc.perform(post("/v1/ledgers")
                         .with(jwt().jwt(builder -> builder.claim("preferred_username", USER_ID)))
                         .contentType("application/json")
                         .accept(JSON_API_VALUE)
@@ -160,7 +160,7 @@ class LedgerControllerTest {
     void createLedger_withoutCurrency_returnsBadRequest() throws Exception {
         var request = new CreateLedgerRequest("Name", "Description", null);
 
-        mockMvc.perform(post("/api/v1/ledgers")
+        mockMvc.perform(post("/v1/ledgers")
                         .with(jwt().jwt(builder -> builder.claim("preferred_username", USER_ID)))
                         .contentType("application/json")
                         .accept(JSON_API_VALUE)
@@ -172,7 +172,7 @@ class LedgerControllerTest {
     void createLedger_withoutAuthentication_returnsForbidden() throws Exception {
         var request = new CreateLedgerRequest("New Ledger", "Description", "EUR");
 
-        mockMvc.perform(post("/api/v1/ledgers")
+        mockMvc.perform(post("/v1/ledgers")
                         .contentType("application/json")
                         .accept(JSON_API_VALUE)
                         .content(objectMapper.writeValueAsString(request)))

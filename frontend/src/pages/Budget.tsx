@@ -77,7 +77,7 @@ interface EnvelopeBudgetRowProps {
   t: (key: string) => string
 }
 
-function EnvelopeBudgetRow({ envelope, balance, onAllocate, t }: EnvelopeBudgetRowProps) {
+function EnvelopeBudgetRow({ envelope, balance, onAllocate }: EnvelopeBudgetRowProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [editValue, setEditValue] = useState("")
 

@@ -32,7 +32,7 @@ import static org.springframework.http.HttpStatus.CONFLICT;
 import static org.springframework.http.HttpStatus.NOT_FOUND;
 
 @RestController
-@RequestMapping(value = "/api/v1/ledgers/{ledgerSlug}/accounts", produces = JSON_API_VALUE)
+@RequestMapping(value = "/v1/ledgers/{ledgerSlug}/accounts", produces = JSON_API_VALUE)
 @RequiredArgsConstructor
 @Slf4j
 public class AccountController {
