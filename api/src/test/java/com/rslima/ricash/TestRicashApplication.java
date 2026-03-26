@@ -8,9 +8,7 @@ import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
 
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 @TestConfiguration(proxyBeanMethods = false)
 public class TestRicashApplication {
