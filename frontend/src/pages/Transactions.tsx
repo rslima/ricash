@@ -227,7 +227,7 @@ export function Transactions() {
 
   const updateEntry = (index: number, field: keyof TransactionEntry, value: string, isEdit = false) => {
     if (isEdit) {
-      let newEntries = [...editEntries]
+      const newEntries = [...editEntries]
       newEntries[index] = { ...newEntries[index], [field]: value }
 
       // Auto-fill toCurrency when account is selected and needs conversion
@@ -261,7 +261,7 @@ export function Transactions() {
 
       setEditEntries(newEntries)
     } else {
-      let newEntries = [...entries]
+      const newEntries = [...entries]
       newEntries[index] = { ...newEntries[index], [field]: value }
 
       // Auto-fill toCurrency when account is selected and needs conversion
