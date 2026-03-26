@@ -28,7 +28,7 @@ export interface JsonApiResponse<T> {
   }
 }
 
-export interface JsonApiListResponse<T> extends JsonApiResponse<T[]> {}
+export type JsonApiListResponse<T> = JsonApiResponse<T[]>
 
 // Domain types
 

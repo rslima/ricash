@@ -18,8 +18,6 @@ public interface LedgerMapper {
         if (userId == null) {
             return null;
         }
-        UserResource userResource = new UserResource();
-        userResource.setId(userId);
-        return userResource;
+        return new UserResource(userId);
     }
 }

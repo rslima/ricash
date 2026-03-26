@@ -1,5 +1,7 @@
 package com.rslima.ricash.ledgers;
 
+import com.rslima.ricash.users.User;
+import com.rslima.ricash.users.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -15,6 +17,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -27,6 +30,9 @@ class LedgerServiceBeanTest {
     @Mock
     private SlugService slugService;
 
+    @Mock
+    private UserRepository userRepository;
+
     private LedgerServiceBean ledgerService;
 
     private static final String USER_ID = "test-user";
@@ -35,7 +41,7 @@ class LedgerServiceBeanTest {
 
     @BeforeEach
     void setUp() {
-        ledgerService = new LedgerServiceBean(ledgerRepository, slugService);
+        ledgerService = new LedgerServiceBean(ledgerRepository, slugService, userRepository);
     }
 
     @Test
@@ -131,6 +137,34 @@ class LedgerServiceBeanTest {
         var result2 = ledgerService.create(USER_ID, request);
 
         assertThat(result1.id()).isNotEqualTo(result2.id());
+    }
+
+    @Test
+    void create_createsUserWhenNotFound() {
+        var request = new CreateLedgerRequest("New Ledger", "Description", "EUR");
+
+        when(userRepository.findById(USER_ID)).thenReturn(Optional.empty());
+        when(slugService.slugify("New Ledger")).thenReturn("new-ledger");
+        when(ledgerRepository.existsBySlug(any(), any())).thenReturn(false);
+        when(ledgerRepository.create(any(Ledger.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ledgerService.create(USER_ID, request);
+
+        verify(userRepository).create(USER_ID);
+    }
+
+    @Test
+    void create_doesNotCreateUserWhenAlreadyExists() {
+        var request = new CreateLedgerRequest("New Ledger", "Description", "EUR");
+
+        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(new User(USER_ID)));
+        when(slugService.slugify("New Ledger")).thenReturn("new-ledger");
+        when(ledgerRepository.existsBySlug(any(), any())).thenReturn(false);
+        when(ledgerRepository.create(any(Ledger.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ledgerService.create(USER_ID, request);
+
+        verify(userRepository, never()).create(any());
     }
 
     private Ledger createTestLedger() {

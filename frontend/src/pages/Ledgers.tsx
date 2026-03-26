@@ -27,6 +27,7 @@ import { useAuth } from "@/contexts/AuthContext"
 import { getLedgers, deleteLedger, createLedger, updateLedger } from "@/api/ledgers"
 import type { LedgerResource } from "@/api/types"
 import { formatDate } from "@/lib/utils"
+import { useIsMobile } from "@/hooks/use-mobile"
 import { Plus, Trash2, BookOpen, MoreHorizontal, Pencil } from "lucide-react"
 import {
   DropdownMenu,
@@ -38,6 +39,7 @@ import {
 export function Ledgers() {
   const { t } = useTranslation()
   const { isAuthenticated } = useAuth()
+  const isMobile = useIsMobile()
   const [ledgers, setLedgers] = useState<LedgerResource[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
@@ -153,17 +155,17 @@ export function Ledgers() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">{t("ledgers.title")}</h2>
-          <p className="text-muted-foreground">
+    <div className="space-y-4 md:space-y-6">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <h2 className="text-xl md:text-2xl font-bold tracking-tight">{t("ledgers.title")}</h2>
+          <p className="text-sm text-muted-foreground">
             {t("ledgers.subtitle")}
           </p>
         </div>
-        <Button onClick={() => setIsCreateDialogOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          {t("ledgers.newLedger")}
+        <Button size={isMobile ? "sm" : "default"} onClick={() => setIsCreateDialogOpen(true)}>
+          <Plus className="mr-1 md:mr-2 h-4 w-4" />
+          {isMobile ? t("common.create") : t("ledgers.newLedger")}
         </Button>
       </div>
 
@@ -294,6 +296,51 @@ export function Ledgers() {
               <Skeleton className="h-12 w-full" />
             </div>
           ) : ledgers.length > 0 ? (
+            isMobile ? (
+            <div className="space-y-2">
+              {ledgers.map((ledger) => (
+                <div key={ledger.id} className="rounded-lg border bg-card p-3">
+                  <div className="flex items-start justify-between">
+                    <Link
+                      to={`/ledgers/${ledger.attributes.slug}/accounts`}
+                      className="min-w-0 flex-1"
+                    >
+                      <div className="flex items-center gap-2">
+                        <BookOpen className="h-4 w-4 text-muted-foreground shrink-0" />
+                        <span className="font-medium truncate">{ledger.attributes.name}</span>
+                        <Badge variant="secondary" className="shrink-0">{ledger.attributes.currency}</Badge>
+                      </div>
+                      {ledger.attributes.description && (
+                        <p className="text-xs text-muted-foreground mt-1 truncate pl-6">
+                          {ledger.attributes.description}
+                        </p>
+                      )}
+                    </Link>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => handleEdit(ledger)}>
+                          <Pencil className="mr-2 h-4 w-4" />
+                          {t("common.edit")}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => handleDelete(ledger.attributes.slug)}
+                          className="text-destructive"
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          {t("common.delete")}
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </div>
+              ))}
+            </div>
+            ) : (
             <Table>
               <TableHeader>
                 <TableRow>
@@ -353,6 +400,7 @@ export function Ledgers() {
                 ))}
               </TableBody>
             </Table>
+            )
           ) : (
             <div className="flex flex-col items-center justify-center py-12">
               <BookOpen className="h-12 w-12 text-muted-foreground mb-4" />

@@ -1,6 +1,7 @@
 package com.rslima.ricash.configuration;
 
 import org.springframework.boot.security.oauth2.server.resource.autoconfigure.OAuth2ResourceServerProperties;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.convert.converter.Converter;
@@ -77,6 +78,7 @@ public class SecurityConfiguration {
     }
 
     @Bean
+    @ConditionalOnMissingBean
     public JwtDecoder jwtDecoder(OAuth2ResourceServerProperties properties) {
         String issuerUri = properties.getJwt().getIssuerUri();
         NimbusJwtDecoder decoder = JwtDecoders.fromIssuerLocation(issuerUri);

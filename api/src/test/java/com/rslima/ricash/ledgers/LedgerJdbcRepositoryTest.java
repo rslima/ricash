@@ -35,11 +35,10 @@ class LedgerJdbcRepositoryTest {
         jdbcClient.sql("DELETE FROM transactions").update();
         jdbcClient.sql("DELETE FROM accounts").update();
         jdbcClient.sql("DELETE FROM ledgers").update();
-        jdbcClient.sql("DELETE FROM user_roles").update();
         jdbcClient.sql("DELETE FROM users").update();
 
-        jdbcClient.sql("INSERT INTO users (id, username, password, salt, status, email) VALUES ('user-1', 'testuser', 'pass', 'salt', 'ACTIVE', 'test@example.com')").update();
-        jdbcClient.sql("INSERT INTO users (id, username, password, salt, status, email) VALUES ('user-2', 'otheruser', 'pass', 'salt', 'ACTIVE', 'other@example.com')").update();
+        jdbcClient.sql("INSERT INTO users (id) VALUES ('user-1')").update();
+        jdbcClient.sql("INSERT INTO users (id) VALUES ('user-2')").update();
     }
 
     @Test
