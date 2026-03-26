@@ -46,6 +46,7 @@ import { getAllInstruments } from "@/api/instruments"
 import { getEnvelopes, getEnvelopeMappings } from "@/api/envelopes"
 import type { TransactionResource, LedgerResource, AccountResource, InstrumentResource, EnvelopeResource } from "@/api/types"
 import { formatCurrency, formatDate } from "@/lib/utils"
+import { useIsMobile } from "@/hooks/use-mobile"
 import { Plus, Trash2, ArrowLeftRight, MoreHorizontal, X, Pencil } from "lucide-react"
 
 interface TransactionEntry {
@@ -76,6 +77,7 @@ export function Transactions() {
   const { ledgerSlug } = useParams<{ ledgerSlug?: string }>()
   const location = useLocation()
   const { isAuthenticated } = useAuth()
+  const isMobile = useIsMobile()
   const locationState = location.state as LocationState | undefined
   const [transactions, setTransactions] = useState<TransactionResource[]>([])
   const [ledgers, setLedgers] = useState<LedgerResource[]>([])
@@ -783,20 +785,21 @@ export function Transactions() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">{t("transactions.title")}</h2>
-          <p className="text-muted-foreground">
+    <div className="space-y-4 md:space-y-6">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <h2 className="text-xl md:text-2xl font-bold tracking-tight">{t("transactions.title")}</h2>
+          <p className="text-sm text-muted-foreground">
             {t("transactions.subtitle")}
           </p>
         </div>
         <Button
+          size={isMobile ? "sm" : "default"}
           disabled={!selectedLedgerSlug || accounts.length === 0}
           onClick={() => setIsCreateDialogOpen(true)}
         >
-          <Plus className="mr-2 h-4 w-4" />
-          {t("transactions.newTransaction")}
+          <Plus className="mr-1 md:mr-2 h-4 w-4" />
+          {isMobile ? t("common.create") : t("transactions.newTransaction")}
         </Button>
       </div>
 
@@ -955,6 +958,66 @@ export function Transactions() {
               </Link>
             </div>
           ) : transactions.length > 0 ? (
+            isMobile ? (
+            <div className="space-y-2">
+              {transactions.map((transaction) => (
+                <div
+                  key={transaction.id}
+                  className="rounded-lg border bg-card p-3"
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium truncate">{transaction.attributes.description}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {formatDate(transaction.attributes.date)}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1 ml-2 shrink-0">
+                      <span className="font-mono text-sm font-medium">
+                        {formatCurrency(
+                          transaction.attributes.amount,
+                          transaction.attributes.currency
+                        )}
+                      </span>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => handleEdit(transaction)}>
+                            <Pencil className="mr-2 h-4 w-4" />
+                            {t("common.edit")}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => handleDelete(transaction.id)}
+                            className="text-destructive"
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            {t("common.delete")}
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-1 mt-2">
+                    {transaction.attributes.entries?.map((entry, idx) => (
+                      <Badge
+                        key={idx}
+                        variant={entry.type === "DEBIT" ? "secondary" : "outline"}
+                        className="text-[10px]"
+                      >
+                        {entry.accountName}: {entry.type === "DEBIT" ? "DB" : "CR"}
+                        {entry.instrumentSymbol && ` (${entry.instrumentSymbol})`}
+                        {entry.quantity && ` x${entry.quantity}`}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+            ) : (
             <Table>
               <TableHeader>
                 <TableRow>
@@ -1018,6 +1081,7 @@ export function Transactions() {
                 ))}
               </TableBody>
             </Table>
+            )
           ) : (
             <div className="flex flex-col items-center justify-center py-12">
               <ArrowLeftRight className="h-12 w-12 text-muted-foreground mb-4" />

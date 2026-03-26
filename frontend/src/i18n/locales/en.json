@@ -46,7 +46,9 @@
     "instrumentPrices": "Prices",
     "portfolio": "Portfolio",
     "exchangeRates": "Exchange Rates",
-    "settings": "Settings"
+    "settings": "Settings",
+    "more": "More",
+    "moreDescription": "Additional navigation options"
   },
   "dashboard": {
     "welcome": "Welcome back, {{name}}",

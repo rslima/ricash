@@ -46,7 +46,9 @@
     "instrumentPrices": "Preços",
     "portfolio": "Portfólio",
     "exchangeRates": "Taxas de Câmbio",
-    "settings": "Configurações"
+    "settings": "Configurações",
+    "more": "Mais",
+    "moreDescription": "Opções adicionais de navegação"
   },
   "dashboard": {
     "welcome": "Bem-vindo(a), {{name}}",

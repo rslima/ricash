@@ -85,3 +85,7 @@
 body {
   @apply bg-background text-foreground font-sans antialiased;
 }
+
+.safe-area-pb {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
