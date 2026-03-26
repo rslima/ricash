@@ -1,7 +1,9 @@
-import { createContext, useContext, type ReactNode } from "react"
+import { createContext, useContext, useEffect, type ReactNode } from "react"
 import { AuthProvider as OidcAuthProvider, useAuth as useOidcAuth } from "react-oidc-context"
-import { User, UserManager, WebStorageStateStore } from "oidc-client-ts"
+import { User, UserManager, OidcClient, WebStorageStateStore } from "oidc-client-ts"
 import { apiClient } from "@/api/client"
+import { isNativePlatform } from "@/lib/capacitor"
+import { NativeStorage } from "@/lib/native-storage"
 
 interface AuthUser {
   id: string
@@ -27,21 +29,28 @@ const AUTH_AUTHORITY = import.meta.env.VITE_AUTH_AUTHORITY || "http://localhost:
 const AUTH_CLIENT_ID = import.meta.env.VITE_AUTH_CLIENT_ID || "ricash-frontend"
 const AUTH_AUDIENCE = import.meta.env.VITE_AUTH_AUDIENCE || ""
 
+// On native platforms, use the custom URL scheme for redirects
+const NATIVE_REDIRECT_URI = "com.ricash.app://callback"
+const WEB_REDIRECT_URI = `${window.location.origin}/callback`
+const REDIRECT_URI = isNativePlatform() ? NATIVE_REDIRECT_URI : WEB_REDIRECT_URI
+
 // Configure OIDC client
 const oidcConfig = {
   authority: AUTH_AUTHORITY,
   client_id: AUTH_CLIENT_ID,
-  redirect_uri: `${window.location.origin}/callback`,
-  post_logout_redirect_uri: window.location.origin,
+  redirect_uri: REDIRECT_URI,
+  post_logout_redirect_uri: isNativePlatform() ? NATIVE_REDIRECT_URI : window.location.origin,
   response_type: "code",
   scope: "openid profile email",
 
-  // Enable automatic silent renew
-  automaticSilentRenew: true,
+  // Enable automatic silent renew (web only — native uses refresh tokens)
+  automaticSilentRenew: !isNativePlatform(),
   silent_redirect_uri: `${window.location.origin}/silent-renew.html`,
 
-  // Use localStorage for tokens
-  userStore: new WebStorageStateStore({ store: window.localStorage }),
+  // Use Capacitor Preferences on native, localStorage on web
+  userStore: new WebStorageStateStore({
+    store: isNativePlatform() ? new NativeStorage() : window.localStorage,
+  }),
 
   // Token refresh settings
   accessTokenExpiringNotificationTimeInSeconds: 120, // Refresh 2 minutes before expiry
@@ -55,8 +64,9 @@ const oidcConfig = {
   ...(AUTH_AUDIENCE ? { extraQueryParams: { audience: AUTH_AUDIENCE } } : {}),
 }
 
-// Create user manager instance
+// Create user manager and OIDC client instances
 const userManager = new UserManager(oidcConfig)
+const oidcClient = new OidcClient(oidcConfig)
 
 // Set up event handlers for token management
 userManager.events.addAccessTokenExpiring(() => {
@@ -125,12 +135,49 @@ function AuthProviderWrapper({ children }: AuthProviderProps) {
     apiClient.setAccessToken(null)
   }
 
+  // On native platforms, listen for deep links from the OIDC redirect
+  useEffect(() => {
+    if (!isNativePlatform()) return
+
+    let cleanup: (() => void) | undefined
+
+    const setupListener = async () => {
+      const { App } = await import("@capacitor/app")
+      const listener = await App.addListener("appUrlOpen", async ({ url }) => {
+        // Handle the OIDC callback URL (com.ricash.app://callback?code=...)
+        if (url.startsWith(NATIVE_REDIRECT_URI)) {
+          try {
+            // Close the in-app browser
+            const { Browser } = await import("@capacitor/browser")
+            await Browser.close()
+          } catch {
+            // Browser might already be closed
+          }
+
+          // Let oidc-client-ts handle the callback by processing the response
+          await userManager.signinRedirectCallback(url)
+        }
+      })
+      cleanup = () => listener.remove()
+    }
+
+    setupListener()
+    return () => cleanup?.()
+  }, [])
+
   const logout = () => {
     auth.signoutRedirect()
   }
 
-  const startLogin = () => {
-    auth.signinRedirect()
+  const startLogin = async () => {
+    if (isNativePlatform()) {
+      // On native, generate the authorization URL and open it in an in-app browser
+      const signinRequest = await oidcClient.createSigninRequest({})
+      const { Browser } = await import("@capacitor/browser")
+      await Browser.open({ url: signinRequest.url, presentationStyle: "popover" })
+    } else {
+      auth.signinRedirect()
+    }
   }
 
   // For compatibility with existing code - this is handled by the library now
