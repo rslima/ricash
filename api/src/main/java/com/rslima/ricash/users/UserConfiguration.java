@@ -11,9 +11,4 @@ public class UserConfiguration {
     public UserRepository userRepository(JdbcClient client) {
         return new UserJdbcRepository(client);
     }
-
-    @Bean
-    public UserService userService(UserRepository userRepository) {
-        return new UserServiceBean(userRepository);
-    }
 }

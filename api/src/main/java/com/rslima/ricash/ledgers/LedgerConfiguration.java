@@ -31,6 +31,7 @@ import com.rslima.ricash.ledgers.transactions.TransactionJdbcRepository;
 import com.rslima.ricash.ledgers.transactions.TransactionRepository;
 import com.rslima.ricash.ledgers.transactions.TransactionService;
 import com.rslima.ricash.ledgers.transactions.TransactionServiceBean;
+import com.rslima.ricash.users.UserRepository;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -69,8 +70,8 @@ public class LedgerConfiguration {
     }
 
     @Bean
-    public LedgerService ledgerService(LedgerRepository ledgerRepository, SlugService slugService) {
-        return new LedgerServiceBean(ledgerRepository, slugService);
+    public LedgerService ledgerService(LedgerRepository ledgerRepository, SlugService slugService, UserRepository userRepository) {
+        return new LedgerServiceBean(ledgerRepository, slugService, userRepository);
     }
 
     @Bean

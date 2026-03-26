@@ -1,6 +1,7 @@
 package com.rslima.ricash.ledgers;
 
 import com.github.f4b6a3.uuid.UuidCreator;
+import com.rslima.ricash.users.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -15,6 +16,7 @@ import java.util.Optional;
 public class LedgerServiceBean implements LedgerService {
     private final LedgerRepository ledgerRepository;
     private final SlugService slugService;
+    private final UserRepository userRepository;
 
     @Override
     public Page<Ledger> listUserLedgers(String userId, PageRequest pageRequest) {
@@ -28,6 +30,10 @@ public class LedgerServiceBean implements LedgerService {
 
     @Override
     public Ledger create(String userId, CreateLedgerRequest request) {
+        if (userRepository.findById(userId).isEmpty()) {
+            userRepository.create(userId);
+        }
+
         final var baseSlug = slugService.slugify(request.name());
         final var slug = generateUniqueSlug(userId, baseSlug);
 
