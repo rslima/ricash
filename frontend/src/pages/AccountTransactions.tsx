@@ -26,6 +26,7 @@ import { getLedgers } from "@/api/ledgers"
 import type { TransactionResource, AccountResource, LedgerResource } from "@/api/types"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import { ArrowLeft, ArrowLeftRight, ChevronRight, Plus, ChevronDown } from "lucide-react"
+import { useErrorHandler } from "@/hooks/use-error-handler"
 
 // Build breadcrumb path for an account
 function buildAccountBreadcrumb(
@@ -53,6 +54,7 @@ export function AccountTransactions() {
   const { t } = useTranslation()
   const { ledgerSlug, accountId } = useParams<{ ledgerSlug: string; accountId: string }>()
   const { isAuthenticated } = useAuth()
+  const handleError = useErrorHandler()
   const navigate = useNavigate()
   const [transactions, setTransactions] = useState<TransactionResource[]>([])
   const [accounts, setAccounts] = useState<AccountResource[]>([])
@@ -103,7 +105,7 @@ export function AccountTransactions() {
         )
         setLedger(foundLedger || null)
       })
-      .catch(console.error)
+      .catch((e) => handleError(e, "fetchFailed"))
       .finally(() => setIsLoading(false))
   }, [isAuthenticated, ledgerSlug, accountId])
 

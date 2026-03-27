@@ -14,7 +14,7 @@ import { LogOut, User } from "lucide-react"
 
 export function Header() {
   const { t } = useTranslation()
-  const { user, logout, isAuthenticated, startLogin } = useAuth()
+  const { user, logout, isAuthenticated, startLogin, loginError } = useAuth()
 
   const getInitials = (name: string) => {
     return name
@@ -63,9 +63,14 @@ export function Header() {
             </DropdownMenuContent>
           </DropdownMenu>
         ) : (
-          <Button variant="outline" size="sm" onClick={startLogin}>
-            {t("auth.signIn")}
-          </Button>
+          <div className="flex items-center gap-2">
+            {loginError && (
+              <span className="text-xs text-destructive">{loginError}</span>
+            )}
+            <Button variant="outline" size="sm" onClick={startLogin}>
+              {t("auth.signIn")}
+            </Button>
+          </div>
         )}
       </div>
     </header>

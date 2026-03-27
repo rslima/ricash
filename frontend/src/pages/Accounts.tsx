@@ -39,6 +39,7 @@ import {
 import { useAuth } from "@/contexts/AuthContext"
 import { getAccounts, deleteAccount, createAccount, updateAccount } from "@/api/accounts"
 import { ApiError } from "@/api/client"
+import { useErrorHandler } from "@/hooks/use-error-handler"
 import { getLedgers } from "@/api/ledgers"
 import { getEnvelopes, getEnvelopeMappings, setEnvelopeAccounts, getEnvelopeAccounts } from "@/api/envelopes"
 import type { AccountResource, LedgerResource, EnvelopeResource } from "@/api/types"
@@ -196,6 +197,7 @@ export function Accounts() {
   const { t } = useTranslation()
   const { ledgerSlug } = useParams<{ ledgerSlug?: string }>()
   const { isAuthenticated } = useAuth()
+  const handleError = useErrorHandler()
   const [accounts, setAccounts] = useState<AccountResource[]>([])
   const [envelopes, setEnvelopes] = useState<EnvelopeResource[]>([])
   const [envelopeMappings, setEnvelopeMappings] = useState<Record<string, string>>({})
@@ -278,7 +280,7 @@ export function Accounts() {
           setSelectedLedgerSlug(response.data[0].attributes.slug)
         }
       })
-      .catch(console.error)
+      .catch((e) => handleError(e, "fetchFailed"))
   }, [isAuthenticated])
 
   useEffect(() => {
@@ -300,7 +302,7 @@ export function Accounts() {
         // Expand all accounts by default
         setExpandedIds(new Set(accountsResponse.data.map((a) => a.id)))
       })
-      .catch(console.error)
+      .catch((e) => handleError(e, "fetchFailed"))
       .finally(() => setIsLoading(false))
   }, [selectedLedgerSlug, isAuthenticated])
 
@@ -356,11 +358,10 @@ export function Accounts() {
       const idsToRemove = new Set(getAllDescendantIds(accountId))
       setAccounts(accounts.filter((a) => !idsToRemove.has(a.id)))
     } catch (error) {
-      console.error("Failed to delete account:", error)
       if (error instanceof ApiError && error.status === 409) {
-        alert(t("accounts.cannotDeleteWithTransactions"))
+        handleError(error, "conflict")
       } else {
-        alert(t("accounts.deleteFailed"))
+        handleError(error, "deleteFailed")
       }
     }
   }
@@ -391,7 +392,7 @@ export function Accounts() {
       setIsCreateDialogOpen(false)
       setFormData({ name: "", description: "", currency: "BRL", type: "ASSET", parentAccountId: "", envelopeId: "" })
     } catch (error) {
-      console.error("Failed to create account:", error)
+      handleError(error, "createFailed")
     } finally {
       setIsCreating(false)
     }
@@ -475,7 +476,7 @@ export function Accounts() {
       setIsEditDialogOpen(false)
       setEditingAccount(null)
     } catch (error) {
-      console.error("Failed to update account:", error)
+      handleError(error, "updateFailed")
     } finally {
       setIsUpdating(false)
     }

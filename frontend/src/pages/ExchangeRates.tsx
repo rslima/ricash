@@ -27,9 +27,11 @@ import { getExchangeRates, createExchangeRate, deleteExchangeRate } from "@/api/
 import type { ExchangeRateResource } from "@/api/types"
 import { formatDate } from "@/lib/utils"
 import { TrendingUp, Plus, Trash2 } from "lucide-react"
+import { useErrorHandler } from "@/hooks/use-error-handler"
 
 export function ExchangeRates() {
   const { t } = useTranslation()
+  const handleError = useErrorHandler()
   const { isAuthenticated } = useAuth()
   const [exchangeRates, setExchangeRates] = useState<ExchangeRateResource[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -73,7 +75,7 @@ export function ExchangeRates() {
       setIsCreateDialogOpen(false)
       resetForm()
     } catch (error) {
-      console.error("Failed to create exchange rate:", error)
+      handleError(error, "createFailed")
     } finally {
       setIsSubmitting(false)
     }
@@ -89,7 +91,7 @@ export function ExchangeRates() {
       const response = await getExchangeRates({ "page[size]": 50 })
       setExchangeRates(response.data)
     } catch (error) {
-      console.error("Failed to fetch exchange rates:", error)
+      handleError(error, "fetchFailed")
     } finally {
       setIsLoading(false)
     }
@@ -102,7 +104,7 @@ export function ExchangeRates() {
       await deleteExchangeRate(id)
       setExchangeRates(exchangeRates.filter((r) => r.id !== id))
     } catch (error) {
-      console.error("Failed to delete exchange rate:", error)
+      handleError(error, "deleteFailed")
     }
   }
 

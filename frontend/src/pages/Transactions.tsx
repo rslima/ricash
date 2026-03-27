@@ -47,6 +47,7 @@ import { getEnvelopes, getEnvelopeMappings } from "@/api/envelopes"
 import type { TransactionResource, LedgerResource, AccountResource, InstrumentResource, EnvelopeResource } from "@/api/types"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import { useIsMobile } from "@/hooks/use-mobile"
+import { useErrorHandler } from "@/hooks/use-error-handler"
 import { Plus, Trash2, ArrowLeftRight, MoreHorizontal, X, Pencil } from "lucide-react"
 
 interface TransactionEntry {
@@ -76,6 +77,7 @@ export function Transactions() {
   const { t } = useTranslation()
   const { ledgerSlug } = useParams<{ ledgerSlug?: string }>()
   const location = useLocation()
+  const handleError = useErrorHandler()
   const { isAuthenticated } = useAuth()
   const isMobile = useIsMobile()
   const locationState = location.state as LocationState | undefined
@@ -125,7 +127,7 @@ export function Transactions() {
           setSelectedLedgerSlug(response.data[0].attributes.slug)
         }
       })
-      .catch(console.error)
+      .catch((e) => handleError(e, "fetchFailed"))
   }, [isAuthenticated])
 
   useEffect(() => {
@@ -151,7 +153,7 @@ export function Transactions() {
         setEnvelopes(envelopesResponse.data)
         setEnvelopeMappings(mappings)
       })
-      .catch(console.error)
+      .catch((e) => handleError(e, "fetchFailed"))
       .finally(() => setIsLoading(false))
   }, [selectedLedgerSlug, isAuthenticated])
 
@@ -193,7 +195,7 @@ export function Transactions() {
       await deleteTransaction(selectedLedgerSlug, transactionId)
       setTransactions(transactions.filter((t) => t.id !== transactionId))
     } catch (error) {
-      console.error("Failed to delete transaction:", error)
+      handleError(error, "deleteFailed")
     }
   }
 
@@ -527,7 +529,7 @@ export function Transactions() {
       setIsCreateDialogOpen(false)
       resetForm()
     } catch (error) {
-      console.error("Failed to create transaction:", error)
+      handleError(error, "createFailed")
     } finally {
       setIsSubmitting(false)
     }
@@ -588,7 +590,7 @@ export function Transactions() {
       setIsEditDialogOpen(false)
       setEditingTransaction(null)
     } catch (error) {
-      console.error("Failed to update transaction:", error)
+      handleError(error, "updateFailed")
     } finally {
       setIsSubmitting(false)
     }

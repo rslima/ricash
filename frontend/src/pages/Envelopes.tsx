@@ -47,6 +47,7 @@ import {
 } from "@/api/envelopes"
 import { getAccounts } from "@/api/accounts"
 import { ApiError } from "@/api/client"
+import { useErrorHandler } from "@/hooks/use-error-handler"
 import { getLedgers } from "@/api/ledgers"
 import type { EnvelopeResource, LedgerResource, AccountResource, EnvelopeType, EnvelopeStatus } from "@/api/types"
 import { Plus, Trash2, MoreHorizontal, Pencil, ChevronRight, ChevronDown, FolderOpen, Link as LinkIcon } from "lucide-react"
@@ -212,6 +213,7 @@ export function Envelopes() {
   const { t } = useTranslation()
   const { ledgerSlug } = useParams<{ ledgerSlug?: string }>()
   const { isAuthenticated } = useAuth()
+  const handleError = useErrorHandler()
   const [envelopes, setEnvelopes] = useState<EnvelopeResource[]>([])
   const [accounts, setAccounts] = useState<AccountResource[]>([])
   const [ledgers, setLedgers] = useState<LedgerResource[]>([])
@@ -291,7 +293,7 @@ export function Envelopes() {
           setSelectedLedgerSlug(response.data[0].attributes.slug)
         }
       })
-      .catch(console.error)
+      .catch((e) => handleError(e, "fetchFailed"))
   }, [isAuthenticated])
 
   useEffect(() => {
@@ -310,7 +312,7 @@ export function Envelopes() {
         setAccounts(accountsResponse.data)
         setExpandedIds(new Set(envelopesResponse.data.map((e) => e.id)))
       })
-      .catch(console.error)
+      .catch((e) => handleError(e, "fetchFailed"))
       .finally(() => setIsLoading(false))
   }, [selectedLedgerSlug, isAuthenticated])
 
@@ -364,11 +366,10 @@ export function Envelopes() {
       const idsToRemove = new Set(getAllDescendantIds(envelopeId))
       setEnvelopes(envelopes.filter((e) => !idsToRemove.has(e.id)))
     } catch (error) {
-      console.error("Failed to delete envelope:", error)
       if (error instanceof ApiError && error.status === 409) {
-        alert(t("envelopes.cannotDeleteWithTransactions"))
+        handleError(error, "conflict")
       } else {
-        alert(t("envelopes.deleteFailed"))
+        handleError(error, "deleteFailed")
       }
     }
   }
@@ -391,7 +392,7 @@ export function Envelopes() {
       setIsCreateDialogOpen(false)
       setFormData({ name: "", description: "", currency: "BRL", type: "EXPENSE", parentEnvelopeId: "" })
     } catch (error) {
-      console.error("Failed to create envelope:", error)
+      handleError(error, "createFailed")
     } finally {
       setIsCreating(false)
     }
@@ -441,7 +442,7 @@ export function Envelopes() {
       setIsEditDialogOpen(false)
       setEditingEnvelope(null)
     } catch (error) {
-      console.error("Failed to update envelope:", error)
+      handleError(error, "updateFailed")
     } finally {
       setIsUpdating(false)
     }
@@ -456,7 +457,7 @@ export function Envelopes() {
       setSelectedAccountIds(response.accountIds)
       setIsAccountsDialogOpen(true)
     } catch (error) {
-      console.error("Failed to load envelope accounts:", error)
+      handleError(error, "fetchFailed")
     }
   }
 
@@ -469,7 +470,7 @@ export function Envelopes() {
       setIsAccountsDialogOpen(false)
       setManagingEnvelope(null)
     } catch (error) {
-      console.error("Failed to save envelope accounts:", error)
+      handleError(error, "updateFailed")
     } finally {
       setIsSavingAccounts(false)
     }

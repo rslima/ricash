@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom"
 import { AuthProvider } from "@/contexts/AuthContext"
+import { Toaster } from "@/components/ui/sonner"
 import { Layout } from "@/components/layout/Layout"
 import { Dashboard } from "@/pages/Dashboard"
 import { Ledgers } from "@/pages/Ledgers"
@@ -44,6 +45,7 @@ function App() {
           </Route>
         </Routes>
       </BrowserRouter>
+      <Toaster />
     </AuthProvider>
   )
 }

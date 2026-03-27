@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, type ReactNode } from "react"
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react"
 import { AuthProvider as OidcAuthProvider, useAuth as useOidcAuth } from "react-oidc-context"
 import { User, UserManager, OidcClient, WebStorageStateStore } from "oidc-client-ts"
 import { apiClient } from "@/api/client"
@@ -18,6 +18,7 @@ interface AuthContextType {
   accessToken: string | null
   isAuthenticated: boolean
   isLoading: boolean
+  loginError: string | null
   logout: () => void
   startLogin: () => void
   exchangeCodeForToken: (code: string) => Promise<boolean>
@@ -124,6 +125,7 @@ function extractAuthUser(oidcUser: User | null | undefined): AuthUser | null {
 
 function AuthProviderWrapper({ children }: AuthProviderProps) {
   const auth = useOidcAuth()
+  const [loginError, setLoginError] = useState<string | null>(null)
 
   const authUser = extractAuthUser(auth.user)
   const accessToken = auth.user?.access_token || null
@@ -155,7 +157,12 @@ function AuthProviderWrapper({ children }: AuthProviderProps) {
           }
 
           // Let oidc-client-ts handle the callback by processing the response
-          await userManager.signinRedirectCallback(url)
+          try {
+            await userManager.signinRedirectCallback(url)
+          } catch (error) {
+            console.error("Sign-in callback error:", error)
+            setLoginError(error instanceof Error ? error.message : "Authentication callback failed")
+          }
         }
       })
       cleanup = () => listener.remove()
@@ -170,13 +177,20 @@ function AuthProviderWrapper({ children }: AuthProviderProps) {
   }
 
   const startLogin = async () => {
-    if (isNativePlatform()) {
-      // On native, generate the authorization URL and open it in an in-app browser
-      const signinRequest = await oidcClient.createSigninRequest({})
-      const { Browser } = await import("@capacitor/browser")
-      await Browser.open({ url: signinRequest.url, presentationStyle: "popover" })
-    } else {
-      auth.signinRedirect()
+    setLoginError(null)
+    try {
+      if (isNativePlatform()) {
+        // On native, generate the authorization URL and open it in an in-app browser
+        const signinRequest = await oidcClient.createSigninRequest({})
+        const { Browser } = await import("@capacitor/browser")
+        await Browser.open({ url: signinRequest.url })
+      } else {
+        await auth.signinRedirect()
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Login failed"
+      console.error("Login error:", error)
+      setLoginError(message)
     }
   }
 
@@ -191,6 +205,7 @@ function AuthProviderWrapper({ children }: AuthProviderProps) {
     accessToken,
     isAuthenticated: auth.isAuthenticated,
     isLoading: auth.isLoading,
+    loginError,
     logout,
     startLogin,
     exchangeCodeForToken,

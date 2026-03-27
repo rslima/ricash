@@ -28,6 +28,7 @@ import { getLedgers, deleteLedger, createLedger, updateLedger } from "@/api/ledg
 import type { LedgerResource } from "@/api/types"
 import { formatDate } from "@/lib/utils"
 import { useIsMobile } from "@/hooks/use-mobile"
+import { useErrorHandler } from "@/hooks/use-error-handler"
 import { Plus, Trash2, BookOpen, MoreHorizontal, Pencil } from "lucide-react"
 import {
   DropdownMenu,
@@ -39,6 +40,7 @@ import {
 export function Ledgers() {
   const { t } = useTranslation()
   const { isAuthenticated } = useAuth()
+  const handleError = useErrorHandler()
   const isMobile = useIsMobile()
   const [ledgers, setLedgers] = useState<LedgerResource[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -67,7 +69,7 @@ export function Ledgers() {
       const response = await getLedgers()
       setLedgers(response.data)
     } catch (error) {
-      console.error("Failed to fetch ledgers:", error)
+      handleError(error, "fetchFailed")
     } finally {
       setIsLoading(false)
     }
@@ -84,7 +86,7 @@ export function Ledgers() {
       await deleteLedger(slug)
       setLedgers(ledgers.filter((l) => l.attributes.slug !== slug))
     } catch (error) {
-      console.error("Failed to delete ledger:", error)
+      handleError(error, "deleteFailed")
     }
   }
 
@@ -102,7 +104,7 @@ export function Ledgers() {
       setIsCreateDialogOpen(false)
       setFormData({ name: "", description: "", currency: "BRL" })
     } catch (error) {
-      console.error("Failed to create ledger:", error)
+      handleError(error, "createFailed")
     } finally {
       setIsCreating(false)
     }
@@ -133,7 +135,7 @@ export function Ledgers() {
       setIsEditDialogOpen(false)
       setEditingLedger(null)
     } catch (error) {
-      console.error("Failed to update ledger:", error)
+      handleError(error, "updateFailed")
     } finally {
       setIsUpdating(false)
     }
