@@ -359,9 +359,14 @@
   },
   "errors": {
     "generic": "An error occurred. Please try again.",
-    "notFound": "Not found",
-    "unauthorized": "Unauthorized",
-    "forbidden": "Forbidden",
-    "serverError": "Server error"
+    "notFound": "The requested resource was not found.",
+    "unauthorized": "Your session has expired. Please sign in again.",
+    "forbidden": "You don't have permission to perform this action.",
+    "conflict": "This operation conflicts with existing data.",
+    "serverError": "A server error occurred. Please try again later.",
+    "fetchFailed": "Failed to load data. Please try again.",
+    "createFailed": "Failed to create. Please try again.",
+    "updateFailed": "Failed to save changes. Please try again.",
+    "deleteFailed": "Failed to delete. Please try again."
   }
 }

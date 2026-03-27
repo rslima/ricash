@@ -27,6 +27,7 @@ import type { EnvelopeResource, LedgerResource, EnvelopeBalance, EnvelopeType } 
 import { formatCurrency } from "@/lib/utils"
 import { ChevronLeft, ChevronRight, FolderOpen, TrendingUp, TrendingDown, PiggyBank } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { useErrorHandler } from "@/hooks/use-error-handler"
 
 interface BudgetProgressBarProps {
   spent: number
@@ -167,6 +168,7 @@ export function Budget() {
   const { t } = useTranslation()
   const { ledgerSlug } = useParams<{ ledgerSlug?: string }>()
   const { isAuthenticated } = useAuth()
+  const handleError = useErrorHandler()
   const [envelopes, setEnvelopes] = useState<EnvelopeResource[]>([])
   const [balances, setBalances] = useState<EnvelopeBalance[]>([])
   const [toBeBudgeted, setToBeBudgeted] = useState(0)
@@ -215,7 +217,7 @@ export function Budget() {
           setSelectedLedgerSlug(response.data[0].attributes.slug)
         }
       })
-      .catch(console.error)
+      .catch((e) => handleError(e, "fetchFailed"))
   }, [isAuthenticated])
 
   useEffect(() => {
@@ -234,7 +236,7 @@ export function Budget() {
         setBalances(budgetResponse.envelopeBalances)
         setToBeBudgeted(budgetResponse.toBeBudgeted)
       })
-      .catch(console.error)
+      .catch((e) => handleError(e, "fetchFailed"))
       .finally(() => setIsLoading(false))
   }, [selectedLedgerSlug, selectedYear, selectedMonth, isAuthenticated])
 
@@ -271,7 +273,7 @@ export function Budget() {
       setBalances(budgetResponse.envelopeBalances)
       setToBeBudgeted(budgetResponse.toBeBudgeted)
     } catch (error) {
-      console.error("Failed to allocate:", error)
+      handleError(error, "updateFailed")
     }
   }
 

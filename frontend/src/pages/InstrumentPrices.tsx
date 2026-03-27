@@ -36,11 +36,13 @@ import { getLedgers } from "@/api/ledgers"
 import type { InstrumentPriceResource, InstrumentResource, LedgerResource } from "@/api/types"
 import { formatDate, formatCurrency } from "@/lib/utils"
 import { Plus, Trash2, TrendingUp, DollarSign } from "lucide-react"
+import { useErrorHandler } from "@/hooks/use-error-handler"
 
 export function InstrumentPrices() {
   const { t } = useTranslation()
   const { ledgerSlug } = useParams<{ ledgerSlug?: string }>()
   const { isAuthenticated } = useAuth()
+  const handleError = useErrorHandler()
   const [prices, setPrices] = useState<InstrumentPriceResource[]>([])
   const [instruments, setInstruments] = useState<InstrumentResource[]>([])
   const [ledgers, setLedgers] = useState<LedgerResource[]>([])
@@ -73,7 +75,7 @@ export function InstrumentPrices() {
           setSelectedLedgerSlug(response.data[0].attributes.slug)
         }
       })
-      .catch(console.error)
+      .catch((e) => handleError(e, "fetchFailed"))
   }, [isAuthenticated])
 
   useEffect(() => {
@@ -91,7 +93,7 @@ export function InstrumentPrices() {
         setPrices(pricesResponse.data)
         setInstruments(instrumentsResponse)
       })
-      .catch(console.error)
+      .catch((e) => handleError(e, "fetchFailed"))
       .finally(() => setIsLoading(false))
   }, [selectedLedgerSlug, isAuthenticated])
 
@@ -115,7 +117,7 @@ export function InstrumentPrices() {
       setIsCreateDialogOpen(false)
       resetForm()
     } catch (error) {
-      console.error("Failed to create price:", error)
+      handleError(error, "createFailed")
     } finally {
       setIsSubmitting(false)
     }
@@ -129,7 +131,7 @@ export function InstrumentPrices() {
       await deleteInstrumentPrice(selectedLedgerSlug, priceId)
       setPrices(prices.filter((p) => p.id !== priceId))
     } catch (error) {
-      console.error("Failed to delete price:", error)
+      handleError(error, "deleteFailed")
     }
   }
 

@@ -41,6 +41,7 @@ import { getInstruments, createInstrument, updateInstrument, deleteInstrument } 
 import { getLedgers } from "@/api/ledgers"
 import type { InstrumentResource, LedgerResource, InstrumentType, InstrumentStatus } from "@/api/types"
 import { Plus, Trash2, TrendingUp, MoreHorizontal, Pencil, Briefcase } from "lucide-react"
+import { useErrorHandler } from "@/hooks/use-error-handler"
 
 const instrumentTypeColors: Record<InstrumentType, "default" | "secondary" | "destructive" | "outline"> = {
   STOCK: "default",
@@ -54,6 +55,7 @@ export function Instruments() {
   const { t } = useTranslation()
   const { ledgerSlug } = useParams<{ ledgerSlug?: string }>()
   const { isAuthenticated } = useAuth()
+  const handleError = useErrorHandler()
   const [instruments, setInstruments] = useState<InstrumentResource[]>([])
   const [ledgers, setLedgers] = useState<LedgerResource[]>([])
   const [selectedLedgerSlug, setSelectedLedgerSlug] = useState<string | null>(ledgerSlug || null)
@@ -107,7 +109,7 @@ export function Instruments() {
           setSelectedLedgerSlug(response.data[0].attributes.slug)
         }
       })
-      .catch(console.error)
+      .catch((e) => handleError(e, "fetchFailed"))
   }, [isAuthenticated])
 
   useEffect(() => {
@@ -121,7 +123,7 @@ export function Instruments() {
       .then((response) => {
         setInstruments(response.data)
       })
-      .catch(console.error)
+      .catch((e) => handleError(e, "fetchFailed"))
       .finally(() => setIsLoading(false))
   }, [selectedLedgerSlug, isAuthenticated])
 
@@ -143,7 +145,7 @@ export function Instruments() {
       setIsCreateDialogOpen(false)
       resetForm()
     } catch (error) {
-      console.error("Failed to create instrument:", error)
+      handleError(error, "createFailed")
     } finally {
       setIsSubmitting(false)
     }
@@ -182,7 +184,7 @@ export function Instruments() {
       setIsEditDialogOpen(false)
       setEditingInstrument(null)
     } catch (error) {
-      console.error("Failed to update instrument:", error)
+      handleError(error, "updateFailed")
     } finally {
       setIsSubmitting(false)
     }
@@ -196,7 +198,7 @@ export function Instruments() {
       await deleteInstrument(selectedLedgerSlug, instrumentId)
       setInstruments(instruments.filter((i) => i.id !== instrumentId))
     } catch (error) {
-      console.error("Failed to delete instrument:", error)
+      handleError(error, "deleteFailed")
     }
   }
 

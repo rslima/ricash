@@ -20,6 +20,7 @@ import type { InstrumentPositionResource, LedgerResource, InstrumentType } from 
 import { formatCurrency } from "@/lib/utils"
 import { TrendingUp, Briefcase, PieChart, DollarSign } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { useErrorHandler } from "@/hooks/use-error-handler"
 
 const instrumentTypeColors: Record<InstrumentType, "default" | "secondary" | "destructive" | "outline"> = {
   STOCK: "default",
@@ -33,6 +34,7 @@ export function Portfolio() {
   const { t } = useTranslation()
   const { ledgerSlug } = useParams<{ ledgerSlug?: string }>()
   const { isAuthenticated } = useAuth()
+  const handleError = useErrorHandler()
   const [positions, setPositions] = useState<InstrumentPositionResource[]>([])
   const [ledgers, setLedgers] = useState<LedgerResource[]>([])
   const [selectedLedgerSlug, setSelectedLedgerSlug] = useState<string | null>(ledgerSlug || null)
@@ -51,7 +53,7 @@ export function Portfolio() {
           setSelectedLedgerSlug(response.data[0].attributes.slug)
         }
       })
-      .catch(console.error)
+      .catch((e) => handleError(e, "fetchFailed"))
   }, [isAuthenticated])
 
   useEffect(() => {
@@ -65,7 +67,7 @@ export function Portfolio() {
       .then((response) => {
         setPositions(response.data)
       })
-      .catch(console.error)
+      .catch((e) => handleError(e, "fetchFailed"))
       .finally(() => setIsLoading(false))
   }, [selectedLedgerSlug, isAuthenticated])
 

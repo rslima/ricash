@@ -10,10 +10,12 @@ import { getTransactions } from "@/api/transactions"
 import type { LedgerResource, AccountResource, TransactionResource } from "@/api/types"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import { Wallet, ArrowUpRight, ArrowDownRight, BookOpen } from "lucide-react"
+import { useErrorHandler } from "@/hooks/use-error-handler"
 
 export function Dashboard() {
   const { t } = useTranslation()
   const { isAuthenticated, user } = useAuth()
+  const handleError = useErrorHandler()
   const [ledgers, setLedgers] = useState<LedgerResource[]>([])
   const [accounts, setAccounts] = useState<AccountResource[]>([])
   const [transactions, setTransactions] = useState<TransactionResource[]>([])
@@ -54,7 +56,7 @@ export function Dashboard() {
             setTransactions(allTransactions)
           }
         })
-        .catch(console.error)
+        .catch((e) => handleError(e, "fetchFailed"))
         .finally(() => setIsLoading(false))
     } else {
       setIsLoading(false)
