@@ -12,6 +12,10 @@ import type { LedgerResource, TransactionResource } from "@/api/types"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import { Wallet, ArrowUpRight, ArrowDownRight, BookOpen } from "lucide-react"
 import { useErrorHandler } from "@/hooks/use-error-handler"
+import { IncomeVsExpensesChart } from "@/components/charts/IncomeVsExpensesChart"
+import { ExpenseBreakdownChart } from "@/components/charts/ExpenseBreakdownChart"
+import { BudgetUtilizationChart } from "@/components/charts/BudgetUtilizationChart"
+import { PortfolioAllocationChart } from "@/components/charts/PortfolioAllocationChart"
 
 export function Dashboard() {
   const { t } = useTranslation()
@@ -201,6 +205,19 @@ export function Dashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {!isLoading && ledgers.length > 0 && (
+        <>
+          <div className="grid gap-4 md:grid-cols-2">
+            <IncomeVsExpensesChart ledgers={ledgers} defaultCurrency={defaultCurrency} />
+            <ExpenseBreakdownChart ledgers={ledgers} defaultCurrency={defaultCurrency} />
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            <BudgetUtilizationChart ledgers={ledgers} defaultCurrency={defaultCurrency} />
+            <PortfolioAllocationChart ledgers={ledgers} defaultCurrency={defaultCurrency} />
+          </div>
+        </>
+      )}
 
       <div className="grid gap-4 md:grid-cols-2">
         <Card>

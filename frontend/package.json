@@ -43,6 +43,7 @@
     "react-i18next": "^16.5.4",
     "react-oidc-context": "^3.3.0",
     "react-router-dom": "^7.12.0",
+    "recharts": "^3.8.1",
     "slugify": "^1.6.6",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.4.0"
