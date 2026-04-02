@@ -22,4 +22,6 @@ public interface TransactionService {
     List<String> getDistinctDescriptions(String userId, String ledgerSlug);
 
     List<Transaction> getTransactionTemplates(String userId, String ledgerSlug);
+
+    MonthlyReport getMonthlyReport(String userId, String ledgerSlug, int year, int month);
 }
