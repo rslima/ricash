@@ -67,7 +67,23 @@
     "noLedgersYet": "No ledgers yet. Create your first ledger to get started.",
     "welcomeTitle": "Welcome to Ricash",
     "welcomeDescription": "Please sign in to manage your personal finances",
-    "welcomeText": "Track your income, expenses, and manage multiple ledgers with double-entry bookkeeping."
+    "welcomeText": "Track your income, expenses, and manage multiple ledgers with double-entry bookkeeping.",
+    "charts": {
+      "incomeVsExpenses": "Income vs Expenses",
+      "incomeVsExpensesDescription": "Last 6 months comparison",
+      "income": "Income",
+      "expenses": "Expenses",
+      "expenseBreakdown": "Expense Breakdown",
+      "expenseBreakdownDescription": "Spending by category",
+      "budgetUtilization": "Budget Utilization",
+      "budgetUtilizationDescription": "Allocated vs spent by envelope this month",
+      "allocated": "Allocated",
+      "spent": "Spent",
+      "portfolioAllocation": "Portfolio Allocation",
+      "portfolioAllocationDescription": "Investment composition by type",
+      "noData": "No data available",
+      "other": "Other"
+    }
   },
   "ledgers": {
     "title": "Ledgers",
