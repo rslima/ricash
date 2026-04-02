@@ -210,7 +210,7 @@ export function Dashboard() {
         <>
           <div className="grid gap-4 md:grid-cols-2">
             <IncomeVsExpensesChart ledgers={ledgers} defaultCurrency={defaultCurrency} />
-            <ExpenseBreakdownChart ledgers={ledgers} defaultCurrency={defaultCurrency} />
+            <ExpenseBreakdownChart ledgers={ledgers} />
           </div>
           <div className="grid gap-4 md:grid-cols-2">
             <BudgetUtilizationChart ledgers={ledgers} defaultCurrency={defaultCurrency} />

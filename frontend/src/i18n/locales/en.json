@@ -82,7 +82,8 @@
       "portfolioAllocation": "Portfolio Allocation",
       "portfolioAllocationDescription": "Investment composition by type",
       "noData": "No data available",
-      "other": "Other"
+      "other": "Other",
+      "backToAll": "Back to all categories"
     }
   },
   "ledgers": {

@@ -82,7 +82,8 @@
       "portfolioAllocation": "Alocação do Portfólio",
       "portfolioAllocationDescription": "Composição dos investimentos por tipo",
       "noData": "Nenhum dado disponível",
-      "other": "Outros"
+      "other": "Outros",
+      "backToAll": "Voltar para todas as categorias"
     }
   },
   "ledgers": {
