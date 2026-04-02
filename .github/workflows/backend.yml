@@ -2,11 +2,11 @@ name: Backend CI
 
 on:
   push:
-    branches: [develop, main]
+    branches: [develop, master]
     paths:
       - 'api/**'
   pull_request:
-    branches: [develop, main]
+    branches: [develop, master]
     paths:
       - 'api/**'
 
