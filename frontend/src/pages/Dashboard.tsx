@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -6,7 +6,8 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { useAuth } from "@/contexts/AuthContext"
 import { getLedgers } from "@/api/ledgers"
 import { getAccounts } from "@/api/accounts"
-import { getTransactions } from "@/api/transactions"
+import { getTransactions, getMonthlyReport } from "@/api/transactions"
+import type { MonthlyReport } from "@/api/transactions"
 import type { LedgerResource, AccountResource, TransactionResource } from "@/api/types"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import { Wallet, ArrowUpRight, ArrowDownRight, BookOpen } from "lucide-react"
@@ -19,6 +20,7 @@ export function Dashboard() {
   const [ledgers, setLedgers] = useState<LedgerResource[]>([])
   const [accounts, setAccounts] = useState<AccountResource[]>([])
   const [transactions, setTransactions] = useState<TransactionResource[]>([])
+  const [monthlyReport, setMonthlyReport] = useState<Record<string, MonthlyReport>>({})
   const [isLoading, setIsLoading] = useState(true)
   const [defaultCurrency, setDefaultCurrency] = useState("BRL")
 
@@ -36,15 +38,20 @@ export function Dashboard() {
             const allAccounts: AccountResource[] = []
             const allTransactions: TransactionResource[] = []
 
+            const now = new Date()
+            const currentYear = now.getFullYear()
+            const currentMonth = now.getMonth() + 1
+
             await Promise.all(
               response.data.map(async (ledger) => {
-                const [accountsRes, transactionsRes] = await Promise.all([
+                const [accountsRes, transactionsRes, report] = await Promise.all([
                   getAccounts(ledger.attributes.slug, { "page[size]": 200 }),
-                  // Fetch more transactions to have enough for monthly calculations
-                  getTransactions(ledger.attributes.slug, { "page[size]": 100 }),
+                  getTransactions(ledger.attributes.slug, { "page[size]": 20 }),
+                  getMonthlyReport(ledger.attributes.slug, currentYear, currentMonth),
                 ])
                 allAccounts.push(...accountsRes.data)
                 allTransactions.push(...transactionsRes.data)
+                setMonthlyReport(prev => ({ ...prev, [ledger.attributes.slug]: report }))
               })
             )
 
@@ -97,48 +104,17 @@ export function Dashboard() {
     return balances
   }, [accounts])
 
-  // Calculate monthly income and expenses from transactions, grouped by currency
-  const { monthlyIncomeByCurrency, monthlyExpensesByCurrency } = useMemo(() => {
-    const now = new Date()
-    const currentMonth = now.getMonth()
-    const currentYear = now.getFullYear()
-
-    const income: Record<string, number> = {}
-    const expenses: Record<string, number> = {}
-
-    // We need to look at account types
-    const accountTypeMap = new Map<string, string>()
-    accounts.forEach((account) => {
-      accountTypeMap.set(account.id, account.attributes.type)
+  // Aggregate monthly income and expenses from API reports across all ledgers
+  const monthlyIncomeByCurrency: Record<string, number> = {}
+  const monthlyExpensesByCurrency: Record<string, number> = {}
+  Object.values(monthlyReport).forEach((report) => {
+    Object.entries(report.incomeByCurrency).forEach(([currency, amount]) => {
+      monthlyIncomeByCurrency[currency] = (monthlyIncomeByCurrency[currency] || 0) + amount
     })
-
-    transactions.forEach((transaction) => {
-      const transactionDate = new Date(transaction.attributes.date)
-      if (transactionDate.getMonth() === currentMonth && transactionDate.getFullYear() === currentYear) {
-        transaction.attributes.entries?.forEach((entry) => {
-          const accountType = accountTypeMap.get(entry.accountId)
-          if (!accountType) return
-
-          // Use toAmount/toCurrency if there was a currency conversion, otherwise use amount/currency
-          const amount = entry.toAmount ?? entry.amount
-          const currency = entry.toCurrency ?? entry.currency
-
-          // Income: credit to INCOME account
-          if (accountType === "INCOME" && entry.type === "CREDIT") {
-            if (!income[currency]) income[currency] = 0
-            income[currency] += amount
-          }
-          // Expense: debit to EXPENSE account
-          if (accountType === "EXPENSE" && entry.type === "DEBIT") {
-            if (!expenses[currency]) expenses[currency] = 0
-            expenses[currency] += amount
-          }
-        })
-      }
+    Object.entries(report.expensesByCurrency).forEach(([currency, amount]) => {
+      monthlyExpensesByCurrency[currency] = (monthlyExpensesByCurrency[currency] || 0) + amount
     })
-
-    return { monthlyIncomeByCurrency: income, monthlyExpensesByCurrency: expenses }
-  }, [transactions, accounts])
+  })
 
   if (!isAuthenticated) {
     return (

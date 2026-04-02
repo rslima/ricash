@@ -62,6 +62,22 @@ export async function deleteTransaction(ledgerSlug: string, transactionId: strin
   return apiClient.delete(`/ledgers/${ledgerSlug}/transactions/${transactionId}`)
 }
 
+export interface MonthlyReport {
+  id: string
+  year: number
+  month: number
+  incomeByCurrency: Record<string, number>
+  expensesByCurrency: Record<string, number>
+}
+
+export async function getMonthlyReport(
+  ledgerSlug: string,
+  year: number,
+  month: number
+): Promise<MonthlyReport> {
+  return apiClient.get(`/ledgers/${ledgerSlug}/transactions/monthly-report`, { year, month })
+}
+
 export async function getTransactionDescriptions(ledgerSlug: string): Promise<string[]> {
   return apiClient.get(`/ledgers/${ledgerSlug}/transactions/descriptions`)
 }

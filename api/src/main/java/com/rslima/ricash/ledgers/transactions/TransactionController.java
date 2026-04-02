@@ -10,6 +10,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.hateoas.EntityModel;
 import org.springframework.hateoas.PagedModel;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -77,6 +78,24 @@ public class TransactionController {
                 .map(transaction -> toEntityModel(transaction, ledgerSlug, principal))
                 .toList();
         return org.springframework.hateoas.CollectionModel.of(resources);
+    }
+
+    @GetMapping(value = "/monthly-report", produces = { MediaType.APPLICATION_JSON_VALUE, JSON_API_VALUE })
+    public ResponseEntity<MonthlyReportResource> getMonthlyReport(
+            @PathVariable String ledgerSlug,
+            @RequestParam int year,
+            @RequestParam int month,
+            JwtAuthenticationToken principal) {
+
+        var report = transactionService.getMonthlyReport(getUserId(principal), ledgerSlug, year, month);
+        var resource = new MonthlyReportResource(
+                String.format("%d-%02d", year, month),
+                report.year(),
+                report.month(),
+                report.incomeByCurrency(),
+                report.expensesByCurrency()
+        );
+        return ResponseEntity.ok(resource);
     }
 
     @GetMapping("/{transactionId}")

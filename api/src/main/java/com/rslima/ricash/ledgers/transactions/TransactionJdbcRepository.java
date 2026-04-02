@@ -16,7 +16,9 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import java.util.LinkedHashMap;
@@ -382,5 +384,53 @@ public class TransactionJdbcRepository implements TransactionRepository {
                 .list();
 
         return groupToTransactions(results);
+    }
+
+    record DBMonthlyReportRow(String currency, String category, BigDecimal total) {}
+
+    @Override
+    public MonthlyReport getMonthlyReport(String ledgerId, int year, int month) {
+        final var rows = jdbcClient.sql("""
+                        SELECT
+                            COALESCE(te.to_currency, te.currency) AS currency,
+                            CASE
+                                WHEN a.type = 'INCOME' AND te.type = 'CREDIT' THEN 'INCOME'
+                                WHEN a.type = 'EXPENSE' AND te.type = 'DEBIT' THEN 'EXPENSE'
+                            END AS category,
+                            SUM(COALESCE(te.to_amount, te.amount)) AS total
+                        FROM transactions t
+                        JOIN transaction_entries te ON t.id = te.transaction_id
+                        JOIN accounts a ON te.account_id = a.id
+                        WHERE t.ledger_id = :ledgerId
+                          AND EXTRACT(YEAR FROM t.date) = :year
+                          AND EXTRACT(MONTH FROM t.date) = :month
+                          AND (
+                              (a.type = 'INCOME' AND te.type = 'CREDIT')
+                              OR (a.type = 'EXPENSE' AND te.type = 'DEBIT')
+                          )
+                        GROUP BY COALESCE(te.to_currency, te.currency),
+                                 CASE
+                                     WHEN a.type = 'INCOME' AND te.type = 'CREDIT' THEN 'INCOME'
+                                     WHEN a.type = 'EXPENSE' AND te.type = 'DEBIT' THEN 'EXPENSE'
+                                 END
+                        """)
+                .param("ledgerId", ledgerId)
+                .param("year", year)
+                .param("month", month)
+                .query(DBMonthlyReportRow.class)
+                .list();
+
+        Map<String, BigDecimal> incomeByCurrency = new HashMap<>();
+        Map<String, BigDecimal> expensesByCurrency = new HashMap<>();
+
+        for (var row : rows) {
+            if ("INCOME".equals(row.category())) {
+                incomeByCurrency.put(row.currency(), row.total());
+            } else if ("EXPENSE".equals(row.category())) {
+                expensesByCurrency.put(row.currency(), row.total());
+            }
+        }
+
+        return new MonthlyReport(year, month, incomeByCurrency, expensesByCurrency);
     }
 }

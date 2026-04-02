@@ -22,4 +22,6 @@ public interface TransactionRepository {
     List<String> findDistinctDescriptions(String ledgerId);
 
     List<Transaction> findTransactionTemplates(String ledgerId);
+
+    MonthlyReport getMonthlyReport(String ledgerId, int year, int month);
 }
