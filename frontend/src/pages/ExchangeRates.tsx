@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -81,7 +81,7 @@ export function ExchangeRates() {
     }
   }
 
-  const fetchExchangeRates = async () => {
+  const fetchExchangeRates = useCallback(async () => {
     if (!isAuthenticated) {
       setIsLoading(false)
       return
@@ -95,7 +95,7 @@ export function ExchangeRates() {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [isAuthenticated, handleError])
 
   const handleDelete = async (id: string) => {
     if (!confirm(t("exchangeRates.confirmDelete"))) return
@@ -110,7 +110,7 @@ export function ExchangeRates() {
 
   useEffect(() => {
     fetchExchangeRates()
-  }, [isAuthenticated])
+  }, [fetchExchangeRates])
 
   const getSourceBadgeVariant = (source: string): "default" | "secondary" | "outline" => {
     switch (source) {

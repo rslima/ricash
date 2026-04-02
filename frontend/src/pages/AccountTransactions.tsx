@@ -107,7 +107,7 @@ export function AccountTransactions() {
       })
       .catch((e) => handleError(e, "fetchFailed"))
       .finally(() => setIsLoading(false))
-  }, [isAuthenticated, ledgerSlug, accountId])
+  }, [isAuthenticated, ledgerSlug, accountId, handleError])
 
   if (!isAuthenticated) {
     return (

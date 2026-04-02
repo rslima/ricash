@@ -68,7 +68,7 @@ export function Dashboard() {
     } else {
       setIsLoading(false)
     }
-  }, [isAuthenticated])
+  }, [isAuthenticated, handleError])
 
   // Calculate total balance by currency (sum of leaf ASSET accounts minus leaf LIABILITY accounts)
   // Leaf accounts are accounts that have no children
