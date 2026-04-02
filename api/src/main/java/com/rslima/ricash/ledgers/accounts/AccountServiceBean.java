@@ -123,6 +123,12 @@ public class AccountServiceBean implements AccountService {
         return slug;
     }
 
+    @Override
+    public BalanceSummary getBalanceSummary(String userId, String ledgerSlug) {
+        final var ledger = getLedgerBySlug(userId, ledgerSlug);
+        return accountRepository.getBalanceSummary(ledger.id());
+    }
+
     private Ledger getLedgerBySlug(String userId, String ledgerSlug) {
         return ledgerRepository.findBySlug(userId, ledgerSlug)
                 .orElseThrow(() -> new LedgerNotFoundException(ledgerSlug));

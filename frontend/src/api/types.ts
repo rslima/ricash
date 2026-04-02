@@ -201,6 +201,12 @@ export interface BudgetSummary {
   envelopeBalances: EnvelopeBalance[]
 }
 
+// Plain JSON types for account reports (not JSON:API)
+export interface BalanceSummary {
+  id: string
+  balanceByCurrency: Record<string, number>
+}
+
 // Pagination params
 export interface PaginationParams {
   "page[number]"?: number

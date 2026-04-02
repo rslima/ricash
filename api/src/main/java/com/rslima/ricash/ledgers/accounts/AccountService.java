@@ -15,4 +15,6 @@ public interface AccountService {
     Account update(String userId, String ledgerSlug, String accountId, UpdateAccountRequest request);
 
     void delete(String userId, String ledgerSlug, String accountId);
+
+    BalanceSummary getBalanceSummary(String userId, String ledgerSlug);
 }

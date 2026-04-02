@@ -25,6 +25,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import org.springframework.http.MediaType;
+
 import static com.toedter.spring.hateoas.jsonapi.MediaTypes.JSON_API_VALUE;
 import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.linkTo;
 import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.methodOn;
@@ -93,6 +95,16 @@ public class AccountController {
 
         Account updatedAccount = accountService.update(getUserId(principal), ledgerSlug, accountId, request);
         return toEntityModel(ledgerSlug, updatedAccount, principal);
+    }
+
+    @GetMapping(value = "/balance-summary", produces = { MediaType.APPLICATION_JSON_VALUE, JSON_API_VALUE })
+    public ResponseEntity<BalanceSummaryResource> getBalanceSummary(
+            @PathVariable String ledgerSlug,
+            JwtAuthenticationToken principal) {
+
+        var summary = accountService.getBalanceSummary(getUserId(principal), ledgerSlug);
+        var resource = new BalanceSummaryResource(ledgerSlug, summary.balanceByCurrency());
+        return ResponseEntity.ok(resource);
     }
 
     @DeleteMapping("/{accountId}")
