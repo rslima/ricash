@@ -10,7 +10,7 @@
     </parent>
     <groupId>com.rslima</groupId>
     <artifactId>ricash</artifactId>
-    <version>0.3.1</version>
+    <version>0.3.2</version>
     <name>ricash</name>
     <description>Control your finance</description>
     <properties>

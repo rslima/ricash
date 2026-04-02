@@ -1,14 +1,14 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useAuth } from "@/contexts/AuthContext"
 import { getLedgers } from "@/api/ledgers"
-import { getAccounts } from "@/api/accounts"
+import { getBalanceSummary } from "@/api/accounts"
 import { getTransactions, getMonthlyReport } from "@/api/transactions"
 import type { MonthlyReport } from "@/api/transactions"
-import type { LedgerResource, AccountResource, TransactionResource } from "@/api/types"
+import type { LedgerResource, TransactionResource } from "@/api/types"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import { Wallet, ArrowUpRight, ArrowDownRight, BookOpen } from "lucide-react"
 import { useErrorHandler } from "@/hooks/use-error-handler"
@@ -18,7 +18,7 @@ export function Dashboard() {
   const { isAuthenticated, user } = useAuth()
   const handleError = useErrorHandler()
   const [ledgers, setLedgers] = useState<LedgerResource[]>([])
-  const [accounts, setAccounts] = useState<AccountResource[]>([])
+  const [totalBalanceByCurrency, setTotalBalanceByCurrency] = useState<Record<string, number>>({})
   const [transactions, setTransactions] = useState<TransactionResource[]>([])
   const [monthlyReport, setMonthlyReport] = useState<Record<string, MonthlyReport>>({})
   const [isLoading, setIsLoading] = useState(true)
@@ -34,9 +34,8 @@ export function Dashboard() {
             // Use first ledger's currency as default
             setDefaultCurrency(response.data[0].attributes.currency)
 
-            // Fetch accounts and transactions from all ledgers
-            const allAccounts: AccountResource[] = []
             const allTransactions: TransactionResource[] = []
+            const aggregatedBalances: Record<string, number> = {}
 
             const now = new Date()
             const currentYear = now.getFullYear()
@@ -44,18 +43,20 @@ export function Dashboard() {
 
             await Promise.all(
               response.data.map(async (ledger) => {
-                const [accountsRes, transactionsRes, report] = await Promise.all([
-                  getAccounts(ledger.attributes.slug, { "page[size]": 200 }),
+                const [balanceSummary, transactionsRes, report] = await Promise.all([
+                  getBalanceSummary(ledger.attributes.slug),
                   getTransactions(ledger.attributes.slug, { "page[size]": 20 }),
                   getMonthlyReport(ledger.attributes.slug, currentYear, currentMonth),
                 ])
-                allAccounts.push(...accountsRes.data)
+                Object.entries(balanceSummary.balanceByCurrency).forEach(([currency, balance]) => {
+                  aggregatedBalances[currency] = (aggregatedBalances[currency] || 0) + balance
+                })
                 allTransactions.push(...transactionsRes.data)
                 setMonthlyReport(prev => ({ ...prev, [ledger.attributes.slug]: report }))
               })
             )
 
-            setAccounts(allAccounts)
+            setTotalBalanceByCurrency(aggregatedBalances)
             // Sort transactions by date descending
             allTransactions.sort((a, b) =>
               new Date(b.attributes.date).getTime() - new Date(a.attributes.date).getTime()
@@ -68,41 +69,7 @@ export function Dashboard() {
     } else {
       setIsLoading(false)
     }
-  }, [isAuthenticated])
-
-  // Calculate total balance by currency (sum of leaf ASSET accounts minus leaf LIABILITY accounts)
-  // Leaf accounts are accounts that have no children
-  const totalBalanceByCurrency = useMemo(() => {
-    // Find all account IDs that are parents (have children)
-    const parentIds = new Set<string>()
-    accounts.forEach((account) => {
-      if (account.attributes.parentAccountId) {
-        parentIds.add(account.attributes.parentAccountId)
-      }
-    })
-
-    // Only sum leaf accounts (accounts that are not parents), grouped by currency
-    const balances: Record<string, number> = {}
-    accounts.forEach((account) => {
-      const isLeaf = !parentIds.has(account.id)
-      if (!isLeaf) return
-
-      const type = account.attributes.type
-      const currency = account.attributes.currency
-      const accountBalance = account.attributes.balance || 0
-
-      if (!balances[currency]) {
-        balances[currency] = 0
-      }
-
-      if (type === "ASSET") {
-        balances[currency] += accountBalance
-      } else if (type === "LIABILITY") {
-        balances[currency] -= accountBalance
-      }
-    })
-    return balances
-  }, [accounts])
+  }, [isAuthenticated, handleError])
 
   // Aggregate monthly income and expenses from API reports across all ledgers
   const monthlyIncomeByCurrency: Record<string, number> = {}

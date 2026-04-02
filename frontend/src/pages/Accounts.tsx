@@ -276,12 +276,12 @@ export function Accounts() {
     getLedgers()
       .then((response) => {
         setLedgers(response.data)
-        if (!selectedLedgerSlug && response.data.length > 0) {
-          setSelectedLedgerSlug(response.data[0].attributes.slug)
+        if (response.data.length > 0) {
+          setSelectedLedgerSlug(prev => prev ?? response.data[0].attributes.slug)
         }
       })
       .catch((e) => handleError(e, "fetchFailed"))
-  }, [isAuthenticated])
+  }, [isAuthenticated, handleError])
 
   useEffect(() => {
     if (!selectedLedgerSlug || !isAuthenticated) {
@@ -304,7 +304,7 @@ export function Accounts() {
       })
       .catch((e) => handleError(e, "fetchFailed"))
       .finally(() => setIsLoading(false))
-  }, [selectedLedgerSlug, isAuthenticated])
+  }, [selectedLedgerSlug, isAuthenticated, handleError])
 
   const handleToggleExpand = (id: string) => {
     setExpandedIds((prev) => {

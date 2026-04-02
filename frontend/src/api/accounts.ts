@@ -1,5 +1,5 @@
 import { apiClient } from "./client"
-import type { JsonApiListResponse, JsonApiResponse, AccountResource, PaginationParams } from "./types"
+import type { JsonApiListResponse, JsonApiResponse, AccountResource, BalanceSummary, PaginationParams } from "./types"
 
 export async function getAccounts(
   ledgerSlug: string,
@@ -45,4 +45,8 @@ export async function updateAccount(
 
 export async function deleteAccount(ledgerSlug: string, accountId: string): Promise<void> {
   return apiClient.delete(`/ledgers/${ledgerSlug}/accounts/${accountId}`)
+}
+
+export async function getBalanceSummary(ledgerSlug: string): Promise<BalanceSummary> {
+  return apiClient.get(`/ledgers/${ledgerSlug}/accounts/balance-summary`)
 }

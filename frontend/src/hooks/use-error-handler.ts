@@ -1,3 +1,4 @@
+import { useCallback } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import { ApiError } from "@/api/client"
@@ -5,7 +6,7 @@ import { ApiError } from "@/api/client"
 export function useErrorHandler() {
   const { t } = useTranslation()
 
-  return (error: unknown, operationKey?: string) => {
+  return useCallback((error: unknown, operationKey?: string) => {
     console.error(operationKey ? `Failed to ${operationKey}:` : "Operation failed:", error)
 
     if (error instanceof ApiError) {
@@ -32,5 +33,5 @@ export function useErrorHandler() {
     }
 
     toast.error(operationKey ? t(`errors.${operationKey}`, { defaultValue: t("errors.generic") }) : t("errors.generic"))
-  }
+  }, [t])
 }

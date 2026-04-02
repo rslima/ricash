@@ -23,4 +23,6 @@ public interface AccountRepository {
     boolean hasTransactions(String accountId);
 
     void delete(String ledgerId, String accountId);
+
+    BalanceSummary getBalanceSummary(String ledgerId);
 }

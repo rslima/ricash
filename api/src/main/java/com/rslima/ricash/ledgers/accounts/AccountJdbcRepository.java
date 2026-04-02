@@ -11,7 +11,9 @@ import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 @RequiredArgsConstructor
@@ -297,5 +299,51 @@ public class AccountJdbcRepository implements AccountRepository {
                 .param("ledgerId", ledgerId)
                 .param("accountId", accountId)
                 .update();
+    }
+
+    record DBBalanceEntry(String currency, BigDecimal netBalance) {
+    }
+
+    @Override
+    public BalanceSummary getBalanceSummary(String ledgerId) {
+        var entries = jdbcClient.sql("""
+                        SELECT
+                            a.currency,
+                            COALESCE(
+                                SUM(CASE WHEN te.type = 'DEBIT' THEN
+                                    CASE
+                                        WHEN te.to_currency = a.currency THEN te.to_amount
+                                        WHEN te.currency = a.currency THEN te.amount
+                                        ELSE 0
+                                    END
+                                ELSE 0 END) -
+                                SUM(CASE WHEN te.type = 'CREDIT' THEN
+                                    CASE
+                                        WHEN te.to_currency = a.currency THEN te.to_amount
+                                        WHEN te.currency = a.currency THEN te.amount
+                                        ELSE 0
+                                    END
+                                ELSE 0 END),
+                                0
+                            ) AS net_balance
+                        FROM accounts a
+                        LEFT JOIN transaction_entries te ON te.account_id = a.id
+                        WHERE a.ledger_id = :ledgerId
+                          AND a.type IN ('ASSET', 'LIABILITY')
+                          AND NOT EXISTS (
+                              SELECT 1 FROM accounts c
+                              WHERE c.parent_account_id = a.id AND c.ledger_id = :ledgerId
+                          )
+                        GROUP BY a.currency
+                        """)
+                .param("ledgerId", ledgerId)
+                .query(DBBalanceEntry.class)
+                .list();
+
+        Map<String, BigDecimal> balanceByCurrency = new HashMap<>();
+        for (var entry : entries) {
+            balanceByCurrency.put(entry.currency(), entry.netBalance());
+        }
+        return new BalanceSummary(balanceByCurrency);
     }
 }

@@ -213,12 +213,12 @@ export function Budget() {
     getLedgers()
       .then((response) => {
         setLedgers(response.data)
-        if (!selectedLedgerSlug && response.data.length > 0) {
-          setSelectedLedgerSlug(response.data[0].attributes.slug)
+        if (response.data.length > 0) {
+          setSelectedLedgerSlug(prev => prev ?? response.data[0].attributes.slug)
         }
       })
       .catch((e) => handleError(e, "fetchFailed"))
-  }, [isAuthenticated])
+  }, [isAuthenticated, handleError])
 
   useEffect(() => {
     if (!selectedLedgerSlug || !isAuthenticated) {
@@ -238,7 +238,7 @@ export function Budget() {
       })
       .catch((e) => handleError(e, "fetchFailed"))
       .finally(() => setIsLoading(false))
-  }, [selectedLedgerSlug, selectedYear, selectedMonth, isAuthenticated])
+  }, [selectedLedgerSlug, selectedYear, selectedMonth, isAuthenticated, handleError])
 
   const handlePreviousMonth = () => {
     if (selectedMonth === 1) {

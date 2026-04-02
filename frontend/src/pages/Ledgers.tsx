@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { Link } from "react-router-dom"
 import { useTranslation } from "react-i18next"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -59,7 +59,7 @@ export function Ledgers() {
     description: "",
   })
 
-  const fetchLedgers = async () => {
+  const fetchLedgers = useCallback(async () => {
     if (!isAuthenticated) {
       setIsLoading(false)
       return
@@ -73,11 +73,11 @@ export function Ledgers() {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [isAuthenticated, handleError])
 
   useEffect(() => {
     fetchLedgers()
-  }, [isAuthenticated])
+  }, [fetchLedgers])
 
   const handleDelete = async (slug: string) => {
     if (!confirm(t("ledgers.confirmDelete"))) return
