@@ -178,7 +178,10 @@
     "selectInstrument": "Select instrument...",
     "quantity": "Quantity",
     "envelope": "Envelope",
-    "selectEnvelope": "Select envelope..."
+    "selectEnvelope": "Select envelope...",
+    "page": "Page {{current}} of {{total}}",
+    "totalTransactions": "{{count}} transaction(s)",
+    "perPage": "per page"
   },
   "accountTransactions": {
     "title": "Transactions for {{name}}",
