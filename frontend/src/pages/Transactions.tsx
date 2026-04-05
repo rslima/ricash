@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react"
+import { useEffect, useState, useMemo, useCallback } from "react"
 import { useParams, Link, useLocation } from "react-router-dom"
 import { useTranslation } from "react-i18next"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -48,7 +48,7 @@ import type { TransactionResource, LedgerResource, AccountResource, InstrumentRe
 import { formatCurrency, formatDate } from "@/lib/utils"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { useErrorHandler } from "@/hooks/use-error-handler"
-import { Plus, Trash2, ArrowLeftRight, MoreHorizontal, X, Pencil } from "lucide-react"
+import { Plus, Trash2, ArrowLeftRight, MoreHorizontal, X, Pencil, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react"
 
 interface TransactionEntry {
   accountId: string
@@ -89,6 +89,10 @@ export function Transactions() {
   const [envelopeMappings, setEnvelopeMappings] = useState<Record<string, string>>({})
   const [transactionTemplates, setTransactionTemplates] = useState<TransactionResource[]>([])
   const [selectedLedgerSlug, setSelectedLedgerSlug] = useState<string | null>(ledgerSlug || null)
+  const [currentPage, setCurrentPage] = useState(0)
+  const [pageSize, setPageSize] = useState(20)
+  const [totalPages, setTotalPages] = useState(0)
+  const [totalElements, setTotalElements] = useState(0)
   const [isLoading, setIsLoading] = useState(true)
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
@@ -130,6 +134,14 @@ export function Transactions() {
       .catch((e) => handleError(e, "fetchFailed"))
   }, [isAuthenticated, handleError])
 
+  const loadTransactions = useCallback(async (ledgerSlug: string, page: number, size: number) => {
+    const response = await getTransactions(ledgerSlug, { "page[number]": page, "page[size]": size })
+    setTransactions(response.data)
+    setTotalPages(response.meta?.page?.totalPages ?? 0)
+    setTotalElements(response.meta?.page?.totalElements ?? 0)
+    return response
+  }, [])
+
   useEffect(() => {
     if (!selectedLedgerSlug || !isAuthenticated) {
       setIsLoading(false)
@@ -138,15 +150,14 @@ export function Transactions() {
 
     setIsLoading(true)
     Promise.all([
-      getTransactions(selectedLedgerSlug),
+      loadTransactions(selectedLedgerSlug, currentPage, pageSize),
       getAccounts(selectedLedgerSlug, { "page[size]": 200 }),
       getAllInstruments(selectedLedgerSlug),
       getTransactionTemplates(selectedLedgerSlug),
       getEnvelopes(selectedLedgerSlug, { "page[size]": 200 }),
       getEnvelopeMappings(selectedLedgerSlug),
     ])
-      .then(([transactionsResponse, accountsResponse, instrumentsResponse, templates, envelopesResponse, mappings]) => {
-        setTransactions(transactionsResponse.data)
+      .then(([, accountsResponse, instrumentsResponse, templates, envelopesResponse, mappings]) => {
         setAccounts(accountsResponse.data)
         setInstruments(instrumentsResponse)
         setTransactionTemplates(templates)
@@ -155,7 +166,7 @@ export function Transactions() {
       })
       .catch((e) => handleError(e, "fetchFailed"))
       .finally(() => setIsLoading(false))
-  }, [selectedLedgerSlug, isAuthenticated, handleError])
+  }, [selectedLedgerSlug, isAuthenticated, handleError, currentPage, pageSize, loadTransactions])
 
   // Handle navigation state to pre-fill transaction form
   useEffect(() => {
@@ -193,7 +204,7 @@ export function Transactions() {
 
     try {
       await deleteTransaction(selectedLedgerSlug, transactionId)
-      setTransactions(transactions.filter((t) => t.id !== transactionId))
+      await loadTransactions(selectedLedgerSlug, currentPage, pageSize)
     } catch (error) {
       handleError(error, "deleteFailed")
     }
@@ -518,7 +529,6 @@ export function Transactions() {
         entries: transactionEntries,
       })
 
-      setTransactions([response.data, ...transactions])
       // Update template cache with the new transaction (replaces existing template for this description)
       setTransactionTemplates((prev) => {
         const filtered = prev.filter((t) => t.attributes.description !== description)
@@ -526,6 +536,8 @@ export function Transactions() {
           a.attributes.description.localeCompare(b.attributes.description)
         )
       })
+      setCurrentPage(0)
+      await loadTransactions(selectedLedgerSlug, 0, pageSize)
       setIsCreateDialogOpen(false)
       resetForm()
     } catch (error) {
@@ -578,15 +590,13 @@ export function Transactions() {
         envelopeId: e.envelopeId || undefined,
       }))
 
-      const response = await updateTransaction(selectedLedgerSlug, editingTransaction.id, {
+      await updateTransaction(selectedLedgerSlug, editingTransaction.id, {
         date: editDate,
         description: editDescription,
         entries: transactionEntries,
       })
 
-      setTransactions(transactions.map((t) =>
-        t.id === editingTransaction.id ? response.data : t
-      ))
+      await loadTransactions(selectedLedgerSlug, currentPage, pageSize)
       setIsEditDialogOpen(false)
       setEditingTransaction(null)
     } catch (error) {
@@ -922,7 +932,7 @@ export function Transactions() {
               key={ledger.id}
               variant={selectedLedgerSlug === ledger.attributes.slug ? "default" : "outline"}
               size="sm"
-              onClick={() => setSelectedLedgerSlug(ledger.attributes.slug)}
+              onClick={() => { setSelectedLedgerSlug(ledger.attributes.slug); setCurrentPage(0) }}
             >
               {ledger.attributes.name}
             </Button>
@@ -960,7 +970,8 @@ export function Transactions() {
               </Link>
             </div>
           ) : transactions.length > 0 ? (
-            isMobile ? (
+            <>
+            {isMobile ? (
             <div className="space-y-2">
               {transactions.map((transaction) => (
                 <div
@@ -1083,7 +1094,44 @@ export function Transactions() {
                 ))}
               </TableBody>
             </Table>
-            )
+            )}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between pt-4">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <span>{t("transactions.totalTransactions", { count: totalElements })}</span>
+                  <span className="text-muted-foreground/50">·</span>
+                  <Select value={String(pageSize)} onValueChange={(value) => { setPageSize(Number(value)); setCurrentPage(0) }}>
+                    <SelectTrigger className="h-8 w-[70px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="10">10</SelectItem>
+                      <SelectItem value="20">20</SelectItem>
+                      <SelectItem value="50">50</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <span>{t("transactions.perPage")}</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="text-sm text-muted-foreground mr-2">
+                    {t("transactions.page", { current: currentPage + 1, total: totalPages })}
+                  </span>
+                  <Button variant="outline" size="icon" className="h-8 w-8" disabled={currentPage === 0} onClick={() => setCurrentPage(0)}>
+                    <ChevronsLeft className="h-4 w-4" />
+                  </Button>
+                  <Button variant="outline" size="icon" className="h-8 w-8" disabled={currentPage === 0} onClick={() => setCurrentPage(currentPage - 1)}>
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <Button variant="outline" size="icon" className="h-8 w-8" disabled={currentPage >= totalPages - 1} onClick={() => setCurrentPage(currentPage + 1)}>
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                  <Button variant="outline" size="icon" className="h-8 w-8" disabled={currentPage >= totalPages - 1} onClick={() => setCurrentPage(totalPages - 1)}>
+                    <ChevronsRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
+            </>
           ) : (
             <div className="flex flex-col items-center justify-center py-12">
               <ArrowLeftRight className="h-12 w-12 text-muted-foreground mb-4" />
