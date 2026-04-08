@@ -166,7 +166,7 @@ export function ExpenseBreakdownChart({ ledgers }: Props) {
                       </Pie>
                       <Tooltip
                         formatter={(value) => formatCurrency(Number(value), currency)}
-                        contentStyle={{ borderRadius: "8px", border: "1px solid hsl(var(--border))", background: "hsl(var(--card))", color: "hsl(var(--card-foreground))" }}
+                        contentStyle={{ borderRadius: "8px", border: "1px solid var(--color-border)", background: "var(--color-card)", color: "var(--color-card-foreground)" }}
                       />
                       <Legend />
                     </PieChart>
