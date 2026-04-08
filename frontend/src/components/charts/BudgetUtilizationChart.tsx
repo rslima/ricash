@@ -103,7 +103,7 @@ export function BudgetUtilizationChart({ ledgers, defaultCurrency }: Props) {
               <YAxis type="category" dataKey="name" className="text-xs" width={100} />
               <Tooltip
                 formatter={(value) => formatCurrency(Number(value), defaultCurrency)}
-                contentStyle={{ borderRadius: "8px", border: "1px solid hsl(var(--border))", background: "hsl(var(--card))", color: "hsl(var(--card-foreground))" }}
+                contentStyle={{ borderRadius: "8px", border: "1px solid var(--color-border)", background: "var(--color-card)", color: "var(--color-card-foreground)" }}
               />
               <Legend />
               <Bar dataKey="allocated" name={t("dashboard.charts.allocated")} fill="var(--color-chart-4)" radius={[0, 4, 4, 0]} />
