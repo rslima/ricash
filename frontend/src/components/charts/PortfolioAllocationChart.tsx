@@ -87,7 +87,7 @@ export function PortfolioAllocationChart({ ledgers, defaultCurrency }: Props) {
               </Pie>
               <Tooltip
                 formatter={(value) => formatCurrency(Number(value), defaultCurrency)}
-                contentStyle={{ borderRadius: "8px", border: "1px solid hsl(var(--border))", background: "hsl(var(--card))" }}
+                contentStyle={{ borderRadius: "8px", border: "1px solid hsl(var(--border))", background: "hsl(var(--card))", color: "hsl(var(--card-foreground))" }}
               />
               <Legend />
             </PieChart>
