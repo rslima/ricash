@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom"
 import { AuthProvider } from "@/contexts/AuthContext"
+import { ThemeProvider } from "@/contexts/ThemeContext"
 import { Toaster } from "@/components/ui/sonner"
 import { Layout } from "@/components/layout/Layout"
 import { Dashboard } from "@/pages/Dashboard"
@@ -18,6 +19,7 @@ import { Envelopes } from "@/pages/Envelopes"
 
 function App() {
   return (
+    <ThemeProvider>
     <AuthProvider>
       <BrowserRouter>
         <Routes>
@@ -47,6 +49,7 @@ function App() {
       </BrowserRouter>
       <Toaster />
     </AuthProvider>
+    </ThemeProvider>
   )
 }
 

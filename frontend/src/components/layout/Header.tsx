@@ -10,11 +10,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { LogOut, User } from "lucide-react"
+import { LogOut, Moon, Sun, User } from "lucide-react"
+import { useTheme } from "@/contexts/ThemeContext"
 
 export function Header() {
   const { t } = useTranslation()
   const { user, logout, isAuthenticated, startLogin, loginError } = useAuth()
+  const { resolvedTheme, setTheme } = useTheme()
 
   const getInitials = (name: string) => {
     return name
@@ -32,6 +34,18 @@ export function Header() {
       </div>
 
       <div className="flex items-center gap-4">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
+          aria-label={t("settings.theme")}
+        >
+          {resolvedTheme === "dark" ? (
+            <Sun className="h-5 w-5" />
+          ) : (
+            <Moon className="h-5 w-5" />
+          )}
+        </Button>
         {isAuthenticated && user ? (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

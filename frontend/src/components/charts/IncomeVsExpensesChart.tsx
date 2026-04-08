@@ -123,7 +123,7 @@ export function IncomeVsExpensesChart({ ledgers, defaultCurrency }: Props) {
                       <YAxis className="text-xs" tickFormatter={(v) => formatCurrency(v, currency)} width={100} />
                       <Tooltip
                         formatter={(value) => formatCurrency(Number(value), currency)}
-                        contentStyle={{ borderRadius: "8px", border: "1px solid hsl(var(--border))", background: "hsl(var(--card))" }}
+                        contentStyle={{ borderRadius: "8px", border: "1px solid hsl(var(--border))", background: "hsl(var(--card))", color: "hsl(var(--card-foreground))" }}
                       />
                       <Legend />
                       <Bar dataKey="income" name={t("dashboard.charts.income")} fill="var(--color-chart-2)" radius={[4, 4, 0, 0]} />

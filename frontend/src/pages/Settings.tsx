@@ -12,11 +12,13 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { useAuth } from "@/contexts/AuthContext"
+import { useTheme } from "@/contexts/ThemeContext"
 import { languages, changeLanguage } from "@/i18n"
 
 export function Settings() {
   const { t, i18n } = useTranslation()
   const { user, isAuthenticated, logout } = useAuth()
+  const { theme, setTheme } = useTheme()
 
   if (!isAuthenticated) {
     return (
@@ -89,6 +91,22 @@ export function Settings() {
             </Select>
             <p className="text-sm text-muted-foreground">
               {t("settings.languageDescription")}
+            </p>
+          </div>
+          <div className="grid gap-2">
+            <Label>{t("settings.theme")}</Label>
+            <Select value={theme} onValueChange={(value) => setTheme(value as "light" | "dark" | "system")}>
+              <SelectTrigger>
+                <SelectValue placeholder={t("settings.theme")} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="light">{t("settings.themeLight")}</SelectItem>
+                <SelectItem value="dark">{t("settings.themeDark")}</SelectItem>
+                <SelectItem value="system">{t("settings.themeSystem")}</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-sm text-muted-foreground">
+              {t("settings.themeDescription")}
             </p>
           </div>
         </CardContent>

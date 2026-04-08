@@ -227,6 +227,9 @@
     "languageDescription": "Selecione seu idioma preferido",
     "theme": "Tema",
     "themeDescription": "Escolha seu tema preferido",
+    "themeLight": "Claro",
+    "themeDark": "Escuro",
+    "themeSystem": "Sistema",
     "notSignedIn": "Não conectado",
     "signInToView": "Faça login para ver suas configurações"
   },
