@@ -34,6 +34,12 @@ public class TransactionServiceBean implements TransactionService {
     }
 
     @Override
+    public Page<Transaction> searchByDescription(String userId, String ledgerSlug, String description, PageRequest pageRequest) {
+        final var ledger = getLedgerBySlug(userId, ledgerSlug);
+        return transactionRepository.searchByDescription(ledger.id(), description, pageRequest);
+    }
+
+    @Override
     public Page<Transaction> listAccountTransactions(String userId, String ledgerSlug, String accountId, PageRequest pageRequest) {
         final var ledger = getLedgerBySlug(userId, ledgerSlug);
         return transactionRepository.listAccountTransactions(ledger.id(), accountId, pageRequest);

@@ -3,6 +3,7 @@ import type { JsonApiListResponse, JsonApiResponse, TransactionResource, Paginat
 
 export interface TransactionFilters extends PaginationParams {
   accountId?: string
+  description?: string
 }
 
 export async function getTransactions(

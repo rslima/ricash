@@ -48,7 +48,7 @@ import type { TransactionResource, LedgerResource, AccountResource, InstrumentRe
 import { formatCurrency, formatDate } from "@/lib/utils"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { useErrorHandler } from "@/hooks/use-error-handler"
-import { Plus, Trash2, ArrowLeftRight, MoreHorizontal, X, Pencil, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react"
+import { Plus, Trash2, ArrowLeftRight, MoreHorizontal, X, Pencil, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Search } from "lucide-react"
 
 interface TransactionEntry {
   accountId: string
@@ -93,6 +93,8 @@ export function Transactions() {
   const [pageSize, setPageSize] = useState(20)
   const [totalPages, setTotalPages] = useState(0)
   const [totalElements, setTotalElements] = useState(0)
+  const [searchDescription, setSearchDescription] = useState("")
+  const [activeSearch, setActiveSearch] = useState("")
   const [isLoading, setIsLoading] = useState(true)
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
@@ -134,8 +136,12 @@ export function Transactions() {
       .catch((e) => handleError(e, "fetchFailed"))
   }, [isAuthenticated, handleError])
 
-  const loadTransactions = useCallback(async (ledgerSlug: string, page: number, size: number) => {
-    const response = await getTransactions(ledgerSlug, { "page[number]": page, "page[size]": size })
+  const loadTransactions = useCallback(async (ledgerSlug: string, page: number, size: number, description?: string) => {
+    const params: Record<string, string | number | undefined> = { "page[number]": page, "page[size]": size }
+    if (description) {
+      params.description = description
+    }
+    const response = await getTransactions(ledgerSlug, params)
     setTransactions(response.data)
     setTotalPages(response.meta?.page?.totalPages ?? 0)
     setTotalElements(response.meta?.page?.totalElements ?? 0)
@@ -150,7 +156,7 @@ export function Transactions() {
 
     setIsLoading(true)
     Promise.all([
-      loadTransactions(selectedLedgerSlug, currentPage, pageSize),
+      loadTransactions(selectedLedgerSlug, currentPage, pageSize, activeSearch || undefined),
       getAccounts(selectedLedgerSlug, { "page[size]": 200 }),
       getAllInstruments(selectedLedgerSlug),
       getTransactionTemplates(selectedLedgerSlug),
@@ -166,7 +172,7 @@ export function Transactions() {
       })
       .catch((e) => handleError(e, "fetchFailed"))
       .finally(() => setIsLoading(false))
-  }, [selectedLedgerSlug, isAuthenticated, handleError, currentPage, pageSize, loadTransactions])
+  }, [selectedLedgerSlug, isAuthenticated, handleError, currentPage, pageSize, activeSearch, loadTransactions])
 
   // Handle navigation state to pre-fill transaction form
   useEffect(() => {
@@ -950,6 +956,45 @@ export function Transactions() {
           <CardDescription>
             {t("transactions.subtitle")}
           </CardDescription>
+          {selectedLedgerSlug && (
+            <form
+              className="mt-4"
+              onSubmit={(e) => {
+                e.preventDefault()
+                setActiveSearch(searchDescription)
+                setCurrentPage(0)
+              }}
+            >
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder={t("transactions.searchByDescription")}
+                    value={searchDescription}
+                    onChange={(e) => setSearchDescription(e.target.value)}
+                    className="pl-9"
+                  />
+                </div>
+                <Button type="submit" variant="secondary" size="icon">
+                  <Search className="h-4 w-4" />
+                </Button>
+                {activeSearch && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => {
+                      setSearchDescription("")
+                      setActiveSearch("")
+                      setCurrentPage(0)
+                    }}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+            </form>
+          )}
         </CardHeader>
         <CardContent>
           {isLoading ? (

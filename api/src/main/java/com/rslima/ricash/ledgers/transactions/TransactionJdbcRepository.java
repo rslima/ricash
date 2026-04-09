@@ -90,6 +90,56 @@ public class TransactionJdbcRepository implements TransactionRepository {
     }
 
     @Override
+    public Page<Transaction> searchByDescription(String ledgerId, String description, PageRequest pageRequest) {
+        final var results = jdbcClient.sql("""
+                        SELECT
+                            t.id AS transaction_id,
+                            t.date,
+                            t.description,
+                            t.created_at,
+                            te.id AS entry_id,
+                            te.account_id,
+                            a.name AS account_name,
+                            te.amount,
+                            te.type,
+                            te.currency,
+                            te.to_amount,
+                            te.to_currency,
+                            te.instrument_id,
+                            te.quantity,
+                            i.symbol AS instrument_symbol,
+                            te.envelope_id
+                        FROM
+                            (SELECT * FROM transactions WHERE ledger_id = :ledgerId
+                             AND description ILIKE :description
+                             ORDER BY date DESC, created_at DESC
+                             OFFSET :offset LIMIT :limit) t
+                        LEFT JOIN transaction_entries te ON t.id = te.transaction_id
+                        LEFT JOIN accounts a ON te.account_id = a.id
+                        LEFT JOIN instruments i ON te.instrument_id = i.id
+                        ORDER BY t.date DESC, t.created_at DESC
+                        """)
+                .param("ledgerId", ledgerId)
+                .param("description", "%" + description + "%")
+                .param("offset", pageRequest.getOffset())
+                .param("limit", pageRequest.getPageSize())
+                .query(DBTransactionWithEntry.class)
+                .list();
+
+        final var total = jdbcClient.sql("""
+                        SELECT COUNT(*) FROM transactions
+                        WHERE ledger_id = :ledgerId AND description ILIKE :description
+                        """)
+                .param("ledgerId", ledgerId)
+                .param("description", "%" + description + "%")
+                .query(Long.class)
+                .single();
+
+        final var transactions = groupToTransactions(results);
+        return new PageImpl<>(transactions, pageRequest, total);
+    }
+
+    @Override
     public Page<Transaction> listAccountTransactions(String ledgerId, String accountId, PageRequest pageRequest) {
         final var results = jdbcClient.sql("""
                         SELECT

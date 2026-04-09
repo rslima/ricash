@@ -181,7 +181,8 @@
     "selectEnvelope": "Select envelope...",
     "page": "Page {{current}} of {{total}}",
     "totalTransactions": "{{count}} transaction(s)",
-    "perPage": "per page"
+    "perPage": "per page",
+    "searchByDescription": "Search by description..."
   },
   "accountTransactions": {
     "title": "Transactions for {{name}}",

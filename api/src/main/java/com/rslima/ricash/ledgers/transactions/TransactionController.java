@@ -45,13 +45,17 @@ public class TransactionController {
             JwtAuthenticationToken principal,
             @RequestParam(name = "page[number]", required = false, defaultValue = "0") int page,
             @RequestParam(name = "page[size]", required = false, defaultValue = "20") int size,
-            @RequestParam(name = "accountId", required = false) String accountId) {
+            @RequestParam(name = "accountId", required = false) String accountId,
+            @RequestParam(name = "description", required = false) String description) {
 
         final var pageable = PageRequest.of(page, size);
         Page<EntityModel<TransactionResource>> transactionResources;
 
         if (accountId != null && !accountId.isBlank()) {
             transactionResources = transactionService.listAccountTransactions(getUserId(principal), ledgerSlug, accountId, pageable)
+                    .map(transaction -> toEntityModel(transaction, ledgerSlug, principal));
+        } else if (description != null && !description.isBlank()) {
+            transactionResources = transactionService.searchByDescription(getUserId(principal), ledgerSlug, description, pageable)
                     .map(transaction -> toEntityModel(transaction, ledgerSlug, principal));
         } else {
             transactionResources = transactionService.listLedgerTransactions(getUserId(principal), ledgerSlug, pageable)
@@ -174,9 +178,9 @@ public class TransactionController {
                         transactionResources.getTotalPages()));
 
         pagedModel.add(linkTo(methodOn(TransactionController.class)
-                .listTransactions(ledgerSlug, principal, page, size, null)).withSelfRel());
+                .listTransactions(ledgerSlug, principal, page, size, null, null)).withSelfRel());
         pagedModel.add(linkTo(methodOn(TransactionController.class)
-                .listTransactions(ledgerSlug, principal, 0, size, null)).withRel("first"));
+                .listTransactions(ledgerSlug, principal, 0, size, null, null)).withRel("first"));
 
         if (transactionResources.getTotalPages() > 0) {
             pagedModel.add(linkTo(methodOn(TransactionController.class).listTransactions(
@@ -184,7 +188,7 @@ public class TransactionController {
                     principal,
                     transactionResources.getTotalPages() - 1,
                     size,
-                    null)).withRel("last"));
+                    null, null)).withRel("last"));
         }
         if (transactionResources.hasNext()) {
             pagedModel.add(linkTo(methodOn(TransactionController.class).listTransactions(
@@ -192,7 +196,7 @@ public class TransactionController {
                     principal,
                     transactionResources.getNumber() + 1,
                     size,
-                    null)).withRel("next"));
+                    null, null)).withRel("next"));
         }
         if (transactionResources.hasPrevious()) {
             pagedModel.add(linkTo(methodOn(TransactionController.class).listTransactions(
@@ -200,7 +204,7 @@ public class TransactionController {
                     principal,
                     transactionResources.getNumber() - 1,
                     size,
-                    null)).withRel("prev"));
+                    null, null)).withRel("prev"));
         }
 
         return pagedModel;

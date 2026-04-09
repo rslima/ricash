@@ -9,6 +9,8 @@ import java.util.Optional;
 public interface TransactionRepository {
     Page<Transaction> listLedgerTransactions(String ledgerId, PageRequest pageRequest);
 
+    Page<Transaction> searchByDescription(String ledgerId, String description, PageRequest pageRequest);
+
     Page<Transaction> listAccountTransactions(String ledgerId, String accountId, PageRequest pageRequest);
 
     Optional<Transaction> findById(String ledgerId, String transactionId);
