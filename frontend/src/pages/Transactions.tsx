@@ -826,7 +826,7 @@ export function Transactions() {
         setIsCreateDialogOpen(open)
         if (!open) resetForm()
       }}>
-        <DialogContent className="sm:max-w-[600px]">
+        <DialogContent className="sm:max-w-[700px] lg:max-w-[900px]">
           <DialogHeader>
             <DialogTitle>{t("transactions.createTransaction")}</DialogTitle>
             <DialogDescription>
@@ -881,7 +881,7 @@ export function Transactions() {
         setIsEditDialogOpen(open)
         if (!open) setEditingTransaction(null)
       }}>
-        <DialogContent className="sm:max-w-[600px]">
+        <DialogContent className="sm:max-w-[700px] lg:max-w-[900px]">
           <DialogHeader>
             <DialogTitle>{t("transactions.editTransaction")}</DialogTitle>
             <DialogDescription>
