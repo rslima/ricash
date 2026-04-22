@@ -826,14 +826,14 @@ export function Transactions() {
         setIsCreateDialogOpen(open)
         if (!open) resetForm()
       }}>
-        <DialogContent className="sm:max-w-[700px] lg:max-w-[900px]">
+        <DialogContent className="sm:max-w-[700px] lg:max-w-[900px] flex flex-col md:max-h-[90vh]">
           <DialogHeader>
             <DialogTitle>{t("transactions.createTransaction")}</DialogTitle>
             <DialogDescription>
               {t("transactions.createDescription")}
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 py-4">
+          <div className="grid gap-4 py-4 flex-1 min-h-0 overflow-y-auto">
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="date" className="text-right">{t("common.date")}</Label>
               <Input
@@ -881,14 +881,14 @@ export function Transactions() {
         setIsEditDialogOpen(open)
         if (!open) setEditingTransaction(null)
       }}>
-        <DialogContent className="sm:max-w-[700px] lg:max-w-[900px]">
+        <DialogContent className="sm:max-w-[700px] lg:max-w-[900px] flex flex-col md:max-h-[90vh]">
           <DialogHeader>
             <DialogTitle>{t("transactions.editTransaction")}</DialogTitle>
             <DialogDescription>
               {t("transactions.editDescription")}
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 py-4">
+          <div className="grid gap-4 py-4 flex-1 min-h-0 overflow-y-auto">
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="edit-date" className="text-right">{t("common.date")}</Label>
               <Input
