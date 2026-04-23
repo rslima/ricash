@@ -30,12 +30,15 @@ const COLORS = [
   "hsl(60 70% 50%)",
 ]
 
+const OTHERS_SLICE_ID = "__others__"
+
 export function ExpenseBreakdownChart({ ledgers }: Props) {
   const { t } = useTranslation()
   const [allAccounts, setAllAccounts] = useState<AccountResource[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [drillParentId, setDrillParentId] = useState<string | null>(null)
   const [drillParentName, setDrillParentName] = useState<string | null>(null)
+  const [othersCurrency, setOthersCurrency] = useState<string | null>(null)
 
   useEffect(() => {
     Promise.all(
@@ -70,14 +73,16 @@ export function ExpenseBreakdownChart({ ledgers }: Props) {
         .map((a) => ({ name: a.attributes.name, value: a.attributes.balance, accountId: a.id }))
         .sort((a, b) => b.value - a.value)
 
+      if (othersCurrency === currency) return sorted.slice(7)
+
       if (sorted.length <= 8) return sorted
 
       const top = sorted.slice(0, 7)
       const otherValue = sorted.slice(7).reduce((sum, s) => sum + s.value, 0)
-      top.push({ name: t("dashboard.charts.other"), value: otherValue, accountId: "" })
+      top.push({ name: t("dashboard.charts.other"), value: otherValue, accountId: OTHERS_SLICE_ID })
       return top
     },
-    [allAccounts, drillParentId, t]
+    [allAccounts, drillParentId, othersCurrency, t]
   )
 
   const currencies = [...new Set(
@@ -87,18 +92,29 @@ export function ExpenseBreakdownChart({ ledgers }: Props) {
         a.attributes.balance > 0
       )
       .map((a) => a.attributes.currency)
-  )].sort()
+  )]
+    .sort()
+    .filter((c) => !othersCurrency || c === othersCurrency)
 
-  const handleSliceClick = (accountId: string, accountName: string) => {
+  const handleSliceClick = (accountId: string, accountName: string, currency: string) => {
+    if (accountId === OTHERS_SLICE_ID) {
+      setOthersCurrency(currency)
+      return
+    }
     if (!accountId) return
     const hasChildren = allAccounts.some((a) => a.attributes.parentAccountId === accountId && a.attributes.balance > 0)
     if (hasChildren) {
       setDrillParentId(accountId)
       setDrillParentName(accountName)
+      setOthersCurrency(null)
     }
   }
 
   const handleBack = () => {
+    if (othersCurrency) {
+      setOthersCurrency(null)
+      return
+    }
     if (!drillParentId) return
     const parent = allAccounts.find((a) => a.id === drillParentId)
     if (parent?.attributes.parentAccountId) {
@@ -116,11 +132,15 @@ export function ExpenseBreakdownChart({ ledgers }: Props) {
       <CardHeader>
         <CardTitle>{t("dashboard.charts.expenseBreakdown")}</CardTitle>
         <CardDescription>
-          {drillParentName
+          {othersCurrency
+            ? drillParentName
+              ? `${drillParentName} · ${t("dashboard.charts.other")}`
+              : t("dashboard.charts.other")
+            : drillParentName
             ? drillParentName
             : t("dashboard.charts.expenseBreakdownDescription")}
         </CardDescription>
-        {drillParentId && (
+        {(drillParentId || othersCurrency) && (
           <Button variant="ghost" size="sm" className="w-fit gap-1" onClick={handleBack}>
             <ArrowLeft className="h-4 w-4" />
             {t("dashboard.charts.backToAll")}
@@ -157,7 +177,7 @@ export function ExpenseBreakdownChart({ ledgers }: Props) {
                         style={{ cursor: "pointer" }}
                         onClick={(_, index) => {
                           const slice = slices[index]
-                          handleSliceClick(slice.accountId, slice.name)
+                          handleSliceClick(slice.accountId, slice.name, currency)
                         }}
                       >
                         {slices.map((_, index) => (
