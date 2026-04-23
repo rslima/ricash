@@ -39,7 +39,7 @@ export function ExpenseBreakdownChart({ ledgers }: Props) {
 
   useEffect(() => {
     Promise.all(
-      ledgers.map((l) => getAccounts(l.attributes.slug, { "page[size]": 100 }))
+      ledgers.map((l) => getAccounts(l.attributes.slug, { "page[size]": 200 }))
     )
       .then((responses) => {
         const accounts: AccountResource[] = []
