@@ -26,4 +26,6 @@ public interface TransactionService {
     List<Transaction> getTransactionTemplates(String userId, String ledgerSlug);
 
     MonthlyReport getMonthlyReport(String userId, String ledgerSlug, int year, int month);
+
+    MonthlyExpenseBreakdown getMonthlyExpenseBreakdown(String userId, String ledgerSlug, int year, int month);
 }

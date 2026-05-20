@@ -26,4 +26,6 @@ public interface TransactionRepository {
     List<Transaction> findTransactionTemplates(String ledgerId);
 
     MonthlyReport getMonthlyReport(String ledgerId, int year, int month);
+
+    MonthlyExpenseBreakdown getMonthlyExpenseBreakdown(String ledgerId, int year, int month);
 }

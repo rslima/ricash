@@ -79,6 +79,21 @@ export async function getMonthlyReport(
   return apiClient.get(`/ledgers/${ledgerSlug}/transactions/monthly-report`, { year, month })
 }
 
+export interface MonthlyExpenseBreakdown {
+  id: string
+  year: number
+  month: number
+  expensesByAccountId: Record<string, number>
+}
+
+export async function getMonthlyExpenseBreakdown(
+  ledgerSlug: string,
+  year: number,
+  month: number
+): Promise<MonthlyExpenseBreakdown> {
+  return apiClient.get(`/ledgers/${ledgerSlug}/transactions/monthly-expense-breakdown`, { year, month })
+}
+
 export async function getTransactionDescriptions(ledgerSlug: string): Promise<string[]> {
   return apiClient.get(`/ledgers/${ledgerSlug}/transactions/descriptions`)
 }

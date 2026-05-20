@@ -290,6 +290,12 @@ public class TransactionServiceBean implements TransactionService {
         return transactionRepository.getMonthlyReport(ledger.id(), year, month);
     }
 
+    @Override
+    public MonthlyExpenseBreakdown getMonthlyExpenseBreakdown(String userId, String ledgerSlug, int year, int month) {
+        final var ledger = getLedgerBySlug(userId, ledgerSlug);
+        return transactionRepository.getMonthlyExpenseBreakdown(ledger.id(), year, month);
+    }
+
     private Ledger getLedgerBySlug(String userId, String ledgerSlug) {
         return ledgerRepository.findBySlug(userId, ledgerSlug)
                 .orElseThrow(() -> new LedgerNotFoundException(ledgerSlug));

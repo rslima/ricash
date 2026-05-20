@@ -1,10 +1,18 @@
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from "recharts"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { getAccounts } from "@/api/accounts"
+import { getMonthlyExpenseBreakdown } from "@/api/transactions"
 import type { LedgerResource, AccountResource } from "@/api/types"
 import { formatCurrency } from "@/lib/utils"
 import { ArrowLeft } from "lucide-react"
@@ -32,13 +40,27 @@ const COLORS = [
 
 const OTHERS_SLICE_ID = "__others__"
 
+type Mode = "all-time" | "monthly"
+
+const MONTH_KEYS = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+] as const
+
 export function ExpenseBreakdownChart({ ledgers }: Props) {
   const { t } = useTranslation()
   const [allAccounts, setAllAccounts] = useState<AccountResource[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+  const [isLoadingAccounts, setIsLoadingAccounts] = useState(true)
   const [drillParentId, setDrillParentId] = useState<string | null>(null)
   const [drillParentName, setDrillParentName] = useState<string | null>(null)
   const [othersCurrency, setOthersCurrency] = useState<string | null>(null)
+
+  const now = useMemo(() => new Date(), [])
+  const [mode, setMode] = useState<Mode>("all-time")
+  const [selectedYear, setSelectedYear] = useState(now.getFullYear())
+  const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1)
+  const [monthlyExpenses, setMonthlyExpenses] = useState<Record<string, number>>({})
+  const [isLoadingMonthly, setIsLoadingMonthly] = useState(false)
 
   useEffect(() => {
     Promise.all(
@@ -56,8 +78,35 @@ export function ExpenseBreakdownChart({ ledgers }: Props) {
         setAllAccounts(accounts)
       })
       .catch(() => setAllAccounts([]))
-      .finally(() => setIsLoading(false))
+      .finally(() => setIsLoadingAccounts(false))
   }, [ledgers])
+
+  useEffect(() => {
+    if (mode !== "monthly") return
+    setIsLoadingMonthly(true)
+    Promise.all(
+      ledgers.map((l) => getMonthlyExpenseBreakdown(l.attributes.slug, selectedYear, selectedMonth))
+    )
+      .then((responses) => {
+        const merged: Record<string, number> = {}
+        for (const report of responses) {
+          for (const [accountId, amount] of Object.entries(report.expensesByAccountId ?? {})) {
+            merged[accountId] = (merged[accountId] ?? 0) + Number(amount)
+          }
+        }
+        setMonthlyExpenses(merged)
+      })
+      .catch(() => setMonthlyExpenses({}))
+      .finally(() => setIsLoadingMonthly(false))
+  }, [ledgers, mode, selectedYear, selectedMonth])
+
+  const valueForAccount = useCallback(
+    (account: AccountResource): number => {
+      if (mode === "monthly") return monthlyExpenses[account.id] ?? 0
+      return account.attributes.balance
+    },
+    [mode, monthlyExpenses]
+  )
 
   const buildSlices = useCallback(
     (currency: string): SliceData[] => {
@@ -66,11 +115,11 @@ export function ExpenseBreakdownChart({ ledgers }: Props) {
         const matchesParent = drillParentId
           ? a.attributes.parentAccountId === drillParentId
           : a.attributes.parentAccountId === null
-        return matchesCurrency && matchesParent && a.attributes.balance > 0
+        return matchesCurrency && matchesParent && valueForAccount(a) > 0
       })
 
       const sorted = filtered
-        .map((a) => ({ name: a.attributes.name, value: a.attributes.balance, accountId: a.id }))
+        .map((a) => ({ name: a.attributes.name, value: valueForAccount(a), accountId: a.id }))
         .sort((a, b) => b.value - a.value)
 
       if (othersCurrency === currency) return sorted.slice(7)
@@ -82,14 +131,14 @@ export function ExpenseBreakdownChart({ ledgers }: Props) {
       top.push({ name: t("dashboard.charts.other"), value: otherValue, accountId: OTHERS_SLICE_ID })
       return top
     },
-    [allAccounts, drillParentId, othersCurrency, t]
+    [allAccounts, drillParentId, othersCurrency, t, valueForAccount]
   )
 
   const currencies = [...new Set(
     allAccounts
       .filter((a) =>
         (drillParentId ? a.attributes.parentAccountId === drillParentId : a.attributes.parentAccountId === null) &&
-        a.attributes.balance > 0
+        valueForAccount(a) > 0
       )
       .map((a) => a.attributes.currency)
   )]
@@ -102,7 +151,7 @@ export function ExpenseBreakdownChart({ ledgers }: Props) {
       return
     }
     if (!accountId) return
-    const hasChildren = allAccounts.some((a) => a.attributes.parentAccountId === accountId && a.attributes.balance > 0)
+    const hasChildren = allAccounts.some((a) => a.attributes.parentAccountId === accountId && valueForAccount(a) > 0)
     if (hasChildren) {
       setDrillParentId(accountId)
       setDrillParentName(accountName)
@@ -127,6 +176,16 @@ export function ExpenseBreakdownChart({ ledgers }: Props) {
     }
   }
 
+  const yearOptions = useMemo(() => {
+    const current = now.getFullYear()
+    const years = new Set<number>()
+    for (let y = current - 5; y <= current + 1; y++) years.add(y)
+    years.add(selectedYear)
+    return [...years].sort((a, b) => a - b)
+  }, [now, selectedYear])
+
+  const isLoading = isLoadingAccounts || (mode === "monthly" && isLoadingMonthly)
+
   return (
     <Card>
       <CardHeader>
@@ -138,8 +197,64 @@ export function ExpenseBreakdownChart({ ledgers }: Props) {
               : t("dashboard.charts.other")
             : drillParentName
             ? drillParentName
+            : mode === "monthly"
+            ? t("dashboard.charts.expenseBreakdownMonthlyDescription")
             : t("dashboard.charts.expenseBreakdownDescription")}
         </CardDescription>
+        <div className="flex flex-wrap items-center gap-2 pt-1">
+          <div className="inline-flex rounded-md border p-0.5">
+            <Button
+              variant={mode === "all-time" ? "secondary" : "ghost"}
+              size="sm"
+              className="h-7 px-3"
+              onClick={() => setMode("all-time")}
+            >
+              {t("dashboard.charts.expenseBreakdownAllTime")}
+            </Button>
+            <Button
+              variant={mode === "monthly" ? "secondary" : "ghost"}
+              size="sm"
+              className="h-7 px-3"
+              onClick={() => setMode("monthly")}
+            >
+              {t("dashboard.charts.expenseBreakdownMonthly")}
+            </Button>
+          </div>
+          {mode === "monthly" && (
+            <>
+              <Select
+                value={selectedMonth.toString()}
+                onValueChange={(v) => setSelectedMonth(parseInt(v))}
+              >
+                <SelectTrigger className="h-8 w-32">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {MONTH_KEYS.map((m, index) => (
+                    <SelectItem key={m} value={(index + 1).toString()}>
+                      {t(`budget.months.${m}`)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select
+                value={selectedYear.toString()}
+                onValueChange={(v) => setSelectedYear(parseInt(v))}
+              >
+                <SelectTrigger className="h-8 w-24">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {yearOptions.map((y) => (
+                    <SelectItem key={y} value={y.toString()}>
+                      {y}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </>
+          )}
+        </div>
         {(drillParentId || othersCurrency) && (
           <Button variant="ghost" size="sm" className="w-fit gap-1" onClick={handleBack}>
             <ArrowLeft className="h-4 w-4" />
