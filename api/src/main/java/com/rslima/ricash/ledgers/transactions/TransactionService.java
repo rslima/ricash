@@ -28,4 +28,6 @@ public interface TransactionService {
     MonthlyReport getMonthlyReport(String userId, String ledgerSlug, int year, int month);
 
     MonthlyExpenseBreakdown getMonthlyExpenseBreakdown(String userId, String ledgerSlug, int year, int month);
+
+    MonthlyIncomeBreakdown getMonthlyIncomeBreakdown(String userId, String ledgerSlug, int year, int month);
 }

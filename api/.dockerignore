@@ -1,0 +1,20 @@
+# Build output — rebuilt inside the image
+target/
+
+# IDE / editor
+.idea/
+*.iml
+.vscode/
+.settings/
+.project
+.classpath
+
+# Local/dev files that shouldn't enter the build context
+*.log
+.git/
+.gitignore
+README.md
+HELP.md
+compose.yaml
+Dockerfile
+.dockerignore

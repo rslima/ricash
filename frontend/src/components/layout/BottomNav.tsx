@@ -13,6 +13,7 @@ import {
   Briefcase,
   DollarSign,
   TrendingUp,
+  FileBarChart,
   Settings,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -37,6 +38,7 @@ const moreItems = [
   { key: "envelopes", href: "/envelopes", icon: FolderOpen },
   { key: "instruments", href: "/instruments", icon: Briefcase },
   { key: "instrumentPrices", href: "/instrument-prices", icon: DollarSign },
+  { key: "reports", href: "/reports", icon: FileBarChart },
   { key: "exchangeRates", href: "/exchange-rates", icon: TrendingUp },
   { key: "settings", href: "/settings", icon: Settings },
 ]

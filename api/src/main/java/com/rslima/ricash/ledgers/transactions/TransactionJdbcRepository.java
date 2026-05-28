@@ -536,4 +536,57 @@ public class TransactionJdbcRepository implements TransactionRepository {
 
         return new MonthlyExpenseBreakdown(year, month, expensesByAccountId);
     }
+
+    record DBIncomeBreakdownRow(String accountId, BigDecimal amount) {}
+
+    @Override
+    public MonthlyIncomeBreakdown getMonthlyIncomeBreakdown(String ledgerId, int year, int month) {
+        final var rows = jdbcClient.sql("""
+                        WITH RECURSIVE account_tree AS (
+                            SELECT id, id AS root_id
+                            FROM accounts
+                            WHERE ledger_id = :ledgerId
+
+                            UNION ALL
+
+                            SELECT a.id, at.root_id
+                            FROM accounts a
+                            INNER JOIN account_tree at ON a.parent_account_id = at.id
+                            WHERE a.ledger_id = :ledgerId
+                        )
+                        SELECT
+                            a.id AS account_id,
+                            SUM(
+                                (CASE WHEN te.type = 'CREDIT' THEN 1 ELSE -1 END) *
+                                (CASE
+                                    WHEN te.to_currency = a.currency THEN te.to_amount
+                                    WHEN te.currency = a.currency THEN te.amount
+                                    ELSE 0
+                                END)
+                            ) AS amount
+                        FROM accounts a
+                        INNER JOIN account_tree at ON at.root_id = a.id
+                        INNER JOIN transaction_entries te ON at.id = te.account_id
+                        INNER JOIN transactions t ON t.id = te.transaction_id
+                        WHERE a.ledger_id = :ledgerId
+                          AND a.type = 'INCOME'
+                          AND EXTRACT(YEAR FROM t.date) = :year
+                          AND EXTRACT(MONTH FROM t.date) = :month
+                        GROUP BY a.id
+                        """)
+                .param("ledgerId", ledgerId)
+                .param("year", year)
+                .param("month", month)
+                .query(DBIncomeBreakdownRow.class)
+                .list();
+
+        Map<String, BigDecimal> incomeByAccountId = new HashMap<>();
+        for (var row : rows) {
+            if (row.amount() != null && row.amount().compareTo(BigDecimal.ZERO) != 0) {
+                incomeByAccountId.put(row.accountId(), row.amount());
+            }
+        }
+
+        return new MonthlyIncomeBreakdown(year, month, incomeByAccountId);
+    }
 }

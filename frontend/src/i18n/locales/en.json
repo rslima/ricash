@@ -45,10 +45,28 @@
     "instruments": "Instruments",
     "instrumentPrices": "Prices",
     "portfolio": "Portfolio",
+    "reports": "Reports",
     "exchangeRates": "Exchange Rates",
     "settings": "Settings",
     "more": "More",
     "moreDescription": "Additional navigation options"
+  },
+  "reports": {
+    "title": "Reports",
+    "subtitle": "Detailed monthly income and expense report",
+    "totalIncome": "Total Income",
+    "totalExpenses": "Total Expenses",
+    "netResult": "Net Result",
+    "incomeMinusExpenses": "Income minus expenses",
+    "incomeByCategory": "Income by Category",
+    "expensesByCategory": "Expenses by Category",
+    "category": "Category",
+    "amount": "Amount",
+    "share": "Share",
+    "total": "Total",
+    "noData": "No income or expense activity for the selected month",
+    "noIncome": "No income recorded for this month",
+    "noExpenses": "No expenses recorded for this month"
   },
   "dashboard": {
     "welcome": "Welcome back, {{name}}",

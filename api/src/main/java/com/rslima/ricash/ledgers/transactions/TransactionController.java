@@ -119,6 +119,23 @@ public class TransactionController {
         return ResponseEntity.ok(resource);
     }
 
+    @GetMapping(value = "/monthly-income-breakdown", produces = { MediaType.APPLICATION_JSON_VALUE, JSON_API_VALUE })
+    public ResponseEntity<MonthlyIncomeBreakdownResource> getMonthlyIncomeBreakdown(
+            @PathVariable String ledgerSlug,
+            @RequestParam int year,
+            @RequestParam int month,
+            JwtAuthenticationToken principal) {
+
+        var breakdown = transactionService.getMonthlyIncomeBreakdown(getUserId(principal), ledgerSlug, year, month);
+        var resource = new MonthlyIncomeBreakdownResource(
+                String.format("%d-%02d", year, month),
+                breakdown.year(),
+                breakdown.month(),
+                breakdown.incomeByAccountId()
+        );
+        return ResponseEntity.ok(resource);
+    }
+
     @GetMapping("/{transactionId}")
     public EntityModel<TransactionResource> getTransaction(
             @PathVariable String ledgerSlug,

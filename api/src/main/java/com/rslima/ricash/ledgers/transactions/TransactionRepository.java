@@ -28,4 +28,6 @@ public interface TransactionRepository {
     MonthlyReport getMonthlyReport(String ledgerId, int year, int month);
 
     MonthlyExpenseBreakdown getMonthlyExpenseBreakdown(String ledgerId, int year, int month);
+
+    MonthlyIncomeBreakdown getMonthlyIncomeBreakdown(String ledgerId, int year, int month);
 }

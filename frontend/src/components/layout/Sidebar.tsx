@@ -14,6 +14,7 @@ import {
   ChevronRight,
   FolderOpen,
   PiggyBank,
+  FileBarChart,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -39,6 +40,7 @@ const navigation = [
   { key: "instruments", href: "/instruments", icon: Briefcase },
   { key: "instrumentPrices", href: "/instrument-prices", icon: DollarSign },
   { key: "portfolio", href: "/portfolio", icon: PieChart },
+  { key: "reports", href: "/reports", icon: FileBarChart },
   { key: "exchangeRates", href: "/exchange-rates", icon: TrendingUp },
   { key: "settings", href: "/settings", icon: Settings },
 ]
