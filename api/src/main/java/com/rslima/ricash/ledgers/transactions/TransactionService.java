@@ -13,6 +13,8 @@ public interface TransactionService {
 
     Page<Transaction> listAccountTransactions(String userId, String ledgerSlug, String accountId, PageRequest pageRequest);
 
+    Page<Transaction> listCategoryTransactions(String userId, String ledgerSlug, String accountId, int year, int month, PageRequest pageRequest);
+
     Optional<Transaction> find(String userId, String ledgerSlug, String transactionId);
 
     Transaction create(String userId, String ledgerSlug, CreateTransactionRequest request);

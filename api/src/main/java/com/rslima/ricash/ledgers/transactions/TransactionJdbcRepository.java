@@ -192,6 +192,91 @@ public class TransactionJdbcRepository implements TransactionRepository {
     }
 
     @Override
+    public Page<Transaction> listCategoryTransactions(String ledgerId, String accountId, int year, int month, PageRequest pageRequest) {
+        // Collect the target account plus all of its descendants via the
+        // parent_account_id tree, then return every transaction in the given
+        // month that touches any account in that subtree.
+        final var results = jdbcClient.sql("""
+                        WITH RECURSIVE account_tree AS (
+                            SELECT id FROM accounts
+                            WHERE id = :accountId AND ledger_id = :ledgerId
+
+                            UNION ALL
+
+                            SELECT a.id FROM accounts a
+                            INNER JOIN account_tree at ON a.parent_account_id = at.id
+                            WHERE a.ledger_id = :ledgerId
+                        )
+                        SELECT
+                            t.id AS transaction_id,
+                            t.date,
+                            t.description,
+                            t.created_at,
+                            te.id AS entry_id,
+                            te.account_id,
+                            a.name AS account_name,
+                            te.amount,
+                            te.type,
+                            te.currency,
+                            te.to_amount,
+                            te.to_currency,
+                            te.instrument_id,
+                            te.quantity,
+                            i.symbol AS instrument_symbol,
+                            te.envelope_id
+                        FROM
+                            (SELECT DISTINCT t.* FROM transactions t
+                             INNER JOIN transaction_entries te ON t.id = te.transaction_id
+                             WHERE t.ledger_id = :ledgerId
+                               AND te.account_id IN (SELECT id FROM account_tree)
+                               AND EXTRACT(YEAR FROM t.date) = :year
+                               AND EXTRACT(MONTH FROM t.date) = :month
+                             ORDER BY t.date DESC, t.created_at DESC
+                             OFFSET :offset LIMIT :limit) t
+                        LEFT JOIN transaction_entries te ON t.id = te.transaction_id
+                        LEFT JOIN accounts a ON te.account_id = a.id
+                        LEFT JOIN instruments i ON te.instrument_id = i.id
+                        ORDER BY t.date DESC, t.created_at DESC
+                        """)
+                .param("ledgerId", ledgerId)
+                .param("accountId", accountId)
+                .param("year", year)
+                .param("month", month)
+                .param("offset", pageRequest.getOffset())
+                .param("limit", pageRequest.getPageSize())
+                .query(DBTransactionWithEntry.class)
+                .list();
+
+        final var total = jdbcClient.sql("""
+                        WITH RECURSIVE account_tree AS (
+                            SELECT id FROM accounts
+                            WHERE id = :accountId AND ledger_id = :ledgerId
+
+                            UNION ALL
+
+                            SELECT a.id FROM accounts a
+                            INNER JOIN account_tree at ON a.parent_account_id = at.id
+                            WHERE a.ledger_id = :ledgerId
+                        )
+                        SELECT COUNT(DISTINCT t.id) FROM transactions t
+                        INNER JOIN transaction_entries te ON t.id = te.transaction_id
+                        WHERE t.ledger_id = :ledgerId
+                          AND te.account_id IN (SELECT id FROM account_tree)
+                          AND EXTRACT(YEAR FROM t.date) = :year
+                          AND EXTRACT(MONTH FROM t.date) = :month
+                        """)
+                .param("ledgerId", ledgerId)
+                .param("accountId", accountId)
+                .param("year", year)
+                .param("month", month)
+                .query(Long.class)
+                .single();
+
+        final var transactions = groupToTransactions(results);
+        return new PageImpl<>(transactions, pageRequest, total);
+    }
+
+    @Override
     public Optional<Transaction> findById(String ledgerId, String transactionId) {
         final var results = jdbcClient.sql("""
                         SELECT

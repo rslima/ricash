@@ -13,6 +13,8 @@ public interface TransactionRepository {
 
     Page<Transaction> listAccountTransactions(String ledgerId, String accountId, PageRequest pageRequest);
 
+    Page<Transaction> listCategoryTransactions(String ledgerId, String accountId, int year, int month, PageRequest pageRequest);
+
     Optional<Transaction> findById(String ledgerId, String transactionId);
 
     Transaction create(String ledgerId, Transaction transaction);

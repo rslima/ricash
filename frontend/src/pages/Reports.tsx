@@ -17,14 +17,26 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Badge } from "@/components/ui/badge"
 import { useAuth } from "@/contexts/AuthContext"
 import { getLedgers } from "@/api/ledgers"
 import { getAccounts } from "@/api/accounts"
-import { getMonthlyIncomeBreakdown, getMonthlyExpenseBreakdown } from "@/api/transactions"
-import type { LedgerResource, AccountResource } from "@/api/types"
-import { formatCurrency } from "@/lib/utils"
+import {
+  getMonthlyIncomeBreakdown,
+  getMonthlyExpenseBreakdown,
+  getCategoryTransactions,
+} from "@/api/transactions"
+import type { LedgerResource, AccountResource, TransactionResource } from "@/api/types"
+import { formatCurrency, formatDate } from "@/lib/utils"
 import { useErrorHandler } from "@/hooks/use-error-handler"
-import { ArrowUpRight, ArrowDownRight, Scale } from "lucide-react"
+import { ArrowUpRight, ArrowDownRight, Scale, ArrowLeftRight } from "lucide-react"
 
 const MONTH_KEYS = [
   "January", "February", "March", "April", "May", "June",
@@ -35,6 +47,8 @@ interface CategoryRow {
   accountId: string
   name: string
   value: number
+  currency: string
+  ledgerSlug: string
 }
 
 // Builds the top-level category rows for a currency. Breakdown values for a
@@ -43,6 +57,7 @@ interface CategoryRow {
 function buildCategoryRows(
   accounts: AccountResource[],
   valueByAccountId: Record<string, number>,
+  ledgerSlugByAccountId: Record<string, string>,
   type: "INCOME" | "EXPENSE",
   currency: string
 ): CategoryRow[] {
@@ -54,7 +69,13 @@ function buildCategoryRows(
         a.attributes.parentAccountId === null &&
         (valueByAccountId[a.id] ?? 0) > 0
     )
-    .map((a) => ({ accountId: a.id, name: a.attributes.name, value: valueByAccountId[a.id] }))
+    .map((a) => ({
+      accountId: a.id,
+      name: a.attributes.name,
+      value: valueByAccountId[a.id],
+      currency: a.attributes.currency,
+      ledgerSlug: ledgerSlugByAccountId[a.id],
+    }))
     .sort((a, b) => b.value - a.value)
 }
 
@@ -68,9 +89,10 @@ interface BreakdownTableProps {
   currency: string
   barColor: string
   emptyLabel: string
+  onRowClick: (row: CategoryRow) => void
 }
 
-function BreakdownTable({ rows, total, currency, barColor, emptyLabel }: BreakdownTableProps) {
+function BreakdownTable({ rows, total, currency, barColor, emptyLabel, onRowClick }: BreakdownTableProps) {
   const { t } = useTranslation()
   if (rows.length === 0) {
     return <p className="text-sm text-muted-foreground text-center py-8">{emptyLabel}</p>
@@ -88,7 +110,11 @@ function BreakdownTable({ rows, total, currency, barColor, emptyLabel }: Breakdo
         {rows.map((row) => {
           const percent = total > 0 ? (row.value / total) * 100 : 0
           return (
-            <TableRow key={row.accountId}>
+            <TableRow
+              key={row.accountId}
+              className="cursor-pointer"
+              onClick={() => onRowClick(row)}
+            >
               <TableCell className="font-medium">{row.name}</TableCell>
               <TableCell className="text-right font-mono">
                 {formatCurrency(row.value, currency)}
@@ -119,6 +145,97 @@ function BreakdownTable({ rows, total, currency, barColor, emptyLabel }: Breakdo
   )
 }
 
+interface CategoryTransactionsDialogProps {
+  category: CategoryRow | null
+  year: number
+  month: number
+  monthLabel: string
+  onClose: () => void
+}
+
+// Shows every transaction in the clicked category (and its subcategories) for
+// the selected month. Fetched on demand from the report drill-down endpoint.
+function CategoryTransactionsDialog({
+  category,
+  year,
+  month,
+  monthLabel,
+  onClose,
+}: CategoryTransactionsDialogProps) {
+  const { t } = useTranslation()
+  const handleError = useErrorHandler()
+  const [transactions, setTransactions] = useState<TransactionResource[]>([])
+  const [isLoading, setIsLoading] = useState(false)
+
+  useEffect(() => {
+    if (!category) return
+    setIsLoading(true)
+    getCategoryTransactions(category.ledgerSlug, category.accountId, year, month)
+      .then((response) => setTransactions(response.data))
+      .catch((e) => handleError(e, "fetchFailed"))
+      .finally(() => setIsLoading(false))
+  }, [category, year, month, handleError])
+
+  return (
+    <Dialog open={category !== null} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="md:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>{category?.name}</DialogTitle>
+          <DialogDescription>
+            {monthLabel}
+            {category && ` · ${formatCurrency(category.value, category.currency)}`}
+          </DialogDescription>
+        </DialogHeader>
+        {isLoading ? (
+          <div className="space-y-3">
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-12 w-full" />
+          </div>
+        ) : transactions.length > 0 ? (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>{t("common.date")}</TableHead>
+                <TableHead>{t("common.description")}</TableHead>
+                <TableHead>{t("transactions.entries")}</TableHead>
+                <TableHead className="text-right">{t("common.amount")}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {transactions.map((transaction) => (
+                <TableRow key={transaction.id}>
+                  <TableCell className="font-medium">
+                    {formatDate(transaction.attributes.date)}
+                  </TableCell>
+                  <TableCell>{transaction.attributes.description}</TableCell>
+                  <TableCell>
+                    <div className="flex flex-wrap gap-1">
+                      {transaction.attributes.entries?.map((entry, idx) => (
+                        <Badge key={idx} variant="outline">
+                          {entry.accountName}: {entry.type === "DEBIT" ? "DB" : "CR"}
+                        </Badge>
+                      ))}
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-right font-mono">
+                    {formatCurrency(transaction.attributes.amount, transaction.attributes.currency)}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        ) : (
+          <div className="flex flex-col items-center justify-center py-12">
+            <ArrowLeftRight className="h-12 w-12 text-muted-foreground mb-4" />
+            <p className="text-sm text-muted-foreground">{t("reports.noCategoryTransactions")}</p>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 export function Reports() {
   const { t } = useTranslation()
   const { isAuthenticated } = useAuth()
@@ -126,9 +243,11 @@ export function Reports() {
 
   const [ledgers, setLedgers] = useState<LedgerResource[]>([])
   const [accounts, setAccounts] = useState<AccountResource[]>([])
+  const [ledgerSlugByAccountId, setLedgerSlugByAccountId] = useState<Record<string, string>>({})
   const [incomeByAccountId, setIncomeByAccountId] = useState<Record<string, number>>({})
   const [expenseByAccountId, setExpenseByAccountId] = useState<Record<string, number>>({})
   const [isLoading, setIsLoading] = useState(true)
+  const [selectedCategory, setSelectedCategory] = useState<CategoryRow | null>(null)
 
   const now = useMemo(() => new Date(), [])
   const [selectedYear, setSelectedYear] = useState(now.getFullYear())
@@ -151,14 +270,18 @@ export function Reports() {
     Promise.all(ledgers.map((l) => getAccounts(l.attributes.slug, { "page[size]": 200 })))
       .then((responses) => {
         const collected: AccountResource[] = []
-        for (const res of responses) {
+        const slugByAccountId: Record<string, string> = {}
+        responses.forEach((res, index) => {
+          const ledgerSlug = ledgers[index].attributes.slug
           for (const account of res.data) {
             if (account.attributes.type === "INCOME" || account.attributes.type === "EXPENSE") {
               collected.push(account)
+              slugByAccountId[account.id] = ledgerSlug
             }
           }
-        }
+        })
         setAccounts(collected)
+        setLedgerSlugByAccountId(slugByAccountId)
       })
       .catch((e) => handleError(e, "fetchFailed"))
   }, [ledgers, handleError])
@@ -217,11 +340,11 @@ export function Reports() {
   // Per-currency totals for the summary cards.
   const totalsByCurrency = useMemo(() => {
     return currencies.map((currency) => {
-      const income = sumRows(buildCategoryRows(accounts, incomeByAccountId, "INCOME", currency))
-      const expenses = sumRows(buildCategoryRows(accounts, expenseByAccountId, "EXPENSE", currency))
+      const income = sumRows(buildCategoryRows(accounts, incomeByAccountId, ledgerSlugByAccountId, "INCOME", currency))
+      const expenses = sumRows(buildCategoryRows(accounts, expenseByAccountId, ledgerSlugByAccountId, "EXPENSE", currency))
       return { currency, income, expenses, net: income - expenses }
     })
-  }, [currencies, accounts, incomeByAccountId, expenseByAccountId])
+  }, [currencies, accounts, incomeByAccountId, expenseByAccountId, ledgerSlugByAccountId])
 
   const monthLabel = `${t(`budget.months.${MONTH_KEYS[selectedMonth - 1]}`)} ${selectedYear}`
 
@@ -362,8 +485,8 @@ export function Reports() {
         </Card>
       ) : (
         currencies.map((currency) => {
-          const incomeRows = buildCategoryRows(accounts, incomeByAccountId, "INCOME", currency)
-          const expenseRows = buildCategoryRows(accounts, expenseByAccountId, "EXPENSE", currency)
+          const incomeRows = buildCategoryRows(accounts, incomeByAccountId, ledgerSlugByAccountId, "INCOME", currency)
+          const expenseRows = buildCategoryRows(accounts, expenseByAccountId, ledgerSlugByAccountId, "EXPENSE", currency)
           return (
             <div key={currency} className="space-y-3">
               {currencies.length > 1 && (
@@ -382,6 +505,7 @@ export function Reports() {
                       currency={currency}
                       barColor="var(--color-chart-2)"
                       emptyLabel={t("reports.noIncome")}
+                      onRowClick={setSelectedCategory}
                     />
                   </CardContent>
                 </Card>
@@ -397,6 +521,7 @@ export function Reports() {
                       currency={currency}
                       barColor="var(--color-chart-1)"
                       emptyLabel={t("reports.noExpenses")}
+                      onRowClick={setSelectedCategory}
                     />
                   </CardContent>
                 </Card>
@@ -405,6 +530,14 @@ export function Reports() {
           )
         })
       )}
+
+      <CategoryTransactionsDialog
+        category={selectedCategory}
+        year={selectedYear}
+        month={selectedMonth}
+        monthLabel={monthLabel}
+        onClose={() => setSelectedCategory(null)}
+      />
     </div>
   )
 }

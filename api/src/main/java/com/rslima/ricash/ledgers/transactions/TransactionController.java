@@ -46,12 +46,19 @@ public class TransactionController {
             @RequestParam(name = "page[number]", required = false, defaultValue = "0") int page,
             @RequestParam(name = "page[size]", required = false, defaultValue = "20") int size,
             @RequestParam(name = "accountId", required = false) String accountId,
-            @RequestParam(name = "description", required = false) String description) {
+            @RequestParam(name = "description", required = false) String description,
+            @RequestParam(name = "year", required = false) Integer year,
+            @RequestParam(name = "month", required = false) Integer month) {
 
         final var pageable = PageRequest.of(page, size);
         Page<EntityModel<TransactionResource>> transactionResources;
 
-        if (accountId != null && !accountId.isBlank()) {
+        if (accountId != null && !accountId.isBlank() && year != null && month != null) {
+            // Drill-down from the monthly report: all transactions in the
+            // category and its subcategories for the given month.
+            transactionResources = transactionService.listCategoryTransactions(getUserId(principal), ledgerSlug, accountId, year, month, pageable)
+                    .map(transaction -> toEntityModel(transaction, ledgerSlug, principal));
+        } else if (accountId != null && !accountId.isBlank()) {
             transactionResources = transactionService.listAccountTransactions(getUserId(principal), ledgerSlug, accountId, pageable)
                     .map(transaction -> toEntityModel(transaction, ledgerSlug, principal));
         } else if (description != null && !description.isBlank()) {
@@ -212,9 +219,9 @@ public class TransactionController {
                         transactionResources.getTotalPages()));
 
         pagedModel.add(linkTo(methodOn(TransactionController.class)
-                .listTransactions(ledgerSlug, principal, page, size, null, null)).withSelfRel());
+                .listTransactions(ledgerSlug, principal, page, size, null, null, null, null)).withSelfRel());
         pagedModel.add(linkTo(methodOn(TransactionController.class)
-                .listTransactions(ledgerSlug, principal, 0, size, null, null)).withRel("first"));
+                .listTransactions(ledgerSlug, principal, 0, size, null, null, null, null)).withRel("first"));
 
         if (transactionResources.getTotalPages() > 0) {
             pagedModel.add(linkTo(methodOn(TransactionController.class).listTransactions(
@@ -222,7 +229,7 @@ public class TransactionController {
                     principal,
                     transactionResources.getTotalPages() - 1,
                     size,
-                    null, null)).withRel("last"));
+                    null, null, null, null)).withRel("last"));
         }
         if (transactionResources.hasNext()) {
             pagedModel.add(linkTo(methodOn(TransactionController.class).listTransactions(
@@ -230,7 +237,7 @@ public class TransactionController {
                     principal,
                     transactionResources.getNumber() + 1,
                     size,
-                    null, null)).withRel("next"));
+                    null, null, null, null)).withRel("next"));
         }
         if (transactionResources.hasPrevious()) {
             pagedModel.add(linkTo(methodOn(TransactionController.class).listTransactions(
@@ -238,7 +245,7 @@ public class TransactionController {
                     principal,
                     transactionResources.getNumber() - 1,
                     size,
-                    null, null)).withRel("prev"));
+                    null, null, null, null)).withRel("prev"));
         }
 
         return pagedModel;

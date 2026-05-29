@@ -46,6 +46,12 @@ public class TransactionServiceBean implements TransactionService {
     }
 
     @Override
+    public Page<Transaction> listCategoryTransactions(String userId, String ledgerSlug, String accountId, int year, int month, PageRequest pageRequest) {
+        final var ledger = getLedgerBySlug(userId, ledgerSlug);
+        return transactionRepository.listCategoryTransactions(ledger.id(), accountId, year, month, pageRequest);
+    }
+
+    @Override
     public Optional<Transaction> find(String userId, String ledgerSlug, String transactionId) {
         final var ledger = getLedgerBySlug(userId, ledgerSlug);
         return transactionRepository.findById(ledger.id(), transactionId);
