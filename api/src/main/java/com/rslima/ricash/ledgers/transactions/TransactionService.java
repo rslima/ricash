@@ -15,6 +15,8 @@ public interface TransactionService {
 
     Page<Transaction> listCategoryTransactions(String userId, String ledgerSlug, String accountId, int year, int month, PageRequest pageRequest);
 
+    Page<CategoryTransaction> listCategoryTransactionAmounts(String userId, String ledgerSlug, String accountId, int year, int month, PageRequest pageRequest);
+
     Optional<Transaction> find(String userId, String ledgerSlug, String transactionId);
 
     Transaction create(String userId, String ledgerSlug, CreateTransactionRequest request);

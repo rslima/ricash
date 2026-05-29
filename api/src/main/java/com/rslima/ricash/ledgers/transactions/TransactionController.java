@@ -143,6 +143,35 @@ public class TransactionController {
         return ResponseEntity.ok(resource);
     }
 
+    @GetMapping("/category-transactions")
+    public PagedModel<EntityModel<CategoryTransactionResource>> listCategoryTransactionAmounts(
+            @PathVariable String ledgerSlug,
+            JwtAuthenticationToken principal,
+            @RequestParam(name = "accountId") String accountId,
+            @RequestParam(name = "year") int year,
+            @RequestParam(name = "month") int month,
+            @RequestParam(name = "page[number]", required = false, defaultValue = "0") int page,
+            @RequestParam(name = "page[size]", required = false, defaultValue = "200") int size) {
+
+        final var pageable = PageRequest.of(page, size);
+        Page<EntityModel<CategoryTransactionResource>> resources = transactionService
+                .listCategoryTransactionAmounts(getUserId(principal), ledgerSlug, accountId, year, month, pageable)
+                .map(transaction -> EntityModel.of(toCategoryResource(transaction)));
+
+        var pagedModel = PagedModel.of(
+                resources.getContent(),
+                new PagedModel.PageMetadata(
+                        resources.getSize(),
+                        resources.getNumber(),
+                        resources.getTotalElements(),
+                        resources.getTotalPages()));
+
+        pagedModel.add(linkTo(methodOn(TransactionController.class)
+                .listCategoryTransactionAmounts(ledgerSlug, principal, accountId, year, month, page, size)).withSelfRel());
+
+        return pagedModel;
+    }
+
     @GetMapping("/{transactionId}")
     public EntityModel<TransactionResource> getTransaction(
             @PathVariable String ledgerSlug,
@@ -193,6 +222,15 @@ public class TransactionController {
 
     private static @Nullable String getUserId(JwtAuthenticationToken principal) {
         return principal.getName();
+    }
+
+    private CategoryTransactionResource toCategoryResource(CategoryTransaction transaction) {
+        return new CategoryTransactionResource(
+                transaction.id(),
+                transaction.date(),
+                transaction.description(),
+                transaction.amount(),
+                transaction.currency());
     }
 
     private EntityModel<TransactionResource> toEntityModel(Transaction transaction, String ledgerSlug, JwtAuthenticationToken principal) {

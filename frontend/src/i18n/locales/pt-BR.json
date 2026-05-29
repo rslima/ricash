@@ -67,7 +67,8 @@
     "noData": "Nenhuma movimentação de receita ou despesa no mês selecionado",
     "noIncome": "Nenhuma receita registrada neste mês",
     "noExpenses": "Nenhuma despesa registrada neste mês",
-    "noCategoryTransactions": "Nenhuma transação nesta categoria neste mês"
+    "noCategoryTransactions": "Nenhuma transação nesta categoria neste mês",
+    "categoryTransactions": "Transações da Categoria"
   },
   "dashboard": {
     "welcome": "Bem-vindo(a), {{name}}",

@@ -95,6 +95,15 @@ export interface TransactionEntry {
 
 export type TransactionResource = JsonApiResource<"transactions", TransactionAttributes>
 
+export interface CategoryTransactionAttributes {
+  date: string
+  description: string
+  amount: number
+  currency: string
+}
+
+export type CategoryTransactionResource = JsonApiResource<"category-transactions", CategoryTransactionAttributes>
+
 export interface ExchangeRateAttributes {
   fromCurrency: string
   toCurrency: string

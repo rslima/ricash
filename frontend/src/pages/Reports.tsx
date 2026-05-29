@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
+import { useNavigate } from "react-router-dom"
 import { useTranslation } from "react-i18next"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -17,26 +18,17 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
-import { Badge } from "@/components/ui/badge"
 import { useAuth } from "@/contexts/AuthContext"
 import { getLedgers } from "@/api/ledgers"
 import { getAccounts } from "@/api/accounts"
 import {
   getMonthlyIncomeBreakdown,
   getMonthlyExpenseBreakdown,
-  getCategoryTransactions,
 } from "@/api/transactions"
-import type { LedgerResource, AccountResource, TransactionResource } from "@/api/types"
-import { formatCurrency, formatDate } from "@/lib/utils"
+import type { LedgerResource, AccountResource } from "@/api/types"
+import { formatCurrency } from "@/lib/utils"
 import { useErrorHandler } from "@/hooks/use-error-handler"
-import { ArrowUpRight, ArrowDownRight, Scale, ArrowLeftRight } from "lucide-react"
+import { ArrowUpRight, ArrowDownRight, Scale } from "lucide-react"
 
 const MONTH_KEYS = [
   "January", "February", "March", "April", "May", "June",
@@ -145,99 +137,9 @@ function BreakdownTable({ rows, total, currency, barColor, emptyLabel, onRowClic
   )
 }
 
-interface CategoryTransactionsDialogProps {
-  category: CategoryRow | null
-  year: number
-  month: number
-  monthLabel: string
-  onClose: () => void
-}
-
-// Shows every transaction in the clicked category (and its subcategories) for
-// the selected month. Fetched on demand from the report drill-down endpoint.
-function CategoryTransactionsDialog({
-  category,
-  year,
-  month,
-  monthLabel,
-  onClose,
-}: CategoryTransactionsDialogProps) {
-  const { t } = useTranslation()
-  const handleError = useErrorHandler()
-  const [transactions, setTransactions] = useState<TransactionResource[]>([])
-  const [isLoading, setIsLoading] = useState(false)
-
-  useEffect(() => {
-    if (!category) return
-    setIsLoading(true)
-    getCategoryTransactions(category.ledgerSlug, category.accountId, year, month)
-      .then((response) => setTransactions(response.data))
-      .catch((e) => handleError(e, "fetchFailed"))
-      .finally(() => setIsLoading(false))
-  }, [category, year, month, handleError])
-
-  return (
-    <Dialog open={category !== null} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="md:max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>{category?.name}</DialogTitle>
-          <DialogDescription>
-            {monthLabel}
-            {category && ` · ${formatCurrency(category.value, category.currency)}`}
-          </DialogDescription>
-        </DialogHeader>
-        {isLoading ? (
-          <div className="space-y-3">
-            <Skeleton className="h-12 w-full" />
-            <Skeleton className="h-12 w-full" />
-            <Skeleton className="h-12 w-full" />
-          </div>
-        ) : transactions.length > 0 ? (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>{t("common.date")}</TableHead>
-                <TableHead>{t("common.description")}</TableHead>
-                <TableHead>{t("transactions.entries")}</TableHead>
-                <TableHead className="text-right">{t("common.amount")}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {transactions.map((transaction) => (
-                <TableRow key={transaction.id}>
-                  <TableCell className="font-medium">
-                    {formatDate(transaction.attributes.date)}
-                  </TableCell>
-                  <TableCell>{transaction.attributes.description}</TableCell>
-                  <TableCell>
-                    <div className="flex flex-wrap gap-1">
-                      {transaction.attributes.entries?.map((entry, idx) => (
-                        <Badge key={idx} variant="outline">
-                          {entry.accountName}: {entry.type === "DEBIT" ? "DB" : "CR"}
-                        </Badge>
-                      ))}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-right font-mono">
-                    {formatCurrency(transaction.attributes.amount, transaction.attributes.currency)}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        ) : (
-          <div className="flex flex-col items-center justify-center py-12">
-            <ArrowLeftRight className="h-12 w-12 text-muted-foreground mb-4" />
-            <p className="text-sm text-muted-foreground">{t("reports.noCategoryTransactions")}</p>
-          </div>
-        )}
-      </DialogContent>
-    </Dialog>
-  )
-}
-
 export function Reports() {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const { isAuthenticated } = useAuth()
   const handleError = useErrorHandler()
 
@@ -247,11 +149,18 @@ export function Reports() {
   const [incomeByAccountId, setIncomeByAccountId] = useState<Record<string, number>>({})
   const [expenseByAccountId, setExpenseByAccountId] = useState<Record<string, number>>({})
   const [isLoading, setIsLoading] = useState(true)
-  const [selectedCategory, setSelectedCategory] = useState<CategoryRow | null>(null)
 
   const now = useMemo(() => new Date(), [])
   const [selectedYear, setSelectedYear] = useState(now.getFullYear())
   const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1)
+
+  const handleCategoryClick = (row: CategoryRow) => {
+    navigate(
+      `/ledgers/${row.ledgerSlug}/reports/categories/${row.accountId}` +
+        `?year=${selectedYear}&month=${selectedMonth}` +
+        `&name=${encodeURIComponent(row.name)}&currency=${row.currency}`
+    )
+  }
 
   // Load ledgers once.
   useEffect(() => {
@@ -505,7 +414,7 @@ export function Reports() {
                       currency={currency}
                       barColor="var(--color-chart-2)"
                       emptyLabel={t("reports.noIncome")}
-                      onRowClick={setSelectedCategory}
+                      onRowClick={handleCategoryClick}
                     />
                   </CardContent>
                 </Card>
@@ -521,7 +430,7 @@ export function Reports() {
                       currency={currency}
                       barColor="var(--color-chart-1)"
                       emptyLabel={t("reports.noExpenses")}
-                      onRowClick={setSelectedCategory}
+                      onRowClick={handleCategoryClick}
                     />
                   </CardContent>
                 </Card>
@@ -530,14 +439,6 @@ export function Reports() {
           )
         })
       )}
-
-      <CategoryTransactionsDialog
-        category={selectedCategory}
-        year={selectedYear}
-        month={selectedMonth}
-        monthLabel={monthLabel}
-        onClose={() => setSelectedCategory(null)}
-      />
     </div>
   )
 }

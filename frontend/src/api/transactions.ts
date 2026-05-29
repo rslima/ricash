@@ -1,5 +1,5 @@
 import { apiClient } from "./client"
-import type { JsonApiListResponse, JsonApiResponse, TransactionResource, PaginationParams } from "./types"
+import type { JsonApiListResponse, JsonApiResponse, TransactionResource, CategoryTransactionResource, PaginationParams } from "./types"
 
 export interface TransactionFilters extends PaginationParams {
   accountId?: string
@@ -16,14 +16,22 @@ export async function getTransactions(
 }
 
 // Lists every transaction in a category (the account plus all its
-// subcategories) for the given month. Used by the report drill-down.
+// subcategories) for the given month. Each transaction's amount is the signed
+// sum of only the entries belonging to that category subtree (converted to the
+// category's currency), so the amounts add up to the category total shown on
+// the report. Used by the report drill-down page.
 export async function getCategoryTransactions(
   ledgerSlug: string,
   accountId: string,
   year: number,
   month: number
-): Promise<JsonApiListResponse<TransactionResource>> {
-  return getTransactions(ledgerSlug, { accountId, year, month, "page[size]": 200 })
+): Promise<JsonApiListResponse<CategoryTransactionResource>> {
+  return apiClient.get(`/ledgers/${ledgerSlug}/transactions/category-transactions`, {
+    accountId,
+    year,
+    month,
+    "page[size]": 200,
+  })
 }
 
 export async function getTransaction(

@@ -15,6 +15,8 @@ public interface TransactionRepository {
 
     Page<Transaction> listCategoryTransactions(String ledgerId, String accountId, int year, int month, PageRequest pageRequest);
 
+    Page<CategoryTransaction> listCategoryTransactionAmounts(String ledgerId, String accountId, int year, int month, PageRequest pageRequest);
+
     Optional<Transaction> findById(String ledgerId, String transactionId);
 
     Transaction create(String ledgerId, Transaction transaction);

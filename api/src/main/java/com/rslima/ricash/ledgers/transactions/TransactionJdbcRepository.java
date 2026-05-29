@@ -276,6 +276,115 @@ public class TransactionJdbcRepository implements TransactionRepository {
         return new PageImpl<>(transactions, pageRequest, total);
     }
 
+    record DBCategoryTransactionRow(String id, LocalDate date, String description, BigDecimal amount, Instant createdAt) {}
+
+    @Override
+    public Page<CategoryTransaction> listCategoryTransactionAmounts(String ledgerId, String accountId, int year, int month, PageRequest pageRequest) {
+        // For each transaction touching the category subtree (the account plus
+        // all descendants) in the given month, sum ONLY the entries whose
+        // account is in the subtree. Sign is keyed off the ROOT account's type
+        // (DEBIT positive for EXPENSE, CREDIT positive for INCOME) so values are
+        // positive like the report breakdown, and amounts are converted to the
+        // root account's currency. The per-transaction sums therefore add up to
+        // the category total shown on the report.
+        final var root = jdbcClient.sql("""
+                        SELECT type, currency FROM accounts
+                        WHERE id = :accountId AND ledger_id = :ledgerId
+                        """)
+                .param("accountId", accountId)
+                .param("ledgerId", ledgerId)
+                .query(DBRootAccount.class)
+                .optional();
+
+        if (root.isEmpty()) {
+            return new PageImpl<>(List.of(), pageRequest, 0);
+        }
+
+        final boolean incomeSign = "INCOME".equals(root.get().type());
+
+        final var rows = jdbcClient.sql("""
+                        WITH RECURSIVE account_tree AS (
+                            SELECT id, currency FROM accounts
+                            WHERE id = :accountId AND ledger_id = :ledgerId
+
+                            UNION ALL
+
+                            SELECT a.id, a.currency FROM accounts a
+                            INNER JOIN account_tree at ON a.parent_account_id = at.id
+                            WHERE a.ledger_id = :ledgerId
+                        ),
+                        root_account AS (
+                            SELECT currency FROM accounts
+                            WHERE id = :accountId AND ledger_id = :ledgerId
+                        )
+                        SELECT
+                            t.id AS id,
+                            t.date,
+                            t.description,
+                            t.created_at,
+                            SUM(
+                                (CASE WHEN te.type = :positiveType THEN 1 ELSE -1 END) *
+                                (CASE
+                                    WHEN te.to_currency = (SELECT currency FROM root_account) THEN te.to_amount
+                                    WHEN te.currency = (SELECT currency FROM root_account) THEN te.amount
+                                    ELSE 0
+                                END)
+                            ) AS amount
+                        FROM transactions t
+                        INNER JOIN transaction_entries te ON t.id = te.transaction_id
+                        WHERE t.ledger_id = :ledgerId
+                          AND te.account_id IN (SELECT id FROM account_tree)
+                          AND EXTRACT(YEAR FROM t.date) = :year
+                          AND EXTRACT(MONTH FROM t.date) = :month
+                        GROUP BY t.id, t.date, t.description, t.created_at
+                        ORDER BY t.date DESC, t.created_at DESC
+                        OFFSET :offset LIMIT :limit
+                        """)
+                .param("ledgerId", ledgerId)
+                .param("accountId", accountId)
+                .param("positiveType", incomeSign ? "CREDIT" : "DEBIT")
+                .param("year", year)
+                .param("month", month)
+                .param("offset", pageRequest.getOffset())
+                .param("limit", pageRequest.getPageSize())
+                .query(DBCategoryTransactionRow.class)
+                .list();
+
+        final var total = jdbcClient.sql("""
+                        WITH RECURSIVE account_tree AS (
+                            SELECT id FROM accounts
+                            WHERE id = :accountId AND ledger_id = :ledgerId
+
+                            UNION ALL
+
+                            SELECT a.id FROM accounts a
+                            INNER JOIN account_tree at ON a.parent_account_id = at.id
+                            WHERE a.ledger_id = :ledgerId
+                        )
+                        SELECT COUNT(DISTINCT t.id) FROM transactions t
+                        INNER JOIN transaction_entries te ON t.id = te.transaction_id
+                        WHERE t.ledger_id = :ledgerId
+                          AND te.account_id IN (SELECT id FROM account_tree)
+                          AND EXTRACT(YEAR FROM t.date) = :year
+                          AND EXTRACT(MONTH FROM t.date) = :month
+                        """)
+                .param("ledgerId", ledgerId)
+                .param("accountId", accountId)
+                .param("year", year)
+                .param("month", month)
+                .query(Long.class)
+                .single();
+
+        final var rootCurrency = root.get().currency();
+        final var categoryTransactions = rows.stream()
+                .map(r -> new CategoryTransaction(r.id(), r.date(), r.description(), r.amount(), rootCurrency, r.createdAt()))
+                .toList();
+
+        return new PageImpl<>(categoryTransactions, pageRequest, total);
+    }
+
+    record DBRootAccount(String type, String currency) {}
+
     @Override
     public Optional<Transaction> findById(String ledgerId, String transactionId) {
         final var results = jdbcClient.sql("""

@@ -17,6 +17,7 @@ import { Callback } from "@/pages/Callback"
 import { Budget } from "@/pages/Budget"
 import { Envelopes } from "@/pages/Envelopes"
 import { Reports } from "@/pages/Reports"
+import { CategoryTransactions } from "@/pages/CategoryTransactions"
 
 function App() {
   return (
@@ -45,6 +46,7 @@ function App() {
             <Route path="portfolio" element={<Portfolio />} />
             <Route path="ledgers/:ledgerSlug/portfolio" element={<Portfolio />} />
             <Route path="reports" element={<Reports />} />
+            <Route path="ledgers/:ledgerSlug/reports/categories/:accountId" element={<CategoryTransactions />} />
             <Route path="settings" element={<Settings />} />
           </Route>
         </Routes>
