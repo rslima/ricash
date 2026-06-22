@@ -693,27 +693,21 @@ public class TransactionJdbcRepository implements TransactionRepository {
                         )
                         SELECT
                             a.id AS account_id,
-                            SUM(
-                                (CASE WHEN te.type = 'DEBIT' THEN 1 ELSE -1 END) *
-                                (CASE
-                                    WHEN te.to_currency = a.currency THEN te.to_amount
-                                    WHEN te.currency = a.currency THEN te.amount
-                                    ELSE 0
-                                END)
-                            ) AS amount
+                            SUM(ms.debit_total) - SUM(ms.credit_total) AS amount
                         FROM accounts a
                         INNER JOIN account_tree at ON at.root_id = a.id
-                        INNER JOIN transaction_entries te ON at.id = te.account_id
-                        INNER JOIN transactions t ON t.id = te.transaction_id
+                        INNER JOIN monthly_account_summary ms
+                            ON ms.account_id = at.id
+                           AND ms.currency = a.currency
+                           AND ms.period_year = :year
+                           AND ms.period_month = :month
                         WHERE a.ledger_id = :ledgerId
                           AND a.type = 'EXPENSE'
-                          AND t.date >= :periodStart
-                          AND t.date < :periodEnd
                         GROUP BY a.id
                         """)
                 .param("ledgerId", ledgerId)
-                .param("periodStart", monthStart(year, month))
-                .param("periodEnd", monthEnd(year, month))
+                .param("year", year)
+                .param("month", month)
                 .query(DBExpenseBreakdownRow.class)
                 .list();
 
@@ -746,27 +740,21 @@ public class TransactionJdbcRepository implements TransactionRepository {
                         )
                         SELECT
                             a.id AS account_id,
-                            SUM(
-                                (CASE WHEN te.type = 'CREDIT' THEN 1 ELSE -1 END) *
-                                (CASE
-                                    WHEN te.to_currency = a.currency THEN te.to_amount
-                                    WHEN te.currency = a.currency THEN te.amount
-                                    ELSE 0
-                                END)
-                            ) AS amount
+                            SUM(ms.credit_total) - SUM(ms.debit_total) AS amount
                         FROM accounts a
                         INNER JOIN account_tree at ON at.root_id = a.id
-                        INNER JOIN transaction_entries te ON at.id = te.account_id
-                        INNER JOIN transactions t ON t.id = te.transaction_id
+                        INNER JOIN monthly_account_summary ms
+                            ON ms.account_id = at.id
+                           AND ms.currency = a.currency
+                           AND ms.period_year = :year
+                           AND ms.period_month = :month
                         WHERE a.ledger_id = :ledgerId
                           AND a.type = 'INCOME'
-                          AND t.date >= :periodStart
-                          AND t.date < :periodEnd
                         GROUP BY a.id
                         """)
                 .param("ledgerId", ledgerId)
-                .param("periodStart", monthStart(year, month))
-                .param("periodEnd", monthEnd(year, month))
+                .param("year", year)
+                .param("month", month)
                 .query(DBIncomeBreakdownRow.class)
                 .list();
 

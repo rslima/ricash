@@ -120,22 +120,15 @@ public class EnvelopeAllocationJdbcRepository implements EnvelopeAllocationRepos
     @Override
     public BigDecimal calculateSpentForEnvelope(String envelopeId, int year, int month) {
         var result = jdbcClient.sql("""
-                        SELECT COALESCE(SUM(
-                            CASE
-                                WHEN te.to_amount IS NOT NULL THEN te.to_amount
-                                ELSE te.amount
-                            END
-                        ), 0)
-                        FROM transaction_entries te
-                        JOIN transactions t ON te.transaction_id = t.id
-                        WHERE te.envelope_id = :envelopeId
-                          AND te.type = 'DEBIT'
-                          AND t.date >= :periodStart
-                          AND t.date < :periodEnd
+                        SELECT COALESCE(SUM(spent_total), 0)
+                        FROM envelope_monthly_summary
+                        WHERE envelope_id = :envelopeId
+                          AND period_year = :year
+                          AND period_month = :month
                         """)
                 .param("envelopeId", envelopeId)
-                .param("periodStart", monthStart(year, month))
-                .param("periodEnd", monthEnd(year, month))
+                .param("year", year)
+                .param("month", month)
                 .query(BigDecimal.class)
                 .single();
         return result != null ? result : BigDecimal.ZERO;
