@@ -11,6 +11,9 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
+import static com.rslima.ricash.ledgers.DateRanges.monthEnd;
+import static com.rslima.ricash.ledgers.DateRanges.monthStart;
+
 @RequiredArgsConstructor
 @Slf4j
 public class EnvelopeAllocationJdbcRepository implements EnvelopeAllocationRepository {
@@ -127,12 +130,12 @@ public class EnvelopeAllocationJdbcRepository implements EnvelopeAllocationRepos
                         JOIN transactions t ON te.transaction_id = t.id
                         WHERE te.envelope_id = :envelopeId
                           AND te.type = 'DEBIT'
-                          AND EXTRACT(YEAR FROM t.date) = :year
-                          AND EXTRACT(MONTH FROM t.date) = :month
+                          AND t.date >= :periodStart
+                          AND t.date < :periodEnd
                         """)
                 .param("envelopeId", envelopeId)
-                .param("year", year)
-                .param("month", month)
+                .param("periodStart", monthStart(year, month))
+                .param("periodEnd", monthEnd(year, month))
                 .query(BigDecimal.class)
                 .single();
         return result != null ? result : BigDecimal.ZERO;
@@ -154,12 +157,12 @@ public class EnvelopeAllocationJdbcRepository implements EnvelopeAllocationRepos
                         WHERE a.ledger_id = :ledgerId
                           AND a.type = 'INCOME'
                           AND te.type = 'CREDIT'
-                          AND EXTRACT(YEAR FROM t.date) = :year
-                          AND EXTRACT(MONTH FROM t.date) = :month
+                          AND t.date >= :periodStart
+                          AND t.date < :periodEnd
                         """)
                 .param("ledgerId", ledgerId)
-                .param("year", year)
-                .param("month", month)
+                .param("periodStart", monthStart(year, month))
+                .param("periodEnd", monthEnd(year, month))
                 .query(BigDecimal.class)
                 .single();
         return result != null ? result : BigDecimal.ZERO;

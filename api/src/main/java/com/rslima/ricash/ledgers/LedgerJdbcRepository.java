@@ -89,17 +89,15 @@ public class LedgerJdbcRepository implements LedgerRepository {
                                    COALESCE(
                                        CASE
                                            WHEN a.type IN ('ASSET', 'EXPENSE') THEN
-                                               SUM(CASE WHEN te.type = 'DEBIT' THEN te.amount ELSE 0 END) -
-                                               SUM(CASE WHEN te.type = 'CREDIT' THEN te.amount ELSE 0 END)
+                                               SUM(bs.debit_total) - SUM(bs.credit_total)
                                            ELSE
-                                               SUM(CASE WHEN te.type = 'CREDIT' THEN te.amount ELSE 0 END) -
-                                               SUM(CASE WHEN te.type = 'DEBIT' THEN te.amount ELSE 0 END)
+                                               SUM(bs.credit_total) - SUM(bs.debit_total)
                                        END,
                                        0
                                    ) AS account_balance
                                FROM accounts a
                                LEFT JOIN account_tree at ON at.root_id = a.id AND at.ledger_id = a.ledger_id
-                               LEFT JOIN transaction_entries te ON at.id = te.account_id
+                               LEFT JOIN account_balance_summary bs ON bs.account_id = at.id AND bs.currency = a.currency
                                GROUP BY a.id, a.ledger_id, a.parent_account_id, a.slug, a.name, a.description,
                                         a.currency, a.status, a.type, a.created_at) ab
                            ON
@@ -220,11 +218,9 @@ public class LedgerJdbcRepository implements LedgerRepository {
                                 COALESCE(
                                     CASE
                                         WHEN a.type IN ('ASSET', 'EXPENSE') THEN
-                                            SUM(CASE WHEN te.type = 'DEBIT' THEN te.amount ELSE 0 END) -
-                                            SUM(CASE WHEN te.type = 'CREDIT' THEN te.amount ELSE 0 END)
+                                            SUM(bs.debit_total) - SUM(bs.credit_total)
                                         ELSE
-                                            SUM(CASE WHEN te.type = 'CREDIT' THEN te.amount ELSE 0 END) -
-                                            SUM(CASE WHEN te.type = 'DEBIT' THEN te.amount ELSE 0 END)
+                                            SUM(bs.credit_total) - SUM(bs.debit_total)
                                     END,
                                     0
                                 ) AS balance,
@@ -234,7 +230,7 @@ public class LedgerJdbcRepository implements LedgerRepository {
                             LEFT JOIN
                                 account_tree at ON at.root_id = a.id
                             LEFT JOIN
-                                transaction_entries te ON at.id = te.account_id
+                                account_balance_summary bs ON bs.account_id = at.id AND bs.currency = a.currency
                             WHERE
                                 a.ledger_id = :id
                             GROUP BY a.id, a.ledger_id, a.parent_account_id, a.slug, a.name, a.description,
@@ -305,11 +301,9 @@ public class LedgerJdbcRepository implements LedgerRepository {
                                 COALESCE(
                                     CASE
                                         WHEN a.type IN ('ASSET', 'EXPENSE') THEN
-                                            SUM(CASE WHEN te.type = 'DEBIT' THEN te.amount ELSE 0 END) -
-                                            SUM(CASE WHEN te.type = 'CREDIT' THEN te.amount ELSE 0 END)
+                                            SUM(bs.debit_total) - SUM(bs.credit_total)
                                         ELSE
-                                            SUM(CASE WHEN te.type = 'CREDIT' THEN te.amount ELSE 0 END) -
-                                            SUM(CASE WHEN te.type = 'DEBIT' THEN te.amount ELSE 0 END)
+                                            SUM(bs.credit_total) - SUM(bs.debit_total)
                                     END,
                                     0
                                 ) AS balance,
@@ -319,7 +313,7 @@ public class LedgerJdbcRepository implements LedgerRepository {
                             LEFT JOIN
                                 account_tree at ON at.root_id = a.id
                             LEFT JOIN
-                                transaction_entries te ON at.id = te.account_id
+                                account_balance_summary bs ON bs.account_id = at.id AND bs.currency = a.currency
                             WHERE
                                 a.ledger_id = :id
                             GROUP BY a.id, a.ledger_id, a.parent_account_id, a.slug, a.name, a.description,

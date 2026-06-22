@@ -55,35 +55,9 @@ public class AccountJdbcRepository implements AccountRepository {
                             COALESCE(
                                 CASE
                                     WHEN a.type IN ('ASSET', 'EXPENSE') THEN
-                                        SUM(CASE WHEN te.type = 'DEBIT' THEN
-                                            CASE
-                                                WHEN te.to_currency = a.currency THEN te.to_amount
-                                                WHEN te.currency = a.currency THEN te.amount
-                                                ELSE 0
-                                            END
-                                        ELSE 0 END) -
-                                        SUM(CASE WHEN te.type = 'CREDIT' THEN
-                                            CASE
-                                                WHEN te.to_currency = a.currency THEN te.to_amount
-                                                WHEN te.currency = a.currency THEN te.amount
-                                                ELSE 0
-                                            END
-                                        ELSE 0 END)
+                                        SUM(bs.debit_total) - SUM(bs.credit_total)
                                     ELSE
-                                        SUM(CASE WHEN te.type = 'CREDIT' THEN
-                                            CASE
-                                                WHEN te.to_currency = a.currency THEN te.to_amount
-                                                WHEN te.currency = a.currency THEN te.amount
-                                                ELSE 0
-                                            END
-                                        ELSE 0 END) -
-                                        SUM(CASE WHEN te.type = 'DEBIT' THEN
-                                            CASE
-                                                WHEN te.to_currency = a.currency THEN te.to_amount
-                                                WHEN te.currency = a.currency THEN te.amount
-                                                ELSE 0
-                                            END
-                                        ELSE 0 END)
+                                        SUM(bs.credit_total) - SUM(bs.debit_total)
                                 END,
                                 0
                             ) AS balance,
@@ -93,7 +67,7 @@ public class AccountJdbcRepository implements AccountRepository {
                         LEFT JOIN
                             account_tree at ON at.root_id = a.id
                         LEFT JOIN
-                            transaction_entries te ON at.id = te.account_id
+                            account_balance_summary bs ON bs.account_id = at.id AND bs.currency = a.currency
                         WHERE
                             a.ledger_id = :ledgerId
                         GROUP BY a.id, a.ledger_id, a.parent_account_id, a.slug, a.name, a.description,
@@ -152,35 +126,9 @@ public class AccountJdbcRepository implements AccountRepository {
                             COALESCE(
                                 CASE
                                     WHEN a.type IN ('ASSET', 'EXPENSE') THEN
-                                        SUM(CASE WHEN te.type = 'DEBIT' THEN
-                                            CASE
-                                                WHEN te.to_currency = a.currency THEN te.to_amount
-                                                WHEN te.currency = a.currency THEN te.amount
-                                                ELSE 0
-                                            END
-                                        ELSE 0 END) -
-                                        SUM(CASE WHEN te.type = 'CREDIT' THEN
-                                            CASE
-                                                WHEN te.to_currency = a.currency THEN te.to_amount
-                                                WHEN te.currency = a.currency THEN te.amount
-                                                ELSE 0
-                                            END
-                                        ELSE 0 END)
+                                        SUM(bs.debit_total) - SUM(bs.credit_total)
                                     ELSE
-                                        SUM(CASE WHEN te.type = 'CREDIT' THEN
-                                            CASE
-                                                WHEN te.to_currency = a.currency THEN te.to_amount
-                                                WHEN te.currency = a.currency THEN te.amount
-                                                ELSE 0
-                                            END
-                                        ELSE 0 END) -
-                                        SUM(CASE WHEN te.type = 'DEBIT' THEN
-                                            CASE
-                                                WHEN te.to_currency = a.currency THEN te.to_amount
-                                                WHEN te.currency = a.currency THEN te.amount
-                                                ELSE 0
-                                            END
-                                        ELSE 0 END)
+                                        SUM(bs.credit_total) - SUM(bs.debit_total)
                                 END,
                                 0
                             ) AS balance,
@@ -190,7 +138,7 @@ public class AccountJdbcRepository implements AccountRepository {
                         LEFT JOIN
                             account_tree at ON true
                         LEFT JOIN
-                            transaction_entries te ON at.id = te.account_id
+                            account_balance_summary bs ON bs.account_id = at.id AND bs.currency = a.currency
                         WHERE
                             a.ledger_id = :ledgerId AND
                             a.id = :accountId
@@ -310,24 +258,11 @@ public class AccountJdbcRepository implements AccountRepository {
                         SELECT
                             a.currency,
                             COALESCE(
-                                SUM(CASE WHEN te.type = 'DEBIT' THEN
-                                    CASE
-                                        WHEN te.to_currency = a.currency THEN te.to_amount
-                                        WHEN te.currency = a.currency THEN te.amount
-                                        ELSE 0
-                                    END
-                                ELSE 0 END) -
-                                SUM(CASE WHEN te.type = 'CREDIT' THEN
-                                    CASE
-                                        WHEN te.to_currency = a.currency THEN te.to_amount
-                                        WHEN te.currency = a.currency THEN te.amount
-                                        ELSE 0
-                                    END
-                                ELSE 0 END),
+                                SUM(bs.debit_total) - SUM(bs.credit_total),
                                 0
                             ) AS net_balance
                         FROM accounts a
-                        LEFT JOIN transaction_entries te ON te.account_id = a.id
+                        LEFT JOIN account_balance_summary bs ON bs.account_id = a.id AND bs.currency = a.currency
                         WHERE a.ledger_id = :ledgerId
                           AND a.type IN ('ASSET', 'LIABILITY')
                           AND NOT EXISTS (

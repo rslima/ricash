@@ -23,6 +23,8 @@ import java.util.Optional;
 
 import java.util.LinkedHashMap;
 
+import static com.rslima.ricash.ledgers.DateRanges.monthEnd;
+import static com.rslima.ricash.ledgers.DateRanges.monthStart;
 import static java.util.stream.Collectors.groupingBy;
 
 @RequiredArgsConstructor
@@ -223,8 +225,8 @@ public class TransactionJdbcRepository implements TransactionRepository {
                              INNER JOIN transaction_entries te ON t.id = te.transaction_id
                              WHERE t.ledger_id = :ledgerId
                                AND te.account_id IN (SELECT id FROM account_tree)
-                               AND EXTRACT(YEAR FROM t.date) = :year
-                               AND EXTRACT(MONTH FROM t.date) = :month
+                               AND t.date >= :periodStart
+                               AND t.date < :periodEnd
                              ORDER BY t.date DESC, t.created_at DESC
                              OFFSET :offset LIMIT :limit) t
                         LEFT JOIN transaction_entries te ON t.id = te.transaction_id
@@ -234,8 +236,8 @@ public class TransactionJdbcRepository implements TransactionRepository {
                         """)
                 .param("ledgerId", ledgerId)
                 .param("accountId", accountId)
-                .param("year", year)
-                .param("month", month)
+                .param("periodStart", monthStart(year, month))
+                .param("periodEnd", monthEnd(year, month))
                 .param("offset", pageRequest.getOffset())
                 .param("limit", pageRequest.getPageSize())
                 .query(DBTransactionWithEntry.class)
@@ -256,13 +258,13 @@ public class TransactionJdbcRepository implements TransactionRepository {
                         INNER JOIN transaction_entries te ON t.id = te.transaction_id
                         WHERE t.ledger_id = :ledgerId
                           AND te.account_id IN (SELECT id FROM account_tree)
-                          AND EXTRACT(YEAR FROM t.date) = :year
-                          AND EXTRACT(MONTH FROM t.date) = :month
+                          AND t.date >= :periodStart
+                          AND t.date < :periodEnd
                         """)
                 .param("ledgerId", ledgerId)
                 .param("accountId", accountId)
-                .param("year", year)
-                .param("month", month)
+                .param("periodStart", monthStart(year, month))
+                .param("periodEnd", monthEnd(year, month))
                 .query(Long.class)
                 .single();
 
@@ -328,8 +330,8 @@ public class TransactionJdbcRepository implements TransactionRepository {
                         INNER JOIN transaction_entries te ON t.id = te.transaction_id
                         WHERE t.ledger_id = :ledgerId
                           AND te.account_id IN (SELECT id FROM account_tree)
-                          AND EXTRACT(YEAR FROM t.date) = :year
-                          AND EXTRACT(MONTH FROM t.date) = :month
+                          AND t.date >= :periodStart
+                          AND t.date < :periodEnd
                         GROUP BY t.id, t.date, t.description, t.created_at
                         ORDER BY t.date DESC, t.created_at DESC
                         OFFSET :offset LIMIT :limit
@@ -337,8 +339,8 @@ public class TransactionJdbcRepository implements TransactionRepository {
                 .param("ledgerId", ledgerId)
                 .param("accountId", accountId)
                 .param("positiveType", incomeSign ? "CREDIT" : "DEBIT")
-                .param("year", year)
-                .param("month", month)
+                .param("periodStart", monthStart(year, month))
+                .param("periodEnd", monthEnd(year, month))
                 .param("offset", pageRequest.getOffset())
                 .param("limit", pageRequest.getPageSize())
                 .query(DBCategoryTransactionRow.class)
@@ -359,13 +361,13 @@ public class TransactionJdbcRepository implements TransactionRepository {
                         INNER JOIN transaction_entries te ON t.id = te.transaction_id
                         WHERE t.ledger_id = :ledgerId
                           AND te.account_id IN (SELECT id FROM account_tree)
-                          AND EXTRACT(YEAR FROM t.date) = :year
-                          AND EXTRACT(MONTH FROM t.date) = :month
+                          AND t.date >= :periodStart
+                          AND t.date < :periodEnd
                         """)
                 .param("ledgerId", ledgerId)
                 .param("accountId", accountId)
-                .param("year", year)
-                .param("month", month)
+                .param("periodStart", monthStart(year, month))
+                .param("periodEnd", monthEnd(year, month))
                 .query(Long.class)
                 .single();
 
@@ -640,8 +642,8 @@ public class TransactionJdbcRepository implements TransactionRepository {
                         JOIN transaction_entries te ON t.id = te.transaction_id
                         JOIN accounts a ON te.account_id = a.id
                         WHERE t.ledger_id = :ledgerId
-                          AND EXTRACT(YEAR FROM t.date) = :year
-                          AND EXTRACT(MONTH FROM t.date) = :month
+                          AND t.date >= :periodStart
+                          AND t.date < :periodEnd
                           AND (
                               (a.type = 'INCOME' AND te.type = 'CREDIT')
                               OR (a.type = 'EXPENSE' AND te.type = 'DEBIT')
@@ -653,8 +655,8 @@ public class TransactionJdbcRepository implements TransactionRepository {
                                  END
                         """)
                 .param("ledgerId", ledgerId)
-                .param("year", year)
-                .param("month", month)
+                .param("periodStart", monthStart(year, month))
+                .param("periodEnd", monthEnd(year, month))
                 .query(DBMonthlyReportRow.class)
                 .list();
 
@@ -705,13 +707,13 @@ public class TransactionJdbcRepository implements TransactionRepository {
                         INNER JOIN transactions t ON t.id = te.transaction_id
                         WHERE a.ledger_id = :ledgerId
                           AND a.type = 'EXPENSE'
-                          AND EXTRACT(YEAR FROM t.date) = :year
-                          AND EXTRACT(MONTH FROM t.date) = :month
+                          AND t.date >= :periodStart
+                          AND t.date < :periodEnd
                         GROUP BY a.id
                         """)
                 .param("ledgerId", ledgerId)
-                .param("year", year)
-                .param("month", month)
+                .param("periodStart", monthStart(year, month))
+                .param("periodEnd", monthEnd(year, month))
                 .query(DBExpenseBreakdownRow.class)
                 .list();
 
@@ -758,13 +760,13 @@ public class TransactionJdbcRepository implements TransactionRepository {
                         INNER JOIN transactions t ON t.id = te.transaction_id
                         WHERE a.ledger_id = :ledgerId
                           AND a.type = 'INCOME'
-                          AND EXTRACT(YEAR FROM t.date) = :year
-                          AND EXTRACT(MONTH FROM t.date) = :month
+                          AND t.date >= :periodStart
+                          AND t.date < :periodEnd
                         GROUP BY a.id
                         """)
                 .param("ledgerId", ledgerId)
-                .param("year", year)
-                .param("month", month)
+                .param("periodStart", monthStart(year, month))
+                .param("periodEnd", monthEnd(year, month))
                 .query(DBIncomeBreakdownRow.class)
                 .list();
 
