@@ -32,12 +32,6 @@ public class TransactionJdbcRepository implements TransactionRepository {
 
     record DBTransaction(String id, String ledgerId, LocalDate date, String description, Instant createdAt) {}
 
-    record DBTransactionEntry(String id, String transactionId, String accountId, String accountName,
-                               BigDecimal amount, String type, String currency,
-                               BigDecimal toAmount, String toCurrency,
-                               String instrumentId, BigDecimal quantity, String instrumentSymbol,
-                               String envelopeId) {}
-
     record DBTransactionWithEntry(String transactionId, LocalDate date, String description, Instant createdAt,
                                    String entryId, String accountId, String accountName,
                                    BigDecimal amount, String type, String currency,
