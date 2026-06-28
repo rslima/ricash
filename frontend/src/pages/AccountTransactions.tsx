@@ -19,13 +19,20 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { useAuth } from "@/contexts/AuthContext"
 import { getTransactions } from "@/api/transactions"
 import { getAccounts } from "@/api/accounts"
 import { getLedgers } from "@/api/ledgers"
 import type { TransactionResource, AccountResource, LedgerResource } from "@/api/types"
 import { formatCurrency, formatDate } from "@/lib/utils"
-import { ArrowLeft, ArrowLeftRight, ChevronRight, Plus, ChevronDown } from "lucide-react"
+import { ArrowLeft, ArrowLeftRight, ChevronRight, Plus, ChevronDown, ChevronLeft, ChevronsLeft, ChevronsRight } from "lucide-react"
 import { useErrorHandler } from "@/hooks/use-error-handler"
 
 // Build breadcrumb path for an account
@@ -60,6 +67,10 @@ export function AccountTransactions() {
   const [accounts, setAccounts] = useState<AccountResource[]>([])
   const [ledger, setLedger] = useState<LedgerResource | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [currentPage, setCurrentPage] = useState(0)
+  const [pageSize, setPageSize] = useState(20)
+  const [totalPages, setTotalPages] = useState(0)
+  const [totalElements, setTotalElements] = useState(0)
 
   const account = useMemo(
     () => accounts.find((a) => a.id === accountId),
@@ -85,20 +96,19 @@ export function AccountTransactions() {
     })
   }
 
+  // Reset to first page when switching accounts
+  useEffect(() => {
+    setCurrentPage(0)
+  }, [accountId])
+
+  // Load account/ledger metadata (independent of pagination)
   useEffect(() => {
     if (!isAuthenticated || !ledgerSlug || !accountId) {
-      setIsLoading(false)
       return
     }
 
-    setIsLoading(true)
-    Promise.all([
-      getTransactions(ledgerSlug, { accountId }),
-      getAccounts(ledgerSlug),
-      getLedgers(),
-    ])
-      .then(([transactionsResponse, accountsResponse, ledgersResponse]) => {
-        setTransactions(transactionsResponse.data)
+    Promise.all([getAccounts(ledgerSlug), getLedgers()])
+      .then(([accountsResponse, ledgersResponse]) => {
         setAccounts(accountsResponse.data)
         const foundLedger = ledgersResponse.data.find(
           (l) => l.attributes.slug === ledgerSlug
@@ -106,8 +116,29 @@ export function AccountTransactions() {
         setLedger(foundLedger || null)
       })
       .catch((e) => handleError(e, "fetchFailed"))
-      .finally(() => setIsLoading(false))
   }, [isAuthenticated, ledgerSlug, accountId, handleError])
+
+  // Load transactions for the current page
+  useEffect(() => {
+    if (!isAuthenticated || !ledgerSlug || !accountId) {
+      setIsLoading(false)
+      return
+    }
+
+    setIsLoading(true)
+    getTransactions(ledgerSlug, {
+      accountId,
+      "page[number]": currentPage,
+      "page[size]": pageSize,
+    })
+      .then((transactionsResponse) => {
+        setTransactions(transactionsResponse.data)
+        setTotalPages(transactionsResponse.meta?.page?.totalPages ?? 0)
+        setTotalElements(transactionsResponse.meta?.page?.totalElements ?? 0)
+      })
+      .catch((e) => handleError(e, "fetchFailed"))
+      .finally(() => setIsLoading(false))
+  }, [isAuthenticated, ledgerSlug, accountId, currentPage, pageSize, handleError])
 
   if (!isAuthenticated) {
     return (
@@ -178,7 +209,7 @@ export function AccountTransactions() {
         <CardHeader>
           <CardTitle>{t("transactions.title")}</CardTitle>
           <CardDescription>
-            {t("accountTransactions.transactionsFound", { count: transactions.length })}
+            {t("accountTransactions.transactionsFound", { count: totalElements })}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -189,6 +220,7 @@ export function AccountTransactions() {
               <Skeleton className="h-12 w-full" />
             </div>
           ) : transactions.length > 0 ? (
+            <>
             <Table>
               <TableHeader>
                 <TableRow>
@@ -233,6 +265,43 @@ export function AccountTransactions() {
                 ))}
               </TableBody>
             </Table>
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between pt-4">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <span>{t("transactions.totalTransactions", { count: totalElements })}</span>
+                  <span className="text-muted-foreground/50">·</span>
+                  <Select value={String(pageSize)} onValueChange={(value) => { setPageSize(Number(value)); setCurrentPage(0) }}>
+                    <SelectTrigger className="h-8 w-[70px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="10">10</SelectItem>
+                      <SelectItem value="20">20</SelectItem>
+                      <SelectItem value="50">50</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <span>{t("transactions.perPage")}</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="text-sm text-muted-foreground mr-2">
+                    {t("transactions.page", { current: currentPage + 1, total: totalPages })}
+                  </span>
+                  <Button variant="outline" size="icon" className="h-8 w-8" disabled={currentPage === 0} onClick={() => setCurrentPage(0)}>
+                    <ChevronsLeft className="h-4 w-4" />
+                  </Button>
+                  <Button variant="outline" size="icon" className="h-8 w-8" disabled={currentPage === 0} onClick={() => setCurrentPage(currentPage - 1)}>
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <Button variant="outline" size="icon" className="h-8 w-8" disabled={currentPage >= totalPages - 1} onClick={() => setCurrentPage(currentPage + 1)}>
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                  <Button variant="outline" size="icon" className="h-8 w-8" disabled={currentPage >= totalPages - 1} onClick={() => setCurrentPage(totalPages - 1)}>
+                    <ChevronsRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
+            </>
           ) : (
             <div className="flex flex-col items-center justify-center py-12">
               <ArrowLeftRight className="h-12 w-12 text-muted-foreground mb-4" />
