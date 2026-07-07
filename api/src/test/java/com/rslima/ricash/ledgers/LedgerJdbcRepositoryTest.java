@@ -167,6 +167,20 @@ class LedgerJdbcRepositoryTest {
     }
 
     @Test
+    void listUserLedgers_totalElementsCountsAllUserLedgers() {
+        for (int i = 1; i <= 25; i++) {
+            insertLedger("ledger-" + i, "user-1", "Ledger " + i, "Description " + i, "USD");
+        }
+        insertLedger("other-ledger", "user-2", "Other Ledger", "Not mine", "USD");
+
+        var result = repository.listUserLedgers("user-1", PageRequest.of(0, 10));
+
+        assertThat(result.getContent()).hasSize(10);
+        assertThat(result.getTotalElements()).isEqualTo(25);
+        assertThat(result.getTotalPages()).isEqualTo(3);
+    }
+
+    @Test
     void listUserLedgers_emptyResult_returnsEmptyPage() {
         var result = repository.listUserLedgers("user-1", PageRequest.of(0, 20));
 

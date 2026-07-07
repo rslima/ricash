@@ -13,6 +13,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -64,6 +65,7 @@ public class TransactionServiceBean implements TransactionService {
     }
 
     @Override
+    @Transactional
     public Transaction create(String userId, String ledgerSlug, CreateTransactionRequest request) {
         final var ledger = getLedgerBySlug(userId, ledgerSlug);
 
@@ -99,6 +101,7 @@ public class TransactionServiceBean implements TransactionService {
     }
 
     @Override
+    @Transactional
     public Transaction update(String userId, String ledgerSlug, String transactionId, UpdateTransactionRequest request) {
         final var ledger = getLedgerBySlug(userId, ledgerSlug);
 
@@ -138,6 +141,7 @@ public class TransactionServiceBean implements TransactionService {
     }
 
     @Override
+    @Transactional
     public void delete(String userId, String ledgerSlug, String transactionId) {
         final var ledger = getLedgerBySlug(userId, ledgerSlug);
         transactionRepository.delete(ledger.id(), transactionId);

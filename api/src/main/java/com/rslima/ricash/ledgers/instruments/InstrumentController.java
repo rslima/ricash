@@ -1,5 +1,6 @@
 package com.rslima.ricash.ledgers.instruments;
 
+import com.rslima.ricash.ledgers.LedgerNotFoundException;
 import com.rslima.ricash.ledgers.LedgerService;
 
 import com.toedter.spring.hateoas.jsonapi.JsonApiError;
@@ -90,7 +91,8 @@ public class InstrumentController {
             @PathVariable String instrumentId,
             JwtAuthenticationToken principal) {
 
-        final var instrument = instrumentService.findById(instrumentId)
+        String ledgerId = getLedgerId(principal, ledgerSlug);
+        final var instrument = instrumentService.findById(ledgerId, instrumentId)
                 .orElseThrow(() -> new InstrumentNotFoundException(instrumentId));
 
         return toEntityModel(instrument, ledgerSlug, principal);
@@ -129,6 +131,7 @@ public class InstrumentController {
             @Valid @RequestBody UpdateInstrumentRequest request) {
 
         Instrument updated = instrumentService.update(
+                getLedgerId(principal, ledgerSlug),
                 instrumentId,
                 request.symbol(),
                 request.name(),
@@ -148,13 +151,13 @@ public class InstrumentController {
             @PathVariable String instrumentId,
             JwtAuthenticationToken principal) {
 
-        instrumentService.delete(instrumentId);
+        instrumentService.delete(getLedgerId(principal, ledgerSlug), instrumentId);
         return ResponseEntity.noContent().build();
     }
 
     private String getLedgerId(JwtAuthenticationToken principal, String ledgerSlug) {
         return ledgerService.findBySlug(getUserId(principal), ledgerSlug)
-                .orElseThrow(() -> new IllegalArgumentException("Ledger not found: " + ledgerSlug))
+                .orElseThrow(() -> new LedgerNotFoundException(ledgerSlug))
                 .id();
     }
 
@@ -225,6 +228,16 @@ public class InstrumentController {
                                 .withDetail(ex.getMessage())));
     }
 
+    @ExceptionHandler(LedgerNotFoundException.class)
+    public ResponseEntity<JsonApiErrors> handleLedgerNotFoundException(LedgerNotFoundException ex) {
+        return ResponseEntity.status(NOT_FOUND).body(
+                JsonApiErrors.create().withError(
+                        JsonApiError.create()
+                                .withStatus(Integer.toString(NOT_FOUND.value()))
+                                .withTitle(NOT_FOUND.getReasonPhrase())
+                                .withDetail(ex.getMessage())));
+    }
+
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<JsonApiErrors> handleIllegalArgumentException(IllegalArgumentException ex) {
         return ResponseEntity.status(BAD_REQUEST).body(
@@ -233,11 +246,5 @@ public class InstrumentController {
                                 .withStatus(Integer.toString(BAD_REQUEST.value()))
                                 .withTitle(BAD_REQUEST.getReasonPhrase())
                                 .withDetail(ex.getMessage())));
-    }
-
-    public static class InstrumentNotFoundException extends RuntimeException {
-        public InstrumentNotFoundException(String id) {
-            super("Instrument not found: " + id);
-        }
     }
 }

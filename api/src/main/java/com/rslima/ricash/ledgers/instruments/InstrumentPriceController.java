@@ -1,5 +1,6 @@
 package com.rslima.ricash.ledgers.instruments;
 
+import com.rslima.ricash.ledgers.LedgerNotFoundException;
 import com.rslima.ricash.ledgers.LedgerService;
 
 import com.toedter.spring.hateoas.jsonapi.JsonApiError;
@@ -67,6 +68,9 @@ public class InstrumentPriceController {
         Page<EntityModel<InstrumentPriceResource>> priceResources;
 
         if (instrumentId != null && !instrumentId.isBlank()) {
+            // Verify the instrument belongs to this ledger before listing its prices
+            instrumentService.findById(ledgerId, instrumentId)
+                    .orElseThrow(() -> new InstrumentNotFoundException(instrumentId));
             priceResources = instrumentPriceService.listByInstrument(instrumentId, pageable)
                     .map(price -> toEntityModel(price, instrumentMap.get(price.instrumentId()), ledgerSlug, principal));
         } else {
@@ -87,12 +91,8 @@ public class InstrumentPriceController {
         String ledgerId = getLedgerId(principal, ledgerSlug);
 
         // Verify instrument belongs to ledger
-        Instrument instrument = instrumentService.findById(request.instrumentId())
-                .orElseThrow(() -> new IllegalArgumentException("Instrument not found: " + request.instrumentId()));
-
-        if (!instrument.ledgerId().equals(ledgerId)) {
-            throw new IllegalArgumentException("Instrument does not belong to this ledger");
-        }
+        Instrument instrument = instrumentService.findById(ledgerId, request.instrumentId())
+                .orElseThrow(() -> new InstrumentNotFoundException(request.instrumentId()));
 
         InstrumentPrice created = instrumentPriceService.savePrice(
                 request.instrumentId(),
@@ -110,13 +110,13 @@ public class InstrumentPriceController {
             @PathVariable String priceId,
             JwtAuthenticationToken principal) {
 
-        instrumentPriceService.delete(priceId);
+        instrumentPriceService.delete(getLedgerId(principal, ledgerSlug), priceId);
         return ResponseEntity.noContent().build();
     }
 
     private String getLedgerId(JwtAuthenticationToken principal, String ledgerSlug) {
         return ledgerService.findBySlug(getUserId(principal), ledgerSlug)
-                .orElseThrow(() -> new IllegalArgumentException("Ledger not found: " + ledgerSlug))
+                .orElseThrow(() -> new LedgerNotFoundException(ledgerSlug))
                 .id();
     }
 
@@ -148,6 +148,16 @@ public class InstrumentPriceController {
                 .listPrices(ledgerSlug, principal, page, size, null)).withSelfRel());
 
         return pagedModel;
+    }
+
+    @ExceptionHandler({LedgerNotFoundException.class, InstrumentNotFoundException.class, InstrumentPriceNotFoundException.class})
+    public ResponseEntity<JsonApiErrors> handleNotFoundException(RuntimeException ex) {
+        return ResponseEntity.status(NOT_FOUND).body(
+                JsonApiErrors.create().withError(
+                        JsonApiError.create()
+                                .withStatus(Integer.toString(NOT_FOUND.value()))
+                                .withTitle(NOT_FOUND.getReasonPhrase())
+                                .withDetail(ex.getMessage())));
     }
 
     @ExceptionHandler(IllegalArgumentException.class)

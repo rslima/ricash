@@ -65,10 +65,10 @@ class InstrumentServiceBeanTest {
     @Test
     void update_existingInstrument() {
         var existing = createTestInstrument();
-        when(instrumentRepository.findById(INSTRUMENT_ID)).thenReturn(Optional.of(existing));
+        when(instrumentRepository.findById(LEDGER_ID, INSTRUMENT_ID)).thenReturn(Optional.of(existing));
         when(instrumentRepository.update(any(Instrument.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        var result = instrumentService.update(INSTRUMENT_ID, "PETR4", "Updated Name", InstrumentType.STOCK, "BRL", "B3", null, InstrumentStatus.ACTIVE);
+        var result = instrumentService.update(LEDGER_ID, INSTRUMENT_ID, "PETR4", "Updated Name", InstrumentType.STOCK, "BRL", "B3", null, InstrumentStatus.ACTIVE);
 
         assertThat(result.name()).isEqualTo("Updated Name");
         assertThat(result.symbol()).isEqualTo("PETR4");
@@ -76,10 +76,10 @@ class InstrumentServiceBeanTest {
 
     @Test
     void update_notFound_throws() {
-        when(instrumentRepository.findById(INSTRUMENT_ID)).thenReturn(Optional.empty());
+        when(instrumentRepository.findById(LEDGER_ID, INSTRUMENT_ID)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> instrumentService.update(INSTRUMENT_ID, "PETR4", "Name", InstrumentType.STOCK, "BRL", null, null, InstrumentStatus.ACTIVE))
-                .isInstanceOf(IllegalArgumentException.class)
+        assertThatThrownBy(() -> instrumentService.update(LEDGER_ID, INSTRUMENT_ID, "PETR4", "Name", InstrumentType.STOCK, "BRL", null, null, InstrumentStatus.ACTIVE))
+                .isInstanceOf(InstrumentNotFoundException.class)
                 .hasMessageContaining("not found");
     }
 
@@ -87,10 +87,10 @@ class InstrumentServiceBeanTest {
     void update_symbolConflict_throws() {
         var existing = createTestInstrument();
         var conflict = new Instrument("other-id", LEDGER_ID, "VALE3", "Vale", InstrumentType.STOCK, "BRL", "B3", null, InstrumentStatus.ACTIVE, Instant.now());
-        when(instrumentRepository.findById(INSTRUMENT_ID)).thenReturn(Optional.of(existing));
+        when(instrumentRepository.findById(LEDGER_ID, INSTRUMENT_ID)).thenReturn(Optional.of(existing));
         when(instrumentRepository.findByLedgerIdAndSymbol(LEDGER_ID, "VALE3")).thenReturn(Optional.of(conflict));
 
-        assertThatThrownBy(() -> instrumentService.update(INSTRUMENT_ID, "VALE3", "Changed", InstrumentType.STOCK, "BRL", null, null, InstrumentStatus.ACTIVE))
+        assertThatThrownBy(() -> instrumentService.update(LEDGER_ID, INSTRUMENT_ID, "VALE3", "Changed", InstrumentType.STOCK, "BRL", null, null, InstrumentStatus.ACTIVE))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("already exists");
     }
@@ -98,9 +98,9 @@ class InstrumentServiceBeanTest {
     @Test
     void findById_delegatesToRepository() {
         var instrument = createTestInstrument();
-        when(instrumentRepository.findById(INSTRUMENT_ID)).thenReturn(Optional.of(instrument));
+        when(instrumentRepository.findById(LEDGER_ID, INSTRUMENT_ID)).thenReturn(Optional.of(instrument));
 
-        var result = instrumentService.findById(INSTRUMENT_ID);
+        var result = instrumentService.findById(LEDGER_ID, INSTRUMENT_ID);
 
         assertThat(result).isPresent();
         assertThat(result.get().id()).isEqualTo(INSTRUMENT_ID);
@@ -108,9 +108,19 @@ class InstrumentServiceBeanTest {
 
     @Test
     void delete_delegatesToRepository() {
-        instrumentService.delete(INSTRUMENT_ID);
+        when(instrumentRepository.deleteById(LEDGER_ID, INSTRUMENT_ID)).thenReturn(true);
 
-        verify(instrumentRepository).deleteById(INSTRUMENT_ID);
+        instrumentService.delete(LEDGER_ID, INSTRUMENT_ID);
+
+        verify(instrumentRepository).deleteById(LEDGER_ID, INSTRUMENT_ID);
+    }
+
+    @Test
+    void delete_notFound_throws() {
+        when(instrumentRepository.deleteById(LEDGER_ID, INSTRUMENT_ID)).thenReturn(false);
+
+        assertThatThrownBy(() -> instrumentService.delete(LEDGER_ID, INSTRUMENT_ID))
+                .isInstanceOf(InstrumentNotFoundException.class);
     }
 
     private Instrument createTestInstrument() {

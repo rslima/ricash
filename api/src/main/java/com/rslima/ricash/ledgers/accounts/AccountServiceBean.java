@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -78,6 +79,7 @@ public class AccountServiceBean implements AccountService {
     }
 
     @Override
+    @Transactional
     public void delete(String userId, String ledgerSlug, String accountId) {
         final var ledger = getLedgerBySlug(userId, ledgerSlug);
 

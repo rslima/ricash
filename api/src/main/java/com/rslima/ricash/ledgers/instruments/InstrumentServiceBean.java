@@ -17,8 +17,8 @@ public class InstrumentServiceBean implements InstrumentService {
     private final InstrumentRepository instrumentRepository;
 
     @Override
-    public Optional<Instrument> findById(String id) {
-        return instrumentRepository.findById(id);
+    public Optional<Instrument> findById(String ledgerId, String id) {
+        return instrumentRepository.findById(ledgerId, id);
     }
 
     @Override
@@ -64,16 +64,12 @@ public class InstrumentServiceBean implements InstrumentService {
     }
 
     @Override
-    public Instrument update(String id, String symbol, String name, InstrumentType type,
+    public Instrument update(String ledgerId, String id, String symbol, String name, InstrumentType type,
                              String currency, String market, String isin, InstrumentStatus status) {
         log.info("Updating instrument {}", id);
 
-        Optional<Instrument> existing = instrumentRepository.findById(id);
-        if (existing.isEmpty()) {
-            throw new IllegalArgumentException("Instrument not found: " + id);
-        }
-
-        Instrument current = existing.get();
+        Instrument current = instrumentRepository.findById(ledgerId, id)
+            .orElseThrow(() -> new InstrumentNotFoundException(id));
 
         // Check if symbol is being changed and would conflict
         if (!current.symbol().equalsIgnoreCase(symbol)) {
@@ -100,8 +96,10 @@ public class InstrumentServiceBean implements InstrumentService {
     }
 
     @Override
-    public void delete(String id) {
-        log.info("Deleting instrument {}", id);
-        instrumentRepository.deleteById(id);
+    public void delete(String ledgerId, String id) {
+        log.info("Deleting instrument {} from ledger {}", id, ledgerId);
+        if (!instrumentRepository.deleteById(ledgerId, id)) {
+            throw new InstrumentNotFoundException(id);
+        }
     }
 }

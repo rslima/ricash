@@ -12,12 +12,13 @@ import java.util.Optional;
 public interface InstrumentRepository {
 
     /**
-     * Finds an instrument by ID.
+     * Finds an instrument by ID within a ledger.
      *
+     * @param ledgerId the ledger ID the instrument must belong to
      * @param id the instrument ID
-     * @return the instrument if found
+     * @return the instrument if found in the given ledger
      */
-    Optional<Instrument> findById(String id);
+    Optional<Instrument> findById(String ledgerId, String id);
 
     /**
      * Finds an instrument by ledger ID and symbol.
@@ -62,9 +63,11 @@ public interface InstrumentRepository {
     Instrument update(Instrument instrument);
 
     /**
-     * Deletes an instrument by ID.
+     * Deletes an instrument by ID within a ledger.
      *
+     * @param ledgerId the ledger ID the instrument must belong to
      * @param id the instrument ID
+     * @return true if a row was deleted
      */
-    void deleteById(String id);
+    boolean deleteById(String ledgerId, String id);
 }

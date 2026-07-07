@@ -120,9 +120,15 @@ public class LedgerJdbcRepository implements LedgerRepository {
                 .map(e -> Map.entry(e.getKey(), buildAccountForest(e.getValue())))
                 .map(e -> toLedger(e.getKey(), e.getValue()))
                 .toList();
+
+        final var total = jdbcClient.sql("SELECT COUNT(*) FROM ledgers WHERE user_id = :userId")
+                .param("userId", userId)
+                .query(Long.class)
+                .single();
+
         return new PageImpl<>(result,
                 pageRequest,
-                result.size());
+                total);
     }
 
     record DBLedgerAndAccount(String lId, String userId, String ledgerSlug, String ledgerName, String ledgerDescription,
