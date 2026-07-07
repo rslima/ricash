@@ -1,8 +1,8 @@
 package com.rslima.ricash.ledgers.exchangerates;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
@@ -124,7 +124,7 @@ public class ExternalExchangeRateService {
 
             // Get the first (most recent) rate
             JsonNode firstRate = value.get(0);
-            BigDecimal rate = firstRate.path("cotacaoVenda").decimalValue();
+            BigDecimal rate = firstRate.path("cotacaoVenda").decimalValue(null);
 
             if (rate == null || rate.compareTo(BigDecimal.ZERO) <= 0) {
                 log.debug("Invalid rate from BCB API: {}", rate);
@@ -138,7 +138,7 @@ public class ExternalExchangeRateService {
 
             return Optional.of(rate.setScale(RATE_SCALE, RoundingMode.HALF_UP));
 
-        } catch (RestClientException | JsonProcessingException e) {
+        } catch (RestClientException | JacksonException e) {
             log.warn("Failed to fetch rate from BCB API: {}", e.getMessage());
             return Optional.empty();
         }
@@ -185,7 +185,7 @@ public class ExternalExchangeRateService {
                 return Optional.empty();
             }
 
-            BigDecimal rate = rates.path(toCurrency).decimalValue();
+            BigDecimal rate = rates.path(toCurrency).decimalValue(null);
 
             if (rate == null || rate.compareTo(BigDecimal.ZERO) <= 0) {
                 log.debug("Invalid rate from ExchangeRate-API: {}", rate);
@@ -194,7 +194,7 @@ public class ExternalExchangeRateService {
 
             return Optional.of(rate.setScale(RATE_SCALE, RoundingMode.HALF_UP));
 
-        } catch (RestClientException | JsonProcessingException e) {
+        } catch (RestClientException | JacksonException e) {
             log.warn("Failed to fetch rate from ExchangeRate-API: {}", e.getMessage());
             return Optional.empty();
         }

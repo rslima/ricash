@@ -57,7 +57,7 @@ class InstrumentControllerTest {
         when(instrumentService.findById(LEDGER_ID, INSTRUMENT_ID)).thenReturn(Optional.of(createTestInstrument()));
 
         mockMvc.perform(get("/v1/ledgers/{slug}/instruments/{id}", LEDGER_SLUG, INSTRUMENT_ID)
-                        .with(jwt().jwt(builder -> builder.claim("preferred_username", OWNER_ID)))
+                        .with(jwt().jwt(builder -> builder.subject(OWNER_ID).claim("preferred_username", OWNER_ID)))
                         .accept(JSON_API_VALUE))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.id", is(INSTRUMENT_ID)))
@@ -69,7 +69,7 @@ class InstrumentControllerTest {
         stubLedgerForOwner();
 
         mockMvc.perform(get("/v1/ledgers/{slug}/instruments/{id}", LEDGER_SLUG, INSTRUMENT_ID)
-                        .with(jwt().jwt(builder -> builder.claim("preferred_username", ATTACKER_ID)))
+                        .with(jwt().jwt(builder -> builder.subject(ATTACKER_ID).claim("preferred_username", ATTACKER_ID)))
                         .accept(JSON_API_VALUE))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.errors[0].status", is("404")));
@@ -83,7 +83,7 @@ class InstrumentControllerTest {
         when(instrumentService.findById(LEDGER_ID, INSTRUMENT_ID)).thenReturn(Optional.empty());
 
         mockMvc.perform(get("/v1/ledgers/{slug}/instruments/{id}", LEDGER_SLUG, INSTRUMENT_ID)
-                        .with(jwt().jwt(builder -> builder.claim("preferred_username", OWNER_ID)))
+                        .with(jwt().jwt(builder -> builder.subject(OWNER_ID).claim("preferred_username", OWNER_ID)))
                         .accept(JSON_API_VALUE))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.errors[0].status", is("404")));
@@ -96,7 +96,7 @@ class InstrumentControllerTest {
                 "PETR4", "Petrobras", InstrumentType.STOCK, "BRL", "B3", null, InstrumentStatus.ACTIVE);
 
         mockMvc.perform(put("/v1/ledgers/{slug}/instruments/{id}", LEDGER_SLUG, INSTRUMENT_ID)
-                        .with(jwt().jwt(builder -> builder.claim("preferred_username", ATTACKER_ID)))
+                        .with(jwt().jwt(builder -> builder.subject(ATTACKER_ID).claim("preferred_username", ATTACKER_ID)))
                         .contentType("application/json")
                         .accept(JSON_API_VALUE)
                         .content(objectMapper.writeValueAsString(request)))
@@ -114,7 +114,7 @@ class InstrumentControllerTest {
                 "PETR4", "Petrobras", InstrumentType.STOCK, "BRL", "B3", null, InstrumentStatus.ACTIVE);
 
         mockMvc.perform(put("/v1/ledgers/{slug}/instruments/{id}", LEDGER_SLUG, INSTRUMENT_ID)
-                        .with(jwt().jwt(builder -> builder.claim("preferred_username", OWNER_ID)))
+                        .with(jwt().jwt(builder -> builder.subject(OWNER_ID).claim("preferred_username", OWNER_ID)))
                         .contentType("application/json")
                         .accept(JSON_API_VALUE)
                         .content(objectMapper.writeValueAsString(request)))
@@ -129,7 +129,7 @@ class InstrumentControllerTest {
         stubLedgerForOwner();
 
         mockMvc.perform(delete("/v1/ledgers/{slug}/instruments/{id}", LEDGER_SLUG, INSTRUMENT_ID)
-                        .with(jwt().jwt(builder -> builder.claim("preferred_username", ATTACKER_ID)))
+                        .with(jwt().jwt(builder -> builder.subject(ATTACKER_ID).claim("preferred_username", ATTACKER_ID)))
                         .accept(JSON_API_VALUE))
                 .andExpect(status().isNotFound());
 
@@ -141,7 +141,7 @@ class InstrumentControllerTest {
         stubLedgerForOwner();
 
         mockMvc.perform(delete("/v1/ledgers/{slug}/instruments/{id}", LEDGER_SLUG, INSTRUMENT_ID)
-                        .with(jwt().jwt(builder -> builder.claim("preferred_username", OWNER_ID)))
+                        .with(jwt().jwt(builder -> builder.subject(OWNER_ID).claim("preferred_username", OWNER_ID)))
                         .accept(JSON_API_VALUE))
                 .andExpect(status().isNoContent());
 
