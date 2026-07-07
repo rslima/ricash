@@ -85,7 +85,7 @@ export function AccountTransactions() {
 
   const handleCreateTransaction = (entryType: "DEBIT" | "CREDIT") => {
     if (!ledgerSlug || !account) return
-    navigate(`/ledgers/${ledgerSlug}/transactions`, {
+    void navigate(`/ledgers/${ledgerSlug}/transactions`, {
       state: {
         createTransaction: true,
         prefilledEntry: {

@@ -1,7 +1,7 @@
 import { apiClient } from "./client"
 import type { JsonApiListResponse, JsonApiResponse, TransactionResource, CategoryTransactionResource, PaginationParams } from "./types"
 
-export interface TransactionFilters extends PaginationParams {
+export type TransactionFilters = PaginationParams & {
   accountId?: string
   description?: string
   year?: number
@@ -12,7 +12,7 @@ export async function getTransactions(
   ledgerSlug: string,
   params?: TransactionFilters
 ): Promise<JsonApiListResponse<TransactionResource>> {
-  return apiClient.get(`/ledgers/${ledgerSlug}/transactions`, params as Record<string, string | number | undefined>)
+  return apiClient.get(`/ledgers/${ledgerSlug}/transactions`, params)
 }
 
 // Lists every transaction in a category (the account plus all its

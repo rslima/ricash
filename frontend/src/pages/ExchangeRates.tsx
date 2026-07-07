@@ -111,7 +111,7 @@ export function ExchangeRates() {
   }
 
   useEffect(() => {
-    fetchExchangeRates()
+    void fetchExchangeRates()
   }, [fetchExchangeRates])
 
   const getSourceBadgeVariant = (source: string): "default" | "secondary" | "outline" => {

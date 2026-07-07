@@ -5,7 +5,7 @@ import './i18n'
 import App from './App.tsx'
 import { initNative } from './lib/native-init'
 
-initNative()
+void initNative()
 
 // One-time cleanup: earlier releases cached authenticated /api/v1 responses
 // in the service worker; purge that cache from already-installed PWAs.

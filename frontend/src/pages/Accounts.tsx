@@ -831,7 +831,7 @@ export function Accounts() {
                             onEdit={handleEdit}
                             onDelete={handleDelete}
                             onCreateChild={handleCreateChild}
-                            ledgerSlug={selectedLedgerSlug!}
+                            ledgerSlug={selectedLedgerSlug}
                             t={t}
                           />
                         ))}

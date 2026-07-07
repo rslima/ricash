@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "https://ricash.app/api/v1"
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "https://ricash.app/api/v1"
 
 interface RequestOptions extends RequestInit {
   params?: Record<string, string | number | undefined>
@@ -59,7 +59,7 @@ class ApiClient {
       return {} as T
     }
 
-    return response.json()
+    return response.json() as Promise<T>
   }
 
   async get<T>(endpoint: string, params?: Record<string, string | number | undefined>): Promise<T> {

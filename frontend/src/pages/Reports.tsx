@@ -155,7 +155,7 @@ export function Reports() {
   const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1)
 
   const handleCategoryClick = (row: CategoryRow) => {
-    navigate(
+    void navigate(
       `/ledgers/${row.ledgerSlug}/reports/categories/${row.accountId}` +
         `?year=${selectedYear}&month=${selectedMonth}` +
         `&name=${encodeURIComponent(row.name)}&currency=${row.currency}`

@@ -26,9 +26,9 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
-const AUTH_AUTHORITY = import.meta.env.VITE_AUTH_AUTHORITY || "http://localhost:9180/realms/Ricash"
-const AUTH_CLIENT_ID = import.meta.env.VITE_AUTH_CLIENT_ID || "ricash-frontend"
-const AUTH_AUDIENCE = import.meta.env.VITE_AUTH_AUDIENCE || ""
+const AUTH_AUTHORITY = (import.meta.env.VITE_AUTH_AUTHORITY as string | undefined) ?? "http://localhost:9180/realms/Ricash"
+const AUTH_CLIENT_ID = (import.meta.env.VITE_AUTH_CLIENT_ID as string | undefined) ?? "ricash-frontend"
+const AUTH_AUDIENCE = (import.meta.env.VITE_AUTH_AUDIENCE as string | undefined) ?? ""
 
 // On native platforms, use the custom URL scheme for redirects
 const NATIVE_REDIRECT_URI = "com.ricash.app://callback"
@@ -146,7 +146,7 @@ function AuthProviderWrapper({ children }: AuthProviderProps) {
 
     const setupListener = async () => {
       const { App } = await import("@capacitor/app")
-      const listener = await App.addListener("appUrlOpen", async ({ url }) => {
+      const listener = await App.addListener("appUrlOpen", ({ url }) => void (async () => {
         // Handle the OIDC callback URL (com.ricash.app://callback?code=...)
         if (url.startsWith(NATIVE_REDIRECT_URI)) {
           try {
@@ -165,19 +165,19 @@ function AuthProviderWrapper({ children }: AuthProviderProps) {
             setLoginError(error instanceof Error ? error.message : "Authentication callback failed")
           }
         }
-      })
-      cleanup = () => listener.remove()
+      })())
+      cleanup = () => void listener.remove()
     }
 
-    setupListener()
+    void setupListener()
     return () => cleanup?.()
   }, [])
 
   const logout = () => {
-    auth.signoutRedirect()
+    void auth.signoutRedirect()
   }
 
-  const startLogin = async () => {
+  const startLogin = () => void (async () => {
     setLoginError(null)
     try {
       if (isNativePlatform()) {
@@ -193,7 +193,7 @@ function AuthProviderWrapper({ children }: AuthProviderProps) {
       console.error("Login error:", error)
       setLoginError(message)
     }
-  }
+  })()
 
   const value: AuthContextType = {
     user: authUser,

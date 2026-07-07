@@ -120,7 +120,7 @@ export function IncomeVsExpensesChart({ ledgers, defaultCurrency }: Props) {
                     <BarChart data={data}>
                       <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                       <XAxis dataKey="month" className="text-xs" />
-                      <YAxis className="text-xs" tickFormatter={(v) => formatCurrency(v, currency)} width={100} />
+                      <YAxis className="text-xs" tickFormatter={(v) => formatCurrency(Number(v), currency)} width={100} />
                       <Tooltip
                         formatter={(value) => formatCurrency(Number(value), currency)}
                         contentStyle={{ borderRadius: "8px", border: "1px solid var(--color-border)", background: "var(--color-card)", color: "var(--color-card-foreground)" }}

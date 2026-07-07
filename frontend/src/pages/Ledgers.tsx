@@ -78,7 +78,7 @@ export function Ledgers() {
   }, [isAuthenticated, handleError])
 
   useEffect(() => {
-    fetchLedgers()
+    void fetchLedgers()
   }, [fetchLedgers])
 
   const handleDelete = async (slug: string) => {
