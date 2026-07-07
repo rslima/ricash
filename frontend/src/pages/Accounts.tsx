@@ -5,37 +5,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import {
   Table,
   TableBody,
-  TableCell,
   TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { useAuth } from "@/contexts/AuthContext"
 import { useLedger } from "@/contexts/LedgerContext"
 import { getAccounts, deleteAccount, createAccount, updateAccount } from "@/api/accounts"
@@ -44,9 +20,9 @@ import { useErrorHandler } from "@/hooks/use-error-handler"
 import { useConfirm } from "@/components/ui/confirm-dialog"
 import { getEnvelopes, getEnvelopeMappings, setEnvelopeAccounts, getEnvelopeAccounts } from "@/api/envelopes"
 import type { AccountResource, EnvelopeResource } from "@/api/types"
-import { formatCurrency } from "@/lib/utils"
-import { Plus, Trash2, Wallet, MoreHorizontal, Pencil, ChevronRight, ChevronDown } from "lucide-react"
-import { AccountAutocomplete } from "@/components/AccountAutocomplete"
+import { Plus, Wallet } from "lucide-react"
+import { AccountDialog, type AccountType } from "@/components/accounts/AccountDialog"
+import { AccountRow, buildAccountTree, countTreeNodes, type AccountTreeNode } from "@/components/accounts/AccountTree"
 
 const accountTypeColors: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
   ASSET: "default",
@@ -56,143 +32,7 @@ const accountTypeColors: Record<string, "default" | "secondary" | "destructive" 
   EXPENSE: "destructive",
 }
 
-type AccountType = "ASSET" | "LIABILITY" | "EQUITY" | "INCOME" | "EXPENSE"
-
 const ACCOUNT_TYPE_ORDER: AccountType[] = ["ASSET", "LIABILITY", "EQUITY", "INCOME", "EXPENSE"]
-
-interface AccountTreeNode {
-  account: AccountResource
-  children: AccountTreeNode[]
-}
-
-function buildAccountTree(accounts: AccountResource[]): AccountTreeNode[] {
-  const accountMap = new Map<string, AccountTreeNode>()
-  const roots: AccountTreeNode[] = []
-
-  // Create nodes for all accounts
-  accounts.forEach((account) => {
-    accountMap.set(account.id, { account, children: [] })
-  })
-
-  // Build the tree structure
-  accounts.forEach((account) => {
-    const node = accountMap.get(account.id)!
-    const parentId = account.attributes.parentAccountId
-
-    if (parentId && accountMap.has(parentId)) {
-      accountMap.get(parentId)!.children.push(node)
-    } else {
-      roots.push(node)
-    }
-  })
-
-  return roots
-}
-
-function countTreeNodes(nodes: AccountTreeNode[]): number {
-  let count = 0
-  for (const node of nodes) {
-    count += 1 + countTreeNodes(node.children)
-  }
-  return count
-}
-
-interface AccountRowProps {
-  node: AccountTreeNode
-  depth: number
-  expandedIds: Set<string>
-  onToggleExpand: (id: string) => void
-  onEdit: (account: AccountResource) => void
-  onDelete: (accountId: string) => void
-  onCreateChild: (account: AccountResource) => void
-  ledgerSlug: string
-  t: (key: string) => string
-}
-
-function AccountRow({ node, depth, expandedIds, onToggleExpand, onEdit, onDelete, onCreateChild, ledgerSlug, t }: AccountRowProps) {
-  const { account, children } = node
-  const hasChildren = children.length > 0
-  const isExpanded = expandedIds.has(account.id)
-
-  return (
-    <>
-      <TableRow>
-        <TableCell className="font-medium">
-          <div className="flex items-center gap-2" style={{ paddingLeft: `${depth * 24}px` }}>
-            {hasChildren ? (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-6 w-6 p-0"
-                onClick={() => onToggleExpand(account.id)}
-              >
-                {isExpanded ? (
-                  <ChevronDown className="h-4 w-4" />
-                ) : (
-                  <ChevronRight className="h-4 w-4" />
-                )}
-              </Button>
-            ) : (
-              <span className="w-6" />
-            )}
-            <Wallet className="h-4 w-4 text-muted-foreground" />
-            <Link
-              to={`/ledgers/${ledgerSlug}/accounts/${account.id}/transactions`}
-              className="hover:underline hover:text-primary"
-            >
-              {account.attributes.name}
-            </Link>
-          </div>
-        </TableCell>
-        <TableCell>{account.attributes.currency}</TableCell>
-        <TableCell className="text-right font-mono">
-          {formatCurrency(account.attributes.balance, account.attributes.currency)}
-        </TableCell>
-        <TableCell>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon">
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => onCreateChild(account)}>
-                <Plus className="mr-2 h-4 w-4" />
-                {t("accounts.createChildAccount")}
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onEdit(account)}>
-                <Pencil className="mr-2 h-4 w-4" />
-                {t("common.edit")}
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => onDelete(account.id)}
-                className="text-destructive"
-              >
-                <Trash2 className="mr-2 h-4 w-4" />
-                {t("common.delete")}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </TableCell>
-      </TableRow>
-      {isExpanded &&
-        children.map((child) => (
-          <AccountRow
-            key={child.account.id}
-            node={child}
-            depth={depth + 1}
-            expandedIds={expandedIds}
-            onToggleExpand={onToggleExpand}
-            onEdit={onEdit}
-            onDelete={onDelete}
-            onCreateChild={onCreateChild}
-            ledgerSlug={ledgerSlug}
-            t={t}
-          />
-        ))}
-    </>
-  )
-}
 
 export function Accounts() {
   const { t } = useTranslation()
@@ -485,261 +325,31 @@ export function Accounts() {
         </Button>
       </div>
 
-      <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t("accounts.createAccount")}</DialogTitle>
-            <DialogDescription>
-              {t("accounts.createDescription")}
-            </DialogDescription>
-          </DialogHeader>
-          <form onSubmit={handleCreate}>
-            <div className="grid gap-4 py-4">
-              <div className="grid gap-2">
-                <Label htmlFor="name">{t("common.name")}</Label>
-                <Input
-                  id="name"
-                  value={formData.name}
-                  onChange={(e) =>
-                    setFormData({ ...formData, name: e.target.value })
-                  }
-                  placeholder="Checking Account"
-                  required
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="type">{t("common.type")}</Label>
-                <Select
-                  value={formData.type}
-                  onValueChange={(value: AccountType) =>
-                    setFormData({ ...formData, type: value })
-                  }
-                  disabled={!!formData.parentAccountId}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder={t("common.type")} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ASSET">{t("accounts.types.ASSET")}</SelectItem>
-                    <SelectItem value="LIABILITY">{t("accounts.types.LIABILITY")}</SelectItem>
-                    <SelectItem value="EQUITY">{t("accounts.types.EQUITY")}</SelectItem>
-                    <SelectItem value="INCOME">{t("accounts.types.INCOME")}</SelectItem>
-                    <SelectItem value="EXPENSE">{t("accounts.types.EXPENSE")}</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="parentAccount">{t("accounts.parentAccount")} ({t("common.optional")})</Label>
-                <AccountAutocomplete
-                  accounts={accounts}
-                  value={formData.parentAccountId}
-                  onValueChange={(value) => {
-                    if (value) {
-                      const parentAccount = accounts.find((a) => a.id === value)
-                      if (parentAccount) {
-                        setFormData({
-                          ...formData,
-                          parentAccountId: value,
-                          type: parentAccount.attributes.type as AccountType,
-                          currency: parentAccount.attributes.currency,
-                        })
-                      }
-                    } else {
-                      setFormData({ ...formData, parentAccountId: "" })
-                    }
-                  }}
-                  placeholder={t("accounts.parentAccount")}
-                  allowNone
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="currency">{t("common.currency")}</Label>
-                <Input
-                  id="currency"
-                  value={formData.currency}
-                  onChange={(e) =>
-                    setFormData({ ...formData, currency: e.target.value })
-                  }
-                  placeholder="USD"
-                  required
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="description">{t("common.description")} ({t("common.optional")})</Label>
-                <Input
-                  id="description"
-                  value={formData.description}
-                  onChange={(e) =>
-                    setFormData({ ...formData, description: e.target.value })
-                  }
-                  placeholder="Main checking account for daily expenses"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="envelope">{t("transactions.envelope")} ({t("common.optional")})</Label>
-                <Select
-                  value={formData.envelopeId || "none"}
-                  onValueChange={(value) =>
-                    setFormData({ ...formData, envelopeId: value === "none" ? "" : value })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder={t("transactions.selectEnvelope")} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">{t("common.none")}</SelectItem>
-                    {envelopes.map((envelope) => (
-                      <SelectItem key={envelope.id} value={envelope.id}>
-                        {envelope.attributes.name} ({t(`envelopes.types.${envelope.attributes.type}`)})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setIsCreateDialogOpen(false)}
-              >
-                {t("common.cancel")}
-              </Button>
-              <Button type="submit" disabled={isCreating}>
-                {isCreating ? t("accounts.creating") : t("accounts.createAccount")}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <AccountDialog
+        mode="create"
+        open={isCreateDialogOpen}
+        onOpenChange={setIsCreateDialogOpen}
+        value={formData}
+        onChange={setFormData}
+        onSubmit={handleCreate}
+        isSubmitting={isCreating}
+        accounts={accounts}
+        parentOptions={accounts}
+        envelopes={envelopes}
+      />
 
-      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t("accounts.editAccount")}</DialogTitle>
-            <DialogDescription>
-              {t("accounts.editDescription")}
-            </DialogDescription>
-          </DialogHeader>
-          <form onSubmit={handleUpdate}>
-            <div className="grid gap-4 py-4">
-              <div className="grid gap-2">
-                <Label htmlFor="edit-name">{t("common.name")}</Label>
-                <Input
-                  id="edit-name"
-                  value={editFormData.name}
-                  onChange={(e) =>
-                    setEditFormData({ ...editFormData, name: e.target.value })
-                  }
-                  placeholder="Checking Account"
-                  required
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="edit-type">{t("common.type")}</Label>
-                <Select
-                  value={editFormData.type}
-                  onValueChange={(value: AccountType) =>
-                    setEditFormData({ ...editFormData, type: value })
-                  }
-                  disabled={!!editFormData.parentAccountId}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder={t("common.type")} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ASSET">{t("accounts.types.ASSET")}</SelectItem>
-                    <SelectItem value="LIABILITY">{t("accounts.types.LIABILITY")}</SelectItem>
-                    <SelectItem value="EQUITY">{t("accounts.types.EQUITY")}</SelectItem>
-                    <SelectItem value="INCOME">{t("accounts.types.INCOME")}</SelectItem>
-                    <SelectItem value="EXPENSE">{t("accounts.types.EXPENSE")}</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="edit-parentAccount">{t("accounts.parentAccount")} ({t("common.optional")})</Label>
-                <AccountAutocomplete
-                  accounts={validParentAccountsForEdit}
-                  value={editFormData.parentAccountId}
-                  onValueChange={(value) => {
-                    if (value) {
-                      const parentAccount = accounts.find((a) => a.id === value)
-                      if (parentAccount) {
-                        setEditFormData({
-                          ...editFormData,
-                          parentAccountId: value,
-                          type: parentAccount.attributes.type as AccountType,
-                          currency: parentAccount.attributes.currency,
-                        })
-                      }
-                    } else {
-                      setEditFormData({ ...editFormData, parentAccountId: "" })
-                    }
-                  }}
-                  placeholder={t("accounts.parentAccount")}
-                  allowNone
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="edit-currency">{t("common.currency")}</Label>
-                <Input
-                  id="edit-currency"
-                  value={editFormData.currency}
-                  onChange={(e) =>
-                    setEditFormData({ ...editFormData, currency: e.target.value })
-                  }
-                  placeholder="BRL"
-                  required
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="edit-description">{t("common.description")} ({t("common.optional")})</Label>
-                <Input
-                  id="edit-description"
-                  value={editFormData.description}
-                  onChange={(e) =>
-                    setEditFormData({ ...editFormData, description: e.target.value })
-                  }
-                  placeholder="Main checking account for daily expenses"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="edit-envelope">{t("transactions.envelope")} ({t("common.optional")})</Label>
-                <Select
-                  value={editFormData.envelopeId || "none"}
-                  onValueChange={(value) =>
-                    setEditFormData({ ...editFormData, envelopeId: value === "none" ? "" : value })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder={t("transactions.selectEnvelope")} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">{t("common.none")}</SelectItem>
-                    {envelopes.map((envelope) => (
-                      <SelectItem key={envelope.id} value={envelope.id}>
-                        {envelope.attributes.name} ({t(`envelopes.types.${envelope.attributes.type}`)})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setIsEditDialogOpen(false)}
-              >
-                {t("common.cancel")}
-              </Button>
-              <Button type="submit" disabled={isUpdating}>
-                {isUpdating ? t("accounts.saving") : t("common.save")}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <AccountDialog
+        mode="edit"
+        open={isEditDialogOpen}
+        onOpenChange={setIsEditDialogOpen}
+        value={editFormData}
+        onChange={setEditFormData}
+        onSubmit={handleUpdate}
+        isSubmitting={isUpdating}
+        accounts={accounts}
+        parentOptions={validParentAccountsForEdit}
+        envelopes={envelopes}
+      />
 
       {ledgers.length > 0 && (
         <div className="flex gap-2 flex-wrap">
@@ -832,8 +442,7 @@ export function Accounts() {
                             onDelete={handleDelete}
                             onCreateChild={handleCreateChild}
                             ledgerSlug={selectedLedgerSlug}
-                            t={t}
-                          />
+                                          />
                         ))}
                       </TableBody>
                     </Table>
