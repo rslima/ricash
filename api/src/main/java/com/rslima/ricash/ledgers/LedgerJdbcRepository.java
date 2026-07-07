@@ -337,6 +337,17 @@ public class LedgerJdbcRepository implements LedgerRepository {
     }
 
     @Override
+    public Optional<String> findIdBySlug(String userId, String slug) {
+        return jdbcClient.sql("""
+                        SELECT id FROM ledgers WHERE user_id = :userId AND slug = :slug
+                        """)
+                .param("userId", userId)
+                .param("slug", slug)
+                .query(String.class)
+                .optional();
+    }
+
+    @Override
     public Ledger create(Ledger ledger) {
         jdbcClient.sql("""
                         INSERT INTO ledgers (id, user_id, slug, name, description, currency, created_at)

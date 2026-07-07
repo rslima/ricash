@@ -1,6 +1,5 @@
 package com.rslima.ricash.ledgers.transactions;
 
-import com.rslima.ricash.ledgers.Ledger;
 import com.rslima.ricash.ledgers.LedgerNotFoundException;
 import com.rslima.ricash.ledgers.LedgerRepository;
 import com.rslima.ricash.ledgers.MonetaryAmount;
@@ -30,47 +29,47 @@ public class TransactionServiceBean implements TransactionService {
 
     @Override
     public Page<Transaction> listLedgerTransactions(String userId, String ledgerSlug, PageRequest pageRequest) {
-        final var ledger = getLedgerBySlug(userId, ledgerSlug);
-        return transactionRepository.listLedgerTransactions(ledger.id(), pageRequest);
+        final var ledgerId = getLedgerId(userId, ledgerSlug);
+        return transactionRepository.listLedgerTransactions(ledgerId, pageRequest);
     }
 
     @Override
     public Page<Transaction> searchByDescription(String userId, String ledgerSlug, String description, PageRequest pageRequest) {
-        final var ledger = getLedgerBySlug(userId, ledgerSlug);
-        return transactionRepository.searchByDescription(ledger.id(), description, pageRequest);
+        final var ledgerId = getLedgerId(userId, ledgerSlug);
+        return transactionRepository.searchByDescription(ledgerId, description, pageRequest);
     }
 
     @Override
     public Page<Transaction> listAccountTransactions(String userId, String ledgerSlug, String accountId, PageRequest pageRequest) {
-        final var ledger = getLedgerBySlug(userId, ledgerSlug);
-        return transactionRepository.listAccountTransactions(ledger.id(), accountId, pageRequest);
+        final var ledgerId = getLedgerId(userId, ledgerSlug);
+        return transactionRepository.listAccountTransactions(ledgerId, accountId, pageRequest);
     }
 
     @Override
     public Page<Transaction> listCategoryTransactions(String userId, String ledgerSlug, String accountId, int year, int month, PageRequest pageRequest) {
-        final var ledger = getLedgerBySlug(userId, ledgerSlug);
-        return transactionRepository.listCategoryTransactions(ledger.id(), accountId, year, month, pageRequest);
+        final var ledgerId = getLedgerId(userId, ledgerSlug);
+        return transactionRepository.listCategoryTransactions(ledgerId, accountId, year, month, pageRequest);
     }
 
     @Override
     public Page<CategoryTransaction> listCategoryTransactionAmounts(String userId, String ledgerSlug, String accountId, int year, int month, PageRequest pageRequest) {
-        final var ledger = getLedgerBySlug(userId, ledgerSlug);
-        return transactionRepository.listCategoryTransactionAmounts(ledger.id(), accountId, year, month, pageRequest);
+        final var ledgerId = getLedgerId(userId, ledgerSlug);
+        return transactionRepository.listCategoryTransactionAmounts(ledgerId, accountId, year, month, pageRequest);
     }
 
     @Override
     public Optional<Transaction> find(String userId, String ledgerSlug, String transactionId) {
-        final var ledger = getLedgerBySlug(userId, ledgerSlug);
-        return transactionRepository.findById(ledger.id(), transactionId);
+        final var ledgerId = getLedgerId(userId, ledgerSlug);
+        return transactionRepository.findById(ledgerId, transactionId);
     }
 
     @Override
     @Transactional
     public Transaction create(String userId, String ledgerSlug, CreateTransactionRequest request) {
-        final var ledger = getLedgerBySlug(userId, ledgerSlug);
+        final var ledgerId = getLedgerId(userId, ledgerSlug);
 
         // Process entries with currency conversions
-        List<TransactionEntry> processedEntries = processEntries(ledger, request.entries(), request.date());
+        List<TransactionEntry> processedEntries = processEntries(ledgerId, request.entries(), request.date());
 
         // Validate multi-currency balance
         validateMultiCurrencyBalance(processedEntries);
@@ -93,24 +92,24 @@ public class TransactionServiceBean implements TransactionService {
                 debitEntries
         );
 
-        transactionRepository.create(ledger.id(), transaction);
+        transactionRepository.create(ledgerId, transaction);
 
         // Fetch the created transaction to get account names populated
-        return transactionRepository.findById(ledger.id(), transaction.id())
+        return transactionRepository.findById(ledgerId, transaction.id())
                 .orElseThrow(() -> new TransactionNotFoundException(transaction.id()));
     }
 
     @Override
     @Transactional
     public Transaction update(String userId, String ledgerSlug, String transactionId, UpdateTransactionRequest request) {
-        final var ledger = getLedgerBySlug(userId, ledgerSlug);
+        final var ledgerId = getLedgerId(userId, ledgerSlug);
 
         // Verify transaction exists
-        final var existing = transactionRepository.findById(ledger.id(), transactionId)
+        final var existing = transactionRepository.findById(ledgerId, transactionId)
                 .orElseThrow(() -> new TransactionNotFoundException(transactionId));
 
         // Process entries with currency conversions
-        List<TransactionEntry> processedEntries = processEntries(ledger, request.entries(), request.date());
+        List<TransactionEntry> processedEntries = processEntries(ledgerId, request.entries(), request.date());
 
         // Validate multi-currency balance
         validateMultiCurrencyBalance(processedEntries);
@@ -133,18 +132,18 @@ public class TransactionServiceBean implements TransactionService {
                 debitEntries
         );
 
-        transactionRepository.update(ledger.id(), transaction);
+        transactionRepository.update(ledgerId, transaction);
 
         // Fetch the updated transaction to get account names populated
-        return transactionRepository.findById(ledger.id(), transactionId)
+        return transactionRepository.findById(ledgerId, transactionId)
                 .orElseThrow(() -> new TransactionNotFoundException(transactionId));
     }
 
     @Override
     @Transactional
     public void delete(String userId, String ledgerSlug, String transactionId) {
-        final var ledger = getLedgerBySlug(userId, ledgerSlug);
-        transactionRepository.delete(ledger.id(), transactionId);
+        final var ledgerId = getLedgerId(userId, ledgerSlug);
+        transactionRepository.delete(ledgerId, transactionId);
     }
 
     // Common interface for entry requests
@@ -160,7 +159,7 @@ public class TransactionServiceBean implements TransactionService {
         String envelopeId();
     }
 
-    private List<TransactionEntry> processEntries(Ledger ledger, List<? extends Object> requestEntries, java.time.LocalDate transactionDate) {
+    private List<TransactionEntry> processEntries(String ledgerId, List<? extends Object> requestEntries, java.time.LocalDate transactionDate) {
         List<TransactionEntry> entries = new ArrayList<>();
 
         for (var obj : requestEntries) {
@@ -195,7 +194,7 @@ public class TransactionServiceBean implements TransactionService {
             }
 
             // Fetch account to get its currency
-            Account account = accountRepository.findById(ledger.id(), requestEntry.accountId())
+            Account account = accountRepository.findById(ledgerId, requestEntry.accountId())
                     .orElseThrow(() -> new IllegalArgumentException("Account not found: " + requestEntry.accountId()));
 
             MonetaryAmount originalAmount = new MonetaryAmount(requestEntry.amount(), requestEntry.currency());
@@ -290,36 +289,36 @@ public class TransactionServiceBean implements TransactionService {
 
     @Override
     public List<String> getDistinctDescriptions(String userId, String ledgerSlug) {
-        final var ledger = getLedgerBySlug(userId, ledgerSlug);
-        return transactionRepository.findDistinctDescriptions(ledger.id());
+        final var ledgerId = getLedgerId(userId, ledgerSlug);
+        return transactionRepository.findDistinctDescriptions(ledgerId);
     }
 
     @Override
     public List<Transaction> getTransactionTemplates(String userId, String ledgerSlug) {
-        final var ledger = getLedgerBySlug(userId, ledgerSlug);
-        return transactionRepository.findTransactionTemplates(ledger.id());
+        final var ledgerId = getLedgerId(userId, ledgerSlug);
+        return transactionRepository.findTransactionTemplates(ledgerId);
     }
 
     @Override
     public MonthlyReport getMonthlyReport(String userId, String ledgerSlug, int year, int month) {
-        final var ledger = getLedgerBySlug(userId, ledgerSlug);
-        return transactionRepository.getMonthlyReport(ledger.id(), year, month);
+        final var ledgerId = getLedgerId(userId, ledgerSlug);
+        return transactionRepository.getMonthlyReport(ledgerId, year, month);
     }
 
     @Override
     public MonthlyExpenseBreakdown getMonthlyExpenseBreakdown(String userId, String ledgerSlug, int year, int month) {
-        final var ledger = getLedgerBySlug(userId, ledgerSlug);
-        return transactionRepository.getMonthlyExpenseBreakdown(ledger.id(), year, month);
+        final var ledgerId = getLedgerId(userId, ledgerSlug);
+        return transactionRepository.getMonthlyExpenseBreakdown(ledgerId, year, month);
     }
 
     @Override
     public MonthlyIncomeBreakdown getMonthlyIncomeBreakdown(String userId, String ledgerSlug, int year, int month) {
-        final var ledger = getLedgerBySlug(userId, ledgerSlug);
-        return transactionRepository.getMonthlyIncomeBreakdown(ledger.id(), year, month);
+        final var ledgerId = getLedgerId(userId, ledgerSlug);
+        return transactionRepository.getMonthlyIncomeBreakdown(ledgerId, year, month);
     }
 
-    private Ledger getLedgerBySlug(String userId, String ledgerSlug) {
-        return ledgerRepository.findBySlug(userId, ledgerSlug)
+    private String getLedgerId(String userId, String ledgerSlug) {
+        return ledgerRepository.findIdBySlug(userId, ledgerSlug)
                 .orElseThrow(() -> new LedgerNotFoundException(ledgerSlug));
     }
 }

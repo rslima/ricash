@@ -1,5 +1,7 @@
 package com.rslima.ricash.ledgers.envelopes;
 
+import com.rslima.ricash.configuration.JsonApiPagination;
+
 import com.rslima.ricash.ledgers.LedgerNotFoundException;
 
 import com.toedter.spring.hateoas.jsonapi.JsonApiError;
@@ -51,10 +53,11 @@ public class EnvelopeController {
             @RequestParam(name = "page[size]", required = false, defaultValue = "20") int size) {
 
         final var pageable = PageRequest.of(page, size);
-        var envelopeResources = envelopeService.listLedgerEnvelopes(getUserId(principal), ledgerSlug, pageable)
+        var envelopeResources = envelopeService.listLedgerEnvelopes(principal.getName(), ledgerSlug, pageable)
                 .map(envelope -> toEntityModel(ledgerSlug, envelope, principal));
 
-        return buildPagedEnvelopeResponse(ledgerSlug, page, size, envelopeResources, principal);
+        return JsonApiPagination.pagedModel(envelopeResources,
+                p -> methodOn(EnvelopeController.class).listEnvelopes(ledgerSlug, principal, p, size));
     }
 
     @GetMapping("/{envelopeId}")
@@ -63,7 +66,7 @@ public class EnvelopeController {
             @PathVariable String envelopeId,
             JwtAuthenticationToken principal) {
 
-        final var envelope = envelopeService.find(getUserId(principal), ledgerSlug, envelopeId)
+        final var envelope = envelopeService.find(principal.getName(), ledgerSlug, envelopeId)
                 .orElseThrow(() -> new EnvelopeNotFoundException(envelopeId));
 
         return toEntityModel(ledgerSlug, envelope, principal);
@@ -75,7 +78,7 @@ public class EnvelopeController {
             JwtAuthenticationToken principal,
             @Valid @RequestBody CreateEnvelopeRequest request) {
 
-        Envelope createdEnvelope = envelopeService.create(getUserId(principal), ledgerSlug, request);
+        Envelope createdEnvelope = envelopeService.create(principal.getName(), ledgerSlug, request);
         EntityModel<EnvelopeResource> entityModel = toEntityModel(ledgerSlug, createdEnvelope, principal);
 
         return ResponseEntity
@@ -90,7 +93,7 @@ public class EnvelopeController {
             JwtAuthenticationToken principal,
             @Valid @RequestBody UpdateEnvelopeRequest request) {
 
-        Envelope updatedEnvelope = envelopeService.update(getUserId(principal), ledgerSlug, envelopeId, request);
+        Envelope updatedEnvelope = envelopeService.update(principal.getName(), ledgerSlug, envelopeId, request);
         return toEntityModel(ledgerSlug, updatedEnvelope, principal);
     }
 
@@ -100,7 +103,7 @@ public class EnvelopeController {
             @PathVariable String envelopeId,
             JwtAuthenticationToken principal) {
 
-        envelopeService.delete(getUserId(principal), ledgerSlug, envelopeId);
+        envelopeService.delete(principal.getName(), ledgerSlug, envelopeId);
         return ResponseEntity.noContent().build();
     }
 
@@ -111,7 +114,7 @@ public class EnvelopeController {
             JwtAuthenticationToken principal,
             @Valid @RequestBody AllocateEnvelopeRequest request) {
 
-        EnvelopeAllocation allocation = envelopeService.allocate(getUserId(principal), ledgerSlug, envelopeId, request);
+        EnvelopeAllocation allocation = envelopeService.allocate(principal.getName(), ledgerSlug, envelopeId, request);
         EnvelopeAllocationResource resource = envelopeMapper.toResource(allocation);
         EntityModel<EnvelopeAllocationResource> entityModel = EntityModel.of(resource);
 
@@ -128,7 +131,7 @@ public class EnvelopeController {
             @RequestParam int month,
             JwtAuthenticationToken principal) {
 
-        EnvelopeBalance balance = envelopeService.getBalance(getUserId(principal), ledgerSlug, envelopeId, year, month);
+        EnvelopeBalance balance = envelopeService.getBalance(principal.getName(), ledgerSlug, envelopeId, year, month);
         EnvelopeBalanceResource resource = envelopeMapper.toResource(balance);
         return EntityModel.of(resource);
     }
@@ -139,7 +142,7 @@ public class EnvelopeController {
             @PathVariable String envelopeId,
             JwtAuthenticationToken principal) {
 
-        List<String> accountIds = envelopeService.getEnvelopeAccounts(getUserId(principal), ledgerSlug, envelopeId);
+        List<String> accountIds = envelopeService.getEnvelopeAccounts(principal.getName(), ledgerSlug, envelopeId);
         return ResponseEntity.ok(Map.of("accountIds", accountIds));
     }
 
@@ -150,12 +153,8 @@ public class EnvelopeController {
             JwtAuthenticationToken principal,
             @RequestBody List<String> accountIds) {
 
-        envelopeService.setEnvelopeAccounts(getUserId(principal), ledgerSlug, envelopeId, accountIds);
+        envelopeService.setEnvelopeAccounts(principal.getName(), ledgerSlug, envelopeId, accountIds);
         return ResponseEntity.ok(Map.of("accountIds", accountIds));
-    }
-
-    private static @Nullable String getUserId(JwtAuthenticationToken principal) {
-        return principal.getName();
     }
 
     private EntityModel<EnvelopeResource> toEntityModel(String ledgerSlug, Envelope envelope, JwtAuthenticationToken principal) {
@@ -165,76 +164,4 @@ public class EnvelopeController {
         return entityModel;
     }
 
-    private PagedModel<EntityModel<EnvelopeResource>> buildPagedEnvelopeResponse(
-            String ledgerSlug,
-            int page,
-            int size,
-            Page<EntityModel<EnvelopeResource>> envelopeResources,
-            JwtAuthenticationToken principal) {
-
-        var pagedModel = PagedModel.of(
-                envelopeResources.getContent(),
-                new PagedModel.PageMetadata(
-                        envelopeResources.getSize(),
-                        envelopeResources.getNumber(),
-                        envelopeResources.getTotalElements(),
-                        envelopeResources.getTotalPages()));
-
-        pagedModel.add(linkTo(methodOn(EnvelopeController.class).listEnvelopes(ledgerSlug, principal, page, size)).withSelfRel());
-        pagedModel.add(linkTo(methodOn(EnvelopeController.class).listEnvelopes(ledgerSlug, principal, 0, size)).withRel("first"));
-
-        if (envelopeResources.getTotalPages() > 0) {
-            pagedModel.add(linkTo(methodOn(EnvelopeController.class).listEnvelopes(
-                    ledgerSlug,
-                    principal,
-                    envelopeResources.getTotalPages() - 1,
-                    size)).withRel("last"));
-        }
-        if (envelopeResources.hasNext()) {
-            pagedModel.add(linkTo(methodOn(EnvelopeController.class).listEnvelopes(
-                    ledgerSlug,
-                    principal,
-                    envelopeResources.getNumber() + 1,
-                    size)).withRel("next"));
-        }
-        if (envelopeResources.hasPrevious()) {
-            pagedModel.add(linkTo(methodOn(EnvelopeController.class).listEnvelopes(
-                    ledgerSlug,
-                    principal,
-                    envelopeResources.getNumber() - 1,
-                    size)).withRel("prev"));
-        }
-
-        return pagedModel;
-    }
-
-    @ExceptionHandler(EnvelopeNotFoundException.class)
-    public ResponseEntity<JsonApiErrors> handleEnvelopeNotFoundException(EnvelopeNotFoundException ex) {
-        return ResponseEntity.status(NOT_FOUND).body(
-                JsonApiErrors.create().withError(
-                        JsonApiError.create()
-                                .withStatus(Integer.toString(NOT_FOUND.value()))
-                                .withTitle(NOT_FOUND.getReasonPhrase())
-                                .withDetail(ex.getMessage())));
-    }
-
-    @ExceptionHandler(LedgerNotFoundException.class)
-    public ResponseEntity<JsonApiErrors> handleLedgerNotFoundException(LedgerNotFoundException ex) {
-        return ResponseEntity.status(NOT_FOUND).body(
-                JsonApiErrors.create().withError(
-                        JsonApiError.create()
-                                .withStatus(Integer.toString(NOT_FOUND.value()))
-                                .withTitle(NOT_FOUND.getReasonPhrase())
-                                .withDetail(ex.getMessage())));
-    }
-
-    @ExceptionHandler(EnvelopeHasTransactionsException.class)
-    public ResponseEntity<JsonApiErrors> handleEnvelopeHasTransactionsException(EnvelopeHasTransactionsException ex) {
-        return ResponseEntity.status(CONFLICT).body(
-                JsonApiErrors.create().withError(
-                        JsonApiError.create()
-                                .withStatus(Integer.toString(CONFLICT.value()))
-                                .withTitle(CONFLICT.getReasonPhrase())
-                                .withDetail(ex.getMessage())));
-    }
 }

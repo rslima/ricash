@@ -12,6 +12,12 @@ public interface LedgerRepository {
 
     Optional<Ledger> findBySlug(String userId, String slug);
 
+    /**
+     * Ownership check without loading the account tree: resolves the ledger id
+     * for a slug owned by the given user.
+     */
+    Optional<String> findIdBySlug(String userId, String slug);
+
     Ledger create(Ledger ledger);
 
     Ledger update(String userId, String slug, String name, String description);

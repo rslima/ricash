@@ -30,6 +30,12 @@ public class LedgerServiceBean implements LedgerService {
     }
 
     @Override
+    public String requireLedgerId(String userId, String slug) {
+        return ledgerRepository.findIdBySlug(userId, slug)
+                .orElseThrow(() -> new LedgerNotFoundException(slug));
+    }
+
+    @Override
     @Transactional
     public Ledger create(String userId, CreateLedgerRequest request) {
         if (userRepository.findById(userId).isEmpty()) {

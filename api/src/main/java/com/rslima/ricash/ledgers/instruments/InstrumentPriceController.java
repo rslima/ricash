@@ -1,5 +1,7 @@
 package com.rslima.ricash.ledgers.instruments;
 
+import com.rslima.ricash.configuration.JsonApiPagination;
+
 import com.rslima.ricash.ledgers.LedgerNotFoundException;
 import com.rslima.ricash.ledgers.LedgerService;
 
@@ -78,7 +80,8 @@ public class InstrumentPriceController {
                     .map(price -> toEntityModel(price, instrumentMap.get(price.instrumentId()), ledgerSlug, principal));
         }
 
-        return buildPagedResponse(ledgerSlug, page, size, priceResources, principal);
+        return JsonApiPagination.pagedModel(priceResources,
+                p -> methodOn(InstrumentPriceController.class).listPrices(ledgerSlug, principal, p, size, null));
     }
 
     @PostMapping
@@ -115,13 +118,7 @@ public class InstrumentPriceController {
     }
 
     private String getLedgerId(JwtAuthenticationToken principal, String ledgerSlug) {
-        return ledgerService.findBySlug(getUserId(principal), ledgerSlug)
-                .orElseThrow(() -> new LedgerNotFoundException(ledgerSlug))
-                .id();
-    }
-
-    private static @Nullable String getUserId(JwtAuthenticationToken principal) {
-        return principal.getName();
+        return ledgerService.requireLedgerId(principal.getName(), ledgerSlug);
     }
 
     private EntityModel<InstrumentPriceResource> toEntityModel(InstrumentPrice price, Instrument instrument, String ledgerSlug, JwtAuthenticationToken principal) {
@@ -129,44 +126,4 @@ public class InstrumentPriceController {
         return EntityModel.of(resource);
     }
 
-    private PagedModel<EntityModel<InstrumentPriceResource>> buildPagedResponse(
-            String ledgerSlug,
-            int page,
-            int size,
-            Page<EntityModel<InstrumentPriceResource>> priceResources,
-            JwtAuthenticationToken principal) {
-
-        var pagedModel = PagedModel.of(
-                priceResources.getContent(),
-                new PagedModel.PageMetadata(
-                        priceResources.getSize(),
-                        priceResources.getNumber(),
-                        priceResources.getTotalElements(),
-                        priceResources.getTotalPages()));
-
-        pagedModel.add(linkTo(methodOn(InstrumentPriceController.class)
-                .listPrices(ledgerSlug, principal, page, size, null)).withSelfRel());
-
-        return pagedModel;
-    }
-
-    @ExceptionHandler({LedgerNotFoundException.class, InstrumentNotFoundException.class, InstrumentPriceNotFoundException.class})
-    public ResponseEntity<JsonApiErrors> handleNotFoundException(RuntimeException ex) {
-        return ResponseEntity.status(NOT_FOUND).body(
-                JsonApiErrors.create().withError(
-                        JsonApiError.create()
-                                .withStatus(Integer.toString(NOT_FOUND.value()))
-                                .withTitle(NOT_FOUND.getReasonPhrase())
-                                .withDetail(ex.getMessage())));
-    }
-
-    @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<JsonApiErrors> handleIllegalArgumentException(IllegalArgumentException ex) {
-        return ResponseEntity.status(BAD_REQUEST).body(
-                JsonApiErrors.create().withError(
-                        JsonApiError.create()
-                                .withStatus(Integer.toString(BAD_REQUEST.value()))
-                                .withTitle(BAD_REQUEST.getReasonPhrase())
-                                .withDetail(ex.getMessage())));
-    }
 }

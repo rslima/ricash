@@ -2,7 +2,7 @@ package com.rslima.ricash.ledgers.instruments;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rslima.ricash.TestRicashApplication;
-import com.rslima.ricash.ledgers.Ledger;
+import com.rslima.ricash.ledgers.LedgerNotFoundException;
 import com.rslima.ricash.ledgers.LedgerService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -13,7 +13,6 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.Instant;
-import java.util.List;
 import java.util.Optional;
 
 import static com.toedter.spring.hateoas.jsonapi.MediaTypes.JSON_API_VALUE;
@@ -150,10 +149,9 @@ class InstrumentControllerTest {
     }
 
     private void stubLedgerForOwner() {
-        var ledger = new Ledger(LEDGER_ID, OWNER_ID, LEDGER_SLUG, "Owner Ledger", null, "BRL",
-                Instant.now(), List.of(), List.of());
-        when(ledgerService.findBySlug(eq(OWNER_ID), eq(LEDGER_SLUG))).thenReturn(Optional.of(ledger));
-        when(ledgerService.findBySlug(eq(ATTACKER_ID), eq(LEDGER_SLUG))).thenReturn(Optional.empty());
+        when(ledgerService.requireLedgerId(eq(OWNER_ID), eq(LEDGER_SLUG))).thenReturn(LEDGER_ID);
+        when(ledgerService.requireLedgerId(eq(ATTACKER_ID), eq(LEDGER_SLUG)))
+                .thenThrow(new LedgerNotFoundException(LEDGER_SLUG));
     }
 
     private Instrument createTestInstrument() {

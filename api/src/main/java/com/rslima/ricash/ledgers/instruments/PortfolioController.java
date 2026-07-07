@@ -63,22 +63,7 @@ public class PortfolioController {
     }
 
     private String getLedgerId(JwtAuthenticationToken principal, String ledgerSlug) {
-        return ledgerService.findBySlug(getUserId(principal), ledgerSlug)
-                .orElseThrow(() -> new LedgerNotFoundException(ledgerSlug))
-                .id();
+        return ledgerService.requireLedgerId(principal.getName(), ledgerSlug);
     }
 
-    private static @Nullable String getUserId(JwtAuthenticationToken principal) {
-        return principal.getName();
-    }
-
-    @ExceptionHandler(LedgerNotFoundException.class)
-    public ResponseEntity<JsonApiErrors> handleLedgerNotFoundException(LedgerNotFoundException ex) {
-        return ResponseEntity.status(NOT_FOUND).body(
-                JsonApiErrors.create().withError(
-                        JsonApiError.create()
-                                .withStatus(Integer.toString(NOT_FOUND.value()))
-                                .withTitle(NOT_FOUND.getReasonPhrase())
-                                .withDetail(ex.getMessage())));
-    }
 }
