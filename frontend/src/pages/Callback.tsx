@@ -12,7 +12,7 @@ export function Callback() {
     // The library handles the callback automatically
     // Once authentication is complete, redirect to home
     if (auth.isAuthenticated) {
-      navigate("/", { replace: true })
+      void navigate("/", { replace: true })
     }
   }, [auth.isAuthenticated, navigate])
 

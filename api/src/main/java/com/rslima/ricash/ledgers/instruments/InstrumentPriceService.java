@@ -69,9 +69,10 @@ public interface InstrumentPriceService {
     InstrumentPrice savePrice(String instrumentId, BigDecimal price, LocalDate effectiveDate, String source);
 
     /**
-     * Deletes a price.
+     * Deletes a price, constrained to instruments of the given ledger.
      *
+     * @param ledgerId the ledger ID the price's instrument must belong to
      * @param id the price ID
      */
-    void delete(String id);
+    void delete(String ledgerId, String id);
 }

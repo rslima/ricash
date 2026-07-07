@@ -3,6 +3,7 @@ import { useParams, Link, useNavigate } from "react-router-dom"
 import { useTranslation } from "react-i18next"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Pagination } from "@/components/ui/pagination"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
@@ -32,7 +33,7 @@ import { getAccounts } from "@/api/accounts"
 import { getLedgers } from "@/api/ledgers"
 import type { TransactionResource, AccountResource, LedgerResource } from "@/api/types"
 import { formatCurrency, formatDate } from "@/lib/utils"
-import { ArrowLeft, ArrowLeftRight, ChevronRight, Plus, ChevronDown, ChevronLeft, ChevronsLeft, ChevronsRight } from "lucide-react"
+import { ArrowLeft, ArrowLeftRight, ChevronRight, Plus, ChevronDown } from "lucide-react"
 import { useErrorHandler } from "@/hooks/use-error-handler"
 
 // Build breadcrumb path for an account
@@ -84,7 +85,7 @@ export function AccountTransactions() {
 
   const handleCreateTransaction = (entryType: "DEBIT" | "CREDIT") => {
     if (!ledgerSlug || !account) return
-    navigate(`/ledgers/${ledgerSlug}/transactions`, {
+    void navigate(`/ledgers/${ledgerSlug}/transactions`, {
       state: {
         createTransaction: true,
         prefilledEntry: {
@@ -140,20 +141,6 @@ export function AccountTransactions() {
       .finally(() => setIsLoading(false))
   }, [isAuthenticated, ledgerSlug, accountId, currentPage, pageSize, handleError])
 
-  if (!isAuthenticated) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full">
-        <Card className="w-full max-w-md">
-          <CardHeader className="text-center">
-            <CardTitle>{t("auth.signInRequired")}</CardTitle>
-            <CardDescription>
-              {t("auth.pleaseSignIn", { resource: t("nav.transactions").toLowerCase() })}
-            </CardDescription>
-          </CardHeader>
-        </Card>
-      </div>
-    )
-  }
 
   return (
     <div className="space-y-6">
@@ -265,42 +252,21 @@ export function AccountTransactions() {
                 ))}
               </TableBody>
             </Table>
-            {totalPages > 1 && (
-              <div className="flex items-center justify-between pt-4">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <span>{t("transactions.totalTransactions", { count: totalElements })}</span>
-                  <span className="text-muted-foreground/50">·</span>
-                  <Select value={String(pageSize)} onValueChange={(value) => { setPageSize(Number(value)); setCurrentPage(0) }}>
-                    <SelectTrigger className="h-8 w-[70px]">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="10">10</SelectItem>
-                      <SelectItem value="20">20</SelectItem>
-                      <SelectItem value="50">50</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <span>{t("transactions.perPage")}</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <span className="text-sm text-muted-foreground mr-2">
-                    {t("transactions.page", { current: currentPage + 1, total: totalPages })}
-                  </span>
-                  <Button variant="outline" size="icon" className="h-8 w-8" disabled={currentPage === 0} onClick={() => setCurrentPage(0)}>
-                    <ChevronsLeft className="h-4 w-4" />
-                  </Button>
-                  <Button variant="outline" size="icon" className="h-8 w-8" disabled={currentPage === 0} onClick={() => setCurrentPage(currentPage - 1)}>
-                    <ChevronLeft className="h-4 w-4" />
-                  </Button>
-                  <Button variant="outline" size="icon" className="h-8 w-8" disabled={currentPage >= totalPages - 1} onClick={() => setCurrentPage(currentPage + 1)}>
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
-                  <Button variant="outline" size="icon" className="h-8 w-8" disabled={currentPage >= totalPages - 1} onClick={() => setCurrentPage(totalPages - 1)}>
-                    <ChevronsRight className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            )}
+            <Pagination page={currentPage} totalPages={totalPages} onPageChange={setCurrentPage}>
+              <span>{t("transactions.totalTransactions", { count: totalElements })}</span>
+              <span className="text-muted-foreground/50">·</span>
+              <Select value={String(pageSize)} onValueChange={(value) => { setPageSize(Number(value)); setCurrentPage(0) }}>
+                <SelectTrigger className="h-8 w-[70px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="10">10</SelectItem>
+                  <SelectItem value="20">20</SelectItem>
+                  <SelectItem value="50">50</SelectItem>
+                </SelectContent>
+              </Select>
+              <span>{t("transactions.perPage")}</span>
+            </Pagination>
             </>
           ) : (
             <div className="flex flex-col items-center justify-center py-12">

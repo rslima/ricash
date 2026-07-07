@@ -1,5 +1,7 @@
 package com.rslima.ricash.ledgers.accounts;
 
+import com.rslima.ricash.configuration.JsonApiPagination;
+
 import com.rslima.ricash.ledgers.LedgerNotFoundException;
 
 import com.toedter.spring.hateoas.jsonapi.JsonApiError;
@@ -50,14 +52,11 @@ public class AccountController {
             @RequestParam(name = "page[size]", required = false, defaultValue = "20") int size) {
 
         final var pageable = PageRequest.of(page, size);
-        var accountResources = accountService.listLedgerAccounts(getUserId(principal), ledgerSlug, pageable)
+        var accountResources = accountService.listLedgerAccounts(principal.getName(), ledgerSlug, pageable)
                 .map(account -> toEntityModel(ledgerSlug, account, principal));
 
-        return buildPagedAccountResponse(ledgerSlug, page, size, accountResources, principal);
-    }
-
-    private static @Nullable String getUserId(JwtAuthenticationToken principal) {
-        return principal.getName();
+        return JsonApiPagination.pagedModel(accountResources,
+                p -> methodOn(AccountController.class).listAccounts(ledgerSlug, principal, p, size));
     }
 
     @GetMapping("/{accountId}")
@@ -66,7 +65,7 @@ public class AccountController {
             @PathVariable String accountId,
             JwtAuthenticationToken principal) {
 
-        final var account = accountService.find(getUserId(principal), ledgerSlug, accountId)
+        final var account = accountService.find(principal.getName(), ledgerSlug, accountId)
                 .orElseThrow(() -> new AccountNotFoundException(accountId));
 
         return toEntityModel(ledgerSlug, account, principal);
@@ -78,7 +77,7 @@ public class AccountController {
             JwtAuthenticationToken principal,
             @Valid @RequestBody CreateAccountRequest request) {
 
-        Account createdAccount = accountService.create(getUserId(principal), ledgerSlug, request);
+        Account createdAccount = accountService.create(principal.getName(), ledgerSlug, request);
         EntityModel<AccountResource> entityModel = toEntityModel(ledgerSlug, createdAccount, principal);
 
         return ResponseEntity
@@ -93,7 +92,7 @@ public class AccountController {
             JwtAuthenticationToken principal,
             @Valid @RequestBody UpdateAccountRequest request) {
 
-        Account updatedAccount = accountService.update(getUserId(principal), ledgerSlug, accountId, request);
+        Account updatedAccount = accountService.update(principal.getName(), ledgerSlug, accountId, request);
         return toEntityModel(ledgerSlug, updatedAccount, principal);
     }
 
@@ -102,7 +101,7 @@ public class AccountController {
             @PathVariable String ledgerSlug,
             JwtAuthenticationToken principal) {
 
-        var summary = accountService.getBalanceSummary(getUserId(principal), ledgerSlug);
+        var summary = accountService.getBalanceSummary(principal.getName(), ledgerSlug);
         var resource = new BalanceSummaryResource(ledgerSlug, summary.balanceByCurrency());
         return ResponseEntity.ok(resource);
     }
@@ -113,7 +112,7 @@ public class AccountController {
             @PathVariable String accountId,
             JwtAuthenticationToken principal) {
 
-        accountService.delete(getUserId(principal), ledgerSlug, accountId);
+        accountService.delete(principal.getName(), ledgerSlug, accountId);
         return ResponseEntity.noContent().build();
     }
 
@@ -124,76 +123,4 @@ public class AccountController {
         return entityModel;
     }
 
-    private PagedModel<EntityModel<AccountResource>> buildPagedAccountResponse(
-            String ledgerSlug,
-            int page,
-            int size,
-            Page<EntityModel<AccountResource>> accountResources,
-            JwtAuthenticationToken principal) {
-
-        var pagedModel = PagedModel.of(
-                accountResources.getContent(),
-                new PagedModel.PageMetadata(
-                        accountResources.getSize(),
-                        accountResources.getNumber(),
-                        accountResources.getTotalElements(),
-                        accountResources.getTotalPages()));
-
-        pagedModel.add(linkTo(methodOn(AccountController.class).listAccounts(ledgerSlug, principal, page, size)).withSelfRel());
-        pagedModel.add(linkTo(methodOn(AccountController.class).listAccounts(ledgerSlug, principal, 0, size)).withRel("first"));
-
-        if (accountResources.getTotalPages() > 0) {
-            pagedModel.add(linkTo(methodOn(AccountController.class).listAccounts(
-                    ledgerSlug,
-                    principal,
-                    accountResources.getTotalPages() - 1,
-                    size)).withRel("last"));
-        }
-        if (accountResources.hasNext()) {
-            pagedModel.add(linkTo(methodOn(AccountController.class).listAccounts(
-                    ledgerSlug,
-                    principal,
-                    accountResources.getNumber() + 1,
-                    size)).withRel("next"));
-        }
-        if (accountResources.hasPrevious()) {
-            pagedModel.add(linkTo(methodOn(AccountController.class).listAccounts(
-                    ledgerSlug,
-                    principal,
-                    accountResources.getNumber() - 1,
-                    size)).withRel("prev"));
-        }
-
-        return pagedModel;
-    }
-
-    @ExceptionHandler(AccountNotFoundException.class)
-    public ResponseEntity<JsonApiErrors> handleAccountNotFoundException(AccountNotFoundException ex) {
-        return ResponseEntity.status(NOT_FOUND).body(
-                JsonApiErrors.create().withError(
-                        JsonApiError.create()
-                                .withStatus(Integer.toString(NOT_FOUND.value()))
-                                .withTitle(NOT_FOUND.getReasonPhrase())
-                                .withDetail(ex.getMessage())));
-    }
-
-    @ExceptionHandler(LedgerNotFoundException.class)
-    public ResponseEntity<JsonApiErrors> handleLedgerNotFoundException(LedgerNotFoundException ex) {
-        return ResponseEntity.status(NOT_FOUND).body(
-                JsonApiErrors.create().withError(
-                        JsonApiError.create()
-                                .withStatus(Integer.toString(NOT_FOUND.value()))
-                                .withTitle(NOT_FOUND.getReasonPhrase())
-                                .withDetail(ex.getMessage())));
-    }
-
-    @ExceptionHandler(AccountHasTransactionsException.class)
-    public ResponseEntity<JsonApiErrors> handleAccountHasTransactionsException(AccountHasTransactionsException ex) {
-        return ResponseEntity.status(CONFLICT).body(
-                JsonApiErrors.create().withError(
-                        JsonApiError.create()
-                                .withStatus(Integer.toString(CONFLICT.value()))
-                                .withTitle(CONFLICT.getReasonPhrase())
-                                .withDetail(ex.getMessage())));
-    }
 }

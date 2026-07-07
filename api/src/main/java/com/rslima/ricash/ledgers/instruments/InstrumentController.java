@@ -1,5 +1,8 @@
 package com.rslima.ricash.ledgers.instruments;
 
+import com.rslima.ricash.configuration.JsonApiPagination;
+
+import com.rslima.ricash.ledgers.LedgerNotFoundException;
 import com.rslima.ricash.ledgers.LedgerService;
 
 import com.toedter.spring.hateoas.jsonapi.JsonApiError;
@@ -69,7 +72,8 @@ public class InstrumentController {
         Page<EntityModel<InstrumentResource>> instrumentResources = instrumentService.listByLedger(ledgerId, pageable)
                 .map(instrument -> toEntityModel(instrument, ledgerSlug, principal));
 
-        return buildPagedResponse(ledgerSlug, page, size, instrumentResources, principal);
+        return JsonApiPagination.pagedModel(instrumentResources,
+                p -> methodOn(InstrumentController.class).listInstruments(ledgerSlug, principal, p, size));
     }
 
     @GetMapping("/all")
@@ -90,7 +94,8 @@ public class InstrumentController {
             @PathVariable String instrumentId,
             JwtAuthenticationToken principal) {
 
-        final var instrument = instrumentService.findById(instrumentId)
+        String ledgerId = getLedgerId(principal, ledgerSlug);
+        final var instrument = instrumentService.findById(ledgerId, instrumentId)
                 .orElseThrow(() -> new InstrumentNotFoundException(instrumentId));
 
         return toEntityModel(instrument, ledgerSlug, principal);
@@ -129,6 +134,7 @@ public class InstrumentController {
             @Valid @RequestBody UpdateInstrumentRequest request) {
 
         Instrument updated = instrumentService.update(
+                getLedgerId(principal, ledgerSlug),
                 instrumentId,
                 request.symbol(),
                 request.name(),
@@ -148,18 +154,12 @@ public class InstrumentController {
             @PathVariable String instrumentId,
             JwtAuthenticationToken principal) {
 
-        instrumentService.delete(instrumentId);
+        instrumentService.delete(getLedgerId(principal, ledgerSlug), instrumentId);
         return ResponseEntity.noContent().build();
     }
 
     private String getLedgerId(JwtAuthenticationToken principal, String ledgerSlug) {
-        return ledgerService.findBySlug(getUserId(principal), ledgerSlug)
-                .orElseThrow(() -> new IllegalArgumentException("Ledger not found: " + ledgerSlug))
-                .id();
-    }
-
-    private static @Nullable String getUserId(JwtAuthenticationToken principal) {
-        return principal.getName();
+        return ledgerService.requireLedgerId(principal.getName(), ledgerSlug);
     }
 
     private EntityModel<InstrumentResource> toEntityModel(Instrument instrument, String ledgerSlug, JwtAuthenticationToken principal) {
@@ -170,74 +170,4 @@ public class InstrumentController {
         return entityModel;
     }
 
-    private PagedModel<EntityModel<InstrumentResource>> buildPagedResponse(
-            String ledgerSlug,
-            int page,
-            int size,
-            Page<EntityModel<InstrumentResource>> instrumentResources,
-            JwtAuthenticationToken principal) {
-
-        var pagedModel = PagedModel.of(
-                instrumentResources.getContent(),
-                new PagedModel.PageMetadata(
-                        instrumentResources.getSize(),
-                        instrumentResources.getNumber(),
-                        instrumentResources.getTotalElements(),
-                        instrumentResources.getTotalPages()));
-
-        pagedModel.add(linkTo(methodOn(InstrumentController.class)
-                .listInstruments(ledgerSlug, principal, page, size)).withSelfRel());
-        pagedModel.add(linkTo(methodOn(InstrumentController.class)
-                .listInstruments(ledgerSlug, principal, 0, size)).withRel("first"));
-
-        if (instrumentResources.getTotalPages() > 0) {
-            pagedModel.add(linkTo(methodOn(InstrumentController.class).listInstruments(
-                    ledgerSlug,
-                    principal,
-                    instrumentResources.getTotalPages() - 1,
-                    size)).withRel("last"));
-        }
-        if (instrumentResources.hasNext()) {
-            pagedModel.add(linkTo(methodOn(InstrumentController.class).listInstruments(
-                    ledgerSlug,
-                    principal,
-                    instrumentResources.getNumber() + 1,
-                    size)).withRel("next"));
-        }
-        if (instrumentResources.hasPrevious()) {
-            pagedModel.add(linkTo(methodOn(InstrumentController.class).listInstruments(
-                    ledgerSlug,
-                    principal,
-                    instrumentResources.getNumber() - 1,
-                    size)).withRel("prev"));
-        }
-
-        return pagedModel;
-    }
-
-    @ExceptionHandler(InstrumentNotFoundException.class)
-    public ResponseEntity<JsonApiErrors> handleInstrumentNotFoundException(InstrumentNotFoundException ex) {
-        return ResponseEntity.status(NOT_FOUND).body(
-                JsonApiErrors.create().withError(
-                        JsonApiError.create()
-                                .withStatus(Integer.toString(NOT_FOUND.value()))
-                                .withTitle(NOT_FOUND.getReasonPhrase())
-                                .withDetail(ex.getMessage())));
-    }
-
-    @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<JsonApiErrors> handleIllegalArgumentException(IllegalArgumentException ex) {
-        return ResponseEntity.status(BAD_REQUEST).body(
-                JsonApiErrors.create().withError(
-                        JsonApiError.create()
-                                .withStatus(Integer.toString(BAD_REQUEST.value()))
-                                .withTitle(BAD_REQUEST.getReasonPhrase())
-                                .withDetail(ex.getMessage())));
-    }
-
-    public static class InstrumentNotFoundException extends RuntimeException {
-        public InstrumentNotFoundException(String id) {
-            super("Instrument not found: " + id);
-        }
-    }
 }

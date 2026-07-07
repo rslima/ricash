@@ -4,7 +4,6 @@ import com.rslima.ricash.ledgers.MonetaryAmount;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -13,7 +12,6 @@ import java.time.LocalDate;
 import java.util.Optional;
 import java.util.UUID;
 
-@Service
 @RequiredArgsConstructor
 @Slf4j
 public class ExchangeRateServiceBean implements ExchangeRateService {

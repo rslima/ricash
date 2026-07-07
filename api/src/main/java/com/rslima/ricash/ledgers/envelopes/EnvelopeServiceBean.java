@@ -1,6 +1,5 @@
 package com.rslima.ricash.ledgers.envelopes;
 
-import com.rslima.ricash.ledgers.Ledger;
 import com.rslima.ricash.ledgers.LedgerNotFoundException;
 import com.rslima.ricash.ledgers.LedgerRepository;
 
@@ -9,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -27,19 +27,19 @@ public class EnvelopeServiceBean implements EnvelopeService {
 
     @Override
     public Page<Envelope> listLedgerEnvelopes(String userId, String ledgerSlug, PageRequest pageRequest) {
-        final var ledger = getLedgerBySlug(userId, ledgerSlug);
-        return envelopeRepository.listLedgerEnvelopes(ledger.id(), pageRequest);
+        final var ledgerId = getLedgerId(userId, ledgerSlug);
+        return envelopeRepository.listLedgerEnvelopes(ledgerId, pageRequest);
     }
 
     @Override
     public Optional<Envelope> find(String userId, String ledgerSlug, String envelopeId) {
-        final var ledger = getLedgerBySlug(userId, ledgerSlug);
-        return envelopeRepository.findById(ledger.id(), envelopeId);
+        final var ledgerId = getLedgerId(userId, ledgerSlug);
+        return envelopeRepository.findById(ledgerId, envelopeId);
     }
 
     @Override
     public Envelope create(String userId, String ledgerSlug, CreateEnvelopeRequest request) {
-        final var ledger = getLedgerBySlug(userId, ledgerSlug);
+        final var ledgerId = getLedgerId(userId, ledgerSlug);
 
         final var envelope = new Envelope(
                 UuidCreator.getTimeOrderedEpoch().toString(),
@@ -53,18 +53,18 @@ public class EnvelopeServiceBean implements EnvelopeService {
                 List.of()
         );
 
-        return envelopeRepository.create(ledger.id(), envelope);
+        return envelopeRepository.create(ledgerId, envelope);
     }
 
     @Override
     public Envelope update(String userId, String ledgerSlug, String envelopeId, UpdateEnvelopeRequest request) {
-        final var ledger = getLedgerBySlug(userId, ledgerSlug);
+        final var ledgerId = getLedgerId(userId, ledgerSlug);
 
-        envelopeRepository.findById(ledger.id(), envelopeId)
+        envelopeRepository.findById(ledgerId, envelopeId)
                 .orElseThrow(() -> new EnvelopeNotFoundException(envelopeId));
 
         return envelopeRepository.update(
-                ledger.id(),
+                ledgerId,
                 envelopeId,
                 request.name(),
                 request.description(),
@@ -76,15 +76,16 @@ public class EnvelopeServiceBean implements EnvelopeService {
     }
 
     @Override
+    @Transactional
     public void delete(String userId, String ledgerSlug, String envelopeId) {
-        final var ledger = getLedgerBySlug(userId, ledgerSlug);
+        final var ledgerId = getLedgerId(userId, ledgerSlug);
 
-        envelopeRepository.findById(ledger.id(), envelopeId)
+        envelopeRepository.findById(ledgerId, envelopeId)
                 .orElseThrow(() -> new EnvelopeNotFoundException(envelopeId));
 
         // Collect all envelope IDs to delete (envelope + all descendants)
         List<String> envelopeIdsToDelete = new ArrayList<>();
-        collectEnvelopeIdsRecursively(ledger.id(), envelopeId, envelopeIdsToDelete);
+        collectEnvelopeIdsRecursively(ledgerId, envelopeId, envelopeIdsToDelete);
 
         // Check if any of the envelopes have transaction entries
         for (String id : envelopeIdsToDelete) {
@@ -101,15 +102,15 @@ public class EnvelopeServiceBean implements EnvelopeService {
             // Delete account mappings
             mappingRepository.deleteByEnvelopeId(id);
             // Delete the envelope
-            envelopeRepository.delete(ledger.id(), id);
+            envelopeRepository.delete(ledgerId, id);
         }
     }
 
     @Override
     public EnvelopeAllocation allocate(String userId, String ledgerSlug, String envelopeId, AllocateEnvelopeRequest request) {
-        final var ledger = getLedgerBySlug(userId, ledgerSlug);
+        final var ledgerId = getLedgerId(userId, ledgerSlug);
 
-        envelopeRepository.findById(ledger.id(), envelopeId)
+        envelopeRepository.findById(ledgerId, envelopeId)
                 .orElseThrow(() -> new EnvelopeNotFoundException(envelopeId));
 
         return allocationRepository.upsert(
@@ -123,9 +124,9 @@ public class EnvelopeServiceBean implements EnvelopeService {
 
     @Override
     public EnvelopeBalance getBalance(String userId, String ledgerSlug, String envelopeId, int year, int month) {
-        final var ledger = getLedgerBySlug(userId, ledgerSlug);
+        final var ledgerId = getLedgerId(userId, ledgerSlug);
 
-        envelopeRepository.findById(ledger.id(), envelopeId)
+        envelopeRepository.findById(ledgerId, envelopeId)
                 .orElseThrow(() -> new EnvelopeNotFoundException(envelopeId));
 
         return calculateBalance(envelopeId, year, month);
@@ -133,9 +134,9 @@ public class EnvelopeServiceBean implements EnvelopeService {
 
     @Override
     public List<EnvelopeBalance> getBudgetSummary(String userId, String ledgerSlug, int year, int month) {
-        final var ledger = getLedgerBySlug(userId, ledgerSlug);
+        final var ledgerId = getLedgerId(userId, ledgerSlug);
 
-        var envelopes = envelopeRepository.listLedgerEnvelopes(ledger.id(), PageRequest.of(0, 1000));
+        var envelopes = envelopeRepository.listLedgerEnvelopes(ledgerId, PageRequest.of(0, 1000));
 
         return envelopes.getContent().stream()
                 .map(envelope -> calculateBalance(envelope.id(), year, month))
@@ -144,9 +145,9 @@ public class EnvelopeServiceBean implements EnvelopeService {
 
     @Override
     public List<String> getEnvelopeAccounts(String userId, String ledgerSlug, String envelopeId) {
-        final var ledger = getLedgerBySlug(userId, ledgerSlug);
+        final var ledgerId = getLedgerId(userId, ledgerSlug);
 
-        envelopeRepository.findById(ledger.id(), envelopeId)
+        envelopeRepository.findById(ledgerId, envelopeId)
                 .orElseThrow(() -> new EnvelopeNotFoundException(envelopeId));
 
         return mappingRepository.findByEnvelopeId(envelopeId).stream()
@@ -155,10 +156,11 @@ public class EnvelopeServiceBean implements EnvelopeService {
     }
 
     @Override
+    @Transactional
     public void setEnvelopeAccounts(String userId, String ledgerSlug, String envelopeId, List<String> accountIds) {
-        final var ledger = getLedgerBySlug(userId, ledgerSlug);
+        final var ledgerId = getLedgerId(userId, ledgerSlug);
 
-        envelopeRepository.findById(ledger.id(), envelopeId)
+        envelopeRepository.findById(ledgerId, envelopeId)
                 .orElseThrow(() -> new EnvelopeNotFoundException(envelopeId));
 
         mappingRepository.setMappingsForEnvelope(envelopeId, accountIds);
@@ -166,19 +168,19 @@ public class EnvelopeServiceBean implements EnvelopeService {
 
     @Override
     public Map<String, String> getAllEnvelopeMappings(String userId, String ledgerSlug) {
-        final var ledger = getLedgerBySlug(userId, ledgerSlug);
-        return mappingRepository.findAllMappingsForLedger(ledger.id());
+        final var ledgerId = getLedgerId(userId, ledgerSlug);
+        return mappingRepository.findAllMappingsForLedger(ledgerId);
     }
 
     @Override
     public BigDecimal getToBeBudgeted(String userId, String ledgerSlug, int year, int month) {
-        final var ledger = getLedgerBySlug(userId, ledgerSlug);
+        final var ledgerId = getLedgerId(userId, ledgerSlug);
 
         // Income for the month
-        BigDecimal income = allocationRepository.calculateIncomeForPeriod(ledger.id(), year, month);
+        BigDecimal income = allocationRepository.calculateIncomeForPeriod(ledgerId, year, month);
 
         // Total allocated for the month
-        BigDecimal allocated = allocationRepository.sumAllocatedForPeriod(ledger.id(), year, month);
+        BigDecimal allocated = allocationRepository.sumAllocatedForPeriod(ledgerId, year, month);
 
         // To Be Budgeted = Income - Allocated
         return income.subtract(allocated);
@@ -245,8 +247,8 @@ public class EnvelopeServiceBean implements EnvelopeService {
         }
     }
 
-    private Ledger getLedgerBySlug(String userId, String ledgerSlug) {
-        return ledgerRepository.findBySlug(userId, ledgerSlug)
+    private String getLedgerId(String userId, String ledgerSlug) {
+        return ledgerRepository.findIdBySlug(userId, ledgerSlug)
                 .orElseThrow(() -> new LedgerNotFoundException(ledgerSlug));
     }
 }

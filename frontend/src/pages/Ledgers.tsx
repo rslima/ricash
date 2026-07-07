@@ -29,6 +29,7 @@ import type { LedgerResource } from "@/api/types"
 import { formatDate } from "@/lib/utils"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { useErrorHandler } from "@/hooks/use-error-handler"
+import { useConfirm } from "@/components/ui/confirm-dialog"
 import { Plus, Trash2, BookOpen, MoreHorizontal, Pencil } from "lucide-react"
 import {
   DropdownMenu,
@@ -41,6 +42,7 @@ export function Ledgers() {
   const { t } = useTranslation()
   const { isAuthenticated } = useAuth()
   const handleError = useErrorHandler()
+  const confirm = useConfirm()
   const isMobile = useIsMobile()
   const [ledgers, setLedgers] = useState<LedgerResource[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -76,11 +78,11 @@ export function Ledgers() {
   }, [isAuthenticated, handleError])
 
   useEffect(() => {
-    fetchLedgers()
+    void fetchLedgers()
   }, [fetchLedgers])
 
   const handleDelete = async (slug: string) => {
-    if (!confirm(t("ledgers.confirmDelete"))) return
+    if (!(await confirm({ description: t("ledgers.confirmDelete") }))) return
 
     try {
       await deleteLedger(slug)
@@ -141,20 +143,6 @@ export function Ledgers() {
     }
   }
 
-  if (!isAuthenticated) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full">
-        <Card className="w-full max-w-md">
-          <CardHeader className="text-center">
-            <CardTitle>{t("auth.signInRequired")}</CardTitle>
-            <CardDescription>
-              {t("auth.pleaseSignIn", { resource: t("nav.ledgers").toLowerCase() })}
-            </CardDescription>
-          </CardHeader>
-        </Card>
-      </div>
-    )
-  }
 
   return (
     <div className="space-y-4 md:space-y-6">

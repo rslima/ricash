@@ -1,6 +1,8 @@
 package com.rslima.ricash.ledgers.transactions;
 
-public class TransactionNotFoundException extends RuntimeException {
+import com.rslima.ricash.exceptions.EntityNotFoundException;
+
+public class TransactionNotFoundException extends EntityNotFoundException {
     public TransactionNotFoundException(String transactionId) {
         super("Transaction not found: " + transactionId);
     }

@@ -22,20 +22,6 @@ public class InstrumentPriceJdbcRepository implements InstrumentPriceRepository 
     private final JdbcClient jdbcClient;
 
     @Override
-    public Optional<InstrumentPrice> findById(String id) {
-        log.debug("Finding price by id {}", id);
-
-        return jdbcClient.sql("""
-                SELECT id, instrument_id, price, effective_date, source, created_at
-                FROM instrument_prices
-                WHERE id = :id
-                """)
-            .param("id", id)
-            .query(this::mapRow)
-            .optional();
-    }
-
-    @Override
     public Optional<InstrumentPrice> findPrice(String instrumentId, LocalDate date) {
         log.debug("Finding price for instrument {} on date {}", instrumentId, date);
 
@@ -173,11 +159,18 @@ public class InstrumentPriceJdbcRepository implements InstrumentPriceRepository 
     }
 
     @Override
-    public void deleteById(String id) {
-        log.debug("Deleting price with id {}", id);
-        jdbcClient.sql("DELETE FROM instrument_prices WHERE id = :id")
+    public boolean deleteById(String ledgerId, String id) {
+        log.debug("Deleting price with id {} in ledger {}", id, ledgerId);
+        return jdbcClient.sql("""
+                DELETE FROM instrument_prices p
+                USING instruments i
+                WHERE p.id = :id
+                  AND p.instrument_id = i.id
+                  AND i.ledger_id = :ledgerId
+                """)
             .param("id", id)
-            .update();
+            .param("ledgerId", ledgerId)
+            .update() > 0;
     }
 
     private InstrumentPrice mapRow(java.sql.ResultSet rs, int rowNum) throws java.sql.SQLException {

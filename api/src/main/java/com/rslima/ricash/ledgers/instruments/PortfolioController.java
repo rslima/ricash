@@ -1,18 +1,23 @@
 package com.rslima.ricash.ledgers.instruments;
 
+import com.rslima.ricash.ledgers.LedgerNotFoundException;
 import com.rslima.ricash.ledgers.LedgerService;
 
+import com.toedter.spring.hateoas.jsonapi.JsonApiError;
+import com.toedter.spring.hateoas.jsonapi.JsonApiErrors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.Nullable;
 import org.springframework.hateoas.CollectionModel;
 import org.springframework.hateoas.EntityModel;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
 import static com.toedter.spring.hateoas.jsonapi.MediaTypes.JSON_API_VALUE;
+import static org.springframework.http.HttpStatus.NOT_FOUND;
 
 @RestController
 @RequestMapping(value = "/v1/ledgers/{ledgerSlug}/portfolio", produces = JSON_API_VALUE)
@@ -58,12 +63,7 @@ public class PortfolioController {
     }
 
     private String getLedgerId(JwtAuthenticationToken principal, String ledgerSlug) {
-        return ledgerService.findBySlug(getUserId(principal), ledgerSlug)
-                .orElseThrow(() -> new IllegalArgumentException("Ledger not found: " + ledgerSlug))
-                .id();
+        return ledgerService.requireLedgerId(principal.getName(), ledgerSlug);
     }
 
-    private static @Nullable String getUserId(JwtAuthenticationToken principal) {
-        return principal.getName();
-    }
 }
