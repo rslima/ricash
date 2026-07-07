@@ -196,55 +196,7 @@ public class LedgerJdbcRepository implements LedgerRepository {
                 .optional();
 
         if (dbLedger.isPresent()) {
-            final var dbLedgerAccounts = jdbcClient.sql("""
-                            WITH RECURSIVE account_tree AS (
-                                -- Base case: each account includes itself
-                                SELECT id, id as root_id
-                                FROM accounts
-                                WHERE ledger_id = :id
-
-                                UNION ALL
-
-                                -- Recursive case: find children and link them to the same root
-                                SELECT a.id, at.root_id
-                                FROM accounts a
-                                INNER JOIN account_tree at ON a.parent_account_id = at.id
-                                WHERE a.ledger_id = :id
-                            )
-                            SELECT
-                                a.id,
-                                a.ledger_id,
-                                a.parent_account_id,
-                                a.slug,
-                                a.name,
-                                a.description,
-                                a.currency,
-                                a.type,
-                                a.status,
-                                COALESCE(
-                                    CASE
-                                        WHEN a.type IN ('ASSET', 'EXPENSE') THEN
-                                            SUM(bs.debit_total) - SUM(bs.credit_total)
-                                        ELSE
-                                            SUM(bs.credit_total) - SUM(bs.debit_total)
-                                    END,
-                                    0
-                                ) AS balance,
-                                a.created_at
-                            FROM
-                                accounts a
-                            LEFT JOIN
-                                account_tree at ON at.root_id = a.id
-                            LEFT JOIN
-                                account_balance_summary bs ON bs.account_id = at.id AND bs.currency = a.currency
-                            WHERE
-                                a.ledger_id = :id
-                            GROUP BY a.id, a.ledger_id, a.parent_account_id, a.slug, a.name, a.description,
-                                     a.currency, a.type, a.status, a.created_at
-                            """)
-                    .param("id", id)
-                    .query(DBAccount.class)
-                    .list();
+            final var dbLedgerAccounts = loadAccounts(id);
 
             final var accountForest = buildAccountForest(dbLedgerAccounts);
 
@@ -279,55 +231,7 @@ public class LedgerJdbcRepository implements LedgerRepository {
 
         if (dbLedger.isPresent()) {
             final var id = dbLedger.get().id();
-            final var dbLedgerAccounts = jdbcClient.sql("""
-                            WITH RECURSIVE account_tree AS (
-                                -- Base case: each account includes itself
-                                SELECT id, id as root_id
-                                FROM accounts
-                                WHERE ledger_id = :id
-
-                                UNION ALL
-
-                                -- Recursive case: find children and link them to the same root
-                                SELECT a.id, at.root_id
-                                FROM accounts a
-                                INNER JOIN account_tree at ON a.parent_account_id = at.id
-                                WHERE a.ledger_id = :id
-                            )
-                            SELECT
-                                a.id,
-                                a.ledger_id,
-                                a.parent_account_id,
-                                a.slug,
-                                a.name,
-                                a.description,
-                                a.currency,
-                                a.type,
-                                a.status,
-                                COALESCE(
-                                    CASE
-                                        WHEN a.type IN ('ASSET', 'EXPENSE') THEN
-                                            SUM(bs.debit_total) - SUM(bs.credit_total)
-                                        ELSE
-                                            SUM(bs.credit_total) - SUM(bs.debit_total)
-                                    END,
-                                    0
-                                ) AS balance,
-                                a.created_at
-                            FROM
-                                accounts a
-                            LEFT JOIN
-                                account_tree at ON at.root_id = a.id
-                            LEFT JOIN
-                                account_balance_summary bs ON bs.account_id = at.id AND bs.currency = a.currency
-                            WHERE
-                                a.ledger_id = :id
-                            GROUP BY a.id, a.ledger_id, a.parent_account_id, a.slug, a.name, a.description,
-                                     a.currency, a.type, a.status, a.created_at
-                            """)
-                    .param("id", id)
-                    .query(DBAccount.class)
-                    .list();
+            final var dbLedgerAccounts = loadAccounts(id);
 
             final var accountForest = buildAccountForest(dbLedgerAccounts);
             return dbLedger.map(toLedger(accountForest));
@@ -421,6 +325,63 @@ public class LedgerJdbcRepository implements LedgerRepository {
                 dbAccount.createdAt(),
                 dbAccount.parentAccountId(),
                 new ArrayList<>());
+    }
+
+
+    /**
+     * Loads all accounts of a ledger with balances rolled up from each
+     * account's subtree (shared by findById and findBySlug).
+     */
+    private List<DBAccount> loadAccounts(String ledgerId) {
+        return jdbcClient.sql("""
+                        WITH RECURSIVE account_tree AS (
+                            -- Base case: each account includes itself
+                            SELECT id, id as root_id
+                            FROM accounts
+                            WHERE ledger_id = :id
+
+                            UNION ALL
+
+                            -- Recursive case: find children and link them to the same root
+                            SELECT a.id, at.root_id
+                            FROM accounts a
+                            INNER JOIN account_tree at ON a.parent_account_id = at.id
+                            WHERE a.ledger_id = :id
+                        )
+                        SELECT
+                            a.id,
+                            a.ledger_id,
+                            a.parent_account_id,
+                            a.slug,
+                            a.name,
+                            a.description,
+                            a.currency,
+                            a.type,
+                            a.status,
+                            COALESCE(
+                                CASE
+                                    WHEN a.type IN ('ASSET', 'EXPENSE') THEN
+                                        SUM(bs.debit_total) - SUM(bs.credit_total)
+                                    ELSE
+                                        SUM(bs.credit_total) - SUM(bs.debit_total)
+                                END,
+                                0
+                            ) AS balance,
+                            a.created_at
+                        FROM
+                            accounts a
+                        LEFT JOIN
+                            account_tree at ON at.root_id = a.id
+                        LEFT JOIN
+                            account_balance_summary bs ON bs.account_id = at.id AND bs.currency = a.currency
+                        WHERE
+                            a.ledger_id = :id
+                        GROUP BY a.id, a.ledger_id, a.parent_account_id, a.slug, a.name, a.description,
+                                 a.currency, a.type, a.status, a.created_at
+                        """)
+                .param("id", ledgerId)
+                .query(DBAccount.class)
+                .list();
     }
 
     private List<Account> buildAccountForest(List<DBAccount> ledgerAccounts) {

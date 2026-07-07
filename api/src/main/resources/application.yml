@@ -8,10 +8,11 @@ spring:
   flyway:
     enabled: on
 
+  # Local runs get the datasource from the docker-compose service connection
+  # (compose.yaml); deployments must supply SPRING_DATASOURCE_URL/USERNAME/
+  # PASSWORD via the environment.
   datasource:
-    url: jdbc:postgresql://localhost:5432/postgres
-    username: ricash
-    password: secret
+    url: jdbc:postgresql://localhost:5432/ricash
   security:
     oauth2:
       resourceserver:

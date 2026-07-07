@@ -16,6 +16,7 @@ import com.rslima.ricash.ledgers.exchangerates.ExchangeRateJdbcRepository;
 import com.rslima.ricash.ledgers.exchangerates.ExchangeRateRepository;
 import com.rslima.ricash.ledgers.exchangerates.ExchangeRateService;
 import com.rslima.ricash.ledgers.exchangerates.ExchangeRateServiceBean;
+import com.rslima.ricash.ledgers.exchangerates.ExchangeRateProviderProperties;
 import com.rslima.ricash.ledgers.exchangerates.ExternalExchangeRateService;
 import com.rslima.ricash.ledgers.instruments.InstrumentJdbcRepository;
 import com.rslima.ricash.ledgers.instruments.InstrumentPriceJdbcRepository;
@@ -34,7 +35,9 @@ import com.rslima.ricash.ledgers.transactions.TransactionServiceBean;
 import com.rslima.ricash.users.UserRepository;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.web.client.RestClient;
 
 @Configuration
 public class LedgerConfiguration {
@@ -115,6 +118,15 @@ public class LedgerConfiguration {
     @Bean
     public ExchangeRateRepository exchangeRateRepository(JdbcClient jdbcClient) {
         return new ExchangeRateJdbcRepository(jdbcClient);
+    }
+
+    @Bean
+    public ExternalExchangeRateService externalExchangeRateService(
+            RestClient.Builder restClientBuilder,
+            ObjectMapper objectMapper,
+            ExchangeRateProviderProperties properties
+    ) {
+        return new ExternalExchangeRateService(restClientBuilder, objectMapper, properties);
     }
 
     // Envelope beans

@@ -146,53 +146,10 @@ public class TransactionServiceBean implements TransactionService {
         transactionRepository.delete(ledgerId, transactionId);
     }
 
-    // Common interface for entry requests
-    private interface EntryData {
-        String accountId();
-        BigDecimal amount();
-        String currency();
-        BigDecimal toAmount();
-        String toCurrency();
-        TransactionEntryType type();
-        String instrumentId();
-        BigDecimal quantity();
-        String envelopeId();
-    }
-
-    private List<TransactionEntry> processEntries(String ledgerId, List<? extends Object> requestEntries, java.time.LocalDate transactionDate) {
+    private List<TransactionEntry> processEntries(String ledgerId, List<? extends TransactionEntryRequest> requestEntries, java.time.LocalDate transactionDate) {
         List<TransactionEntry> entries = new ArrayList<>();
 
-        for (var obj : requestEntries) {
-            // Convert to EntryData
-            EntryData requestEntry;
-            if (obj instanceof CreateTransactionRequest.EntryRequest createEntry) {
-                requestEntry = new EntryData() {
-                    public String accountId() { return createEntry.accountId(); }
-                    public BigDecimal amount() { return createEntry.amount(); }
-                    public String currency() { return createEntry.currency(); }
-                    public BigDecimal toAmount() { return createEntry.toAmount(); }
-                    public String toCurrency() { return createEntry.toCurrency(); }
-                    public TransactionEntryType type() { return createEntry.type(); }
-                    public String instrumentId() { return createEntry.instrumentId(); }
-                    public BigDecimal quantity() { return createEntry.quantity(); }
-                    public String envelopeId() { return createEntry.envelopeId(); }
-                };
-            } else if (obj instanceof UpdateTransactionRequest.EntryRequest updateEntry) {
-                requestEntry = new EntryData() {
-                    public String accountId() { return updateEntry.accountId(); }
-                    public BigDecimal amount() { return updateEntry.amount(); }
-                    public String currency() { return updateEntry.currency(); }
-                    public BigDecimal toAmount() { return updateEntry.toAmount(); }
-                    public String toCurrency() { return updateEntry.toCurrency(); }
-                    public TransactionEntryType type() { return updateEntry.type(); }
-                    public String instrumentId() { return updateEntry.instrumentId(); }
-                    public BigDecimal quantity() { return updateEntry.quantity(); }
-                    public String envelopeId() { return updateEntry.envelopeId(); }
-                };
-            } else {
-                throw new IllegalArgumentException("Unsupported entry type: " + obj.getClass());
-            }
-
+        for (var requestEntry : requestEntries) {
             // Fetch account to get its currency
             Account account = accountRepository.findById(ledgerId, requestEntry.accountId())
                     .orElseThrow(() -> new IllegalArgumentException("Account not found: " + requestEntry.accountId()));
