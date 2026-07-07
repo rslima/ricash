@@ -17,7 +17,9 @@ class ApiClient {
   }
 
   private buildUrl(endpoint: string, params?: Record<string, string | number | undefined>): string {
-    const url = new URL(`${this.baseUrl}${endpoint}`)
+    // A relative base (e.g. "/api/v1" via the dev proxy) needs an origin to
+    // resolve against; for an absolute base the second arg is ignored.
+    const url = new URL(`${this.baseUrl}${endpoint}`, window.location.origin)
     if (params) {
       Object.entries(params).forEach(([key, value]) => {
         if (value !== undefined) {

@@ -7,6 +7,18 @@ import path from 'path'
 
 // https://vite.dev/config/
 export default defineConfig({
+  server: {
+    proxy: {
+      // Dev-only: forward /api/* to the Spring Boot backend, stripping the
+      // /api prefix so the browser uses the same /api/v1 base as production
+      // (where a reverse proxy does the stripping). Backend serves under /v1.
+      '/api': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+        rewrite: (p) => p.replace(/^\/api/, ''),
+      },
+    },
+  },
   plugins: [
     react(),
     tailwindcss(),
