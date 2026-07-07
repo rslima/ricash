@@ -1,8 +1,9 @@
 import { useEffect, useState, useMemo, useCallback } from "react"
-import { useParams, Link, useLocation } from "react-router-dom"
+import { Link, useLocation } from "react-router-dom"
 import { useTranslation } from "react-i18next"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Pagination } from "@/components/ui/pagination"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Input } from "@/components/ui/input"
@@ -39,16 +40,17 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { useAuth } from "@/contexts/AuthContext"
+import { useLedger } from "@/contexts/LedgerContext"
 import { getTransactions, deleteTransaction, createTransaction, updateTransaction, getTransactionTemplates, type TransactionEntryInput } from "@/api/transactions"
-import { getLedgers } from "@/api/ledgers"
 import { getAccounts } from "@/api/accounts"
 import { getAllInstruments } from "@/api/instruments"
 import { getEnvelopes, getEnvelopeMappings } from "@/api/envelopes"
-import type { TransactionResource, LedgerResource, AccountResource, InstrumentResource, EnvelopeResource } from "@/api/types"
+import type { TransactionResource, AccountResource, InstrumentResource, EnvelopeResource } from "@/api/types"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { useErrorHandler } from "@/hooks/use-error-handler"
-import { Plus, Trash2, ArrowLeftRight, MoreHorizontal, X, Pencil, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Search } from "lucide-react"
+import { useConfirm } from "@/components/ui/confirm-dialog"
+import { Plus, Trash2, ArrowLeftRight, MoreHorizontal, X, Pencil, Search } from "lucide-react"
 
 interface TransactionEntry {
   accountId: string
@@ -75,20 +77,20 @@ interface LocationState {
 
 export function Transactions() {
   const { t } = useTranslation()
-  const { ledgerSlug } = useParams<{ ledgerSlug?: string }>()
   const location = useLocation()
   const handleError = useErrorHandler()
+  const confirm = useConfirm()
   const { isAuthenticated } = useAuth()
   const isMobile = useIsMobile()
   const locationState = location.state as LocationState | undefined
   const [transactions, setTransactions] = useState<TransactionResource[]>([])
-  const [ledgers, setLedgers] = useState<LedgerResource[]>([])
   const [accounts, setAccounts] = useState<AccountResource[]>([])
   const [instruments, setInstruments] = useState<InstrumentResource[]>([])
   const [envelopes, setEnvelopes] = useState<EnvelopeResource[]>([])
   const [envelopeMappings, setEnvelopeMappings] = useState<Record<string, string>>({})
   const [transactionTemplates, setTransactionTemplates] = useState<TransactionResource[]>([])
-  const [selectedLedgerSlug, setSelectedLedgerSlug] = useState<string | null>(ledgerSlug || null)
+  const { ledgers, currentLedger, setCurrentLedger } = useLedger()
+  const selectedLedgerSlug = currentLedger?.attributes.slug ?? null
   const [currentPage, setCurrentPage] = useState(0)
   const [pageSize, setPageSize] = useState(20)
   const [totalPages, setTotalPages] = useState(0)
@@ -119,22 +121,6 @@ export function Transactions() {
     () => ledgers.find((l) => l.attributes.slug === selectedLedgerSlug),
     [ledgers, selectedLedgerSlug]
   )
-
-  useEffect(() => {
-    if (!isAuthenticated) {
-      setIsLoading(false)
-      return
-    }
-
-    getLedgers()
-      .then((response) => {
-        setLedgers(response.data)
-        if (response.data.length > 0) {
-          setSelectedLedgerSlug(prev => prev ?? response.data[0].attributes.slug)
-        }
-      })
-      .catch((e) => handleError(e, "fetchFailed"))
-  }, [isAuthenticated, handleError])
 
   const loadTransactions = useCallback(async (ledgerSlug: string, page: number, size: number, description?: string) => {
     const params: Record<string, string | number | undefined> = { "page[number]": page, "page[size]": size }
@@ -206,7 +192,7 @@ export function Transactions() {
 
   const handleDelete = async (transactionId: string) => {
     if (!selectedLedgerSlug) return
-    if (!confirm(t("transactions.confirmDelete"))) return
+    if (!(await confirm({ description: t("transactions.confirmDelete") }))) return
 
     try {
       await deleteTransaction(selectedLedgerSlug, transactionId)
@@ -612,20 +598,6 @@ export function Transactions() {
     }
   }
 
-  if (!isAuthenticated) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full">
-        <Card className="w-full max-w-md">
-          <CardHeader className="text-center">
-            <CardTitle>{t("auth.signInRequired")}</CardTitle>
-            <CardDescription>
-              {t("auth.pleaseSignIn", { resource: t("nav.transactions").toLowerCase() })}
-            </CardDescription>
-          </CardHeader>
-        </Card>
-      </div>
-    )
-  }
 
   const debitTotal = calculateTotal("DEBIT", entries)
   const creditTotal = calculateTotal("CREDIT", entries)
@@ -938,7 +910,7 @@ export function Transactions() {
               key={ledger.id}
               variant={selectedLedgerSlug === ledger.attributes.slug ? "default" : "outline"}
               size="sm"
-              onClick={() => { setSelectedLedgerSlug(ledger.attributes.slug); setCurrentPage(0) }}
+              onClick={() => { setCurrentLedger(ledger.attributes.slug); setCurrentPage(0) }}
             >
               {ledger.attributes.name}
             </Button>
@@ -1140,42 +1112,21 @@ export function Transactions() {
               </TableBody>
             </Table>
             )}
-            {totalPages > 1 && (
-              <div className="flex items-center justify-between pt-4">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <span>{t("transactions.totalTransactions", { count: totalElements })}</span>
-                  <span className="text-muted-foreground/50">·</span>
-                  <Select value={String(pageSize)} onValueChange={(value) => { setPageSize(Number(value)); setCurrentPage(0) }}>
-                    <SelectTrigger className="h-8 w-[70px]">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="10">10</SelectItem>
-                      <SelectItem value="20">20</SelectItem>
-                      <SelectItem value="50">50</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <span>{t("transactions.perPage")}</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <span className="text-sm text-muted-foreground mr-2">
-                    {t("transactions.page", { current: currentPage + 1, total: totalPages })}
-                  </span>
-                  <Button variant="outline" size="icon" className="h-8 w-8" disabled={currentPage === 0} onClick={() => setCurrentPage(0)}>
-                    <ChevronsLeft className="h-4 w-4" />
-                  </Button>
-                  <Button variant="outline" size="icon" className="h-8 w-8" disabled={currentPage === 0} onClick={() => setCurrentPage(currentPage - 1)}>
-                    <ChevronLeft className="h-4 w-4" />
-                  </Button>
-                  <Button variant="outline" size="icon" className="h-8 w-8" disabled={currentPage >= totalPages - 1} onClick={() => setCurrentPage(currentPage + 1)}>
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
-                  <Button variant="outline" size="icon" className="h-8 w-8" disabled={currentPage >= totalPages - 1} onClick={() => setCurrentPage(totalPages - 1)}>
-                    <ChevronsRight className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            )}
+            <Pagination page={currentPage} totalPages={totalPages} onPageChange={setCurrentPage}>
+              <span>{t("transactions.totalTransactions", { count: totalElements })}</span>
+              <span className="text-muted-foreground/50">·</span>
+              <Select value={String(pageSize)} onValueChange={(value) => { setPageSize(Number(value)); setCurrentPage(0) }}>
+                <SelectTrigger className="h-8 w-[70px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="10">10</SelectItem>
+                  <SelectItem value="20">20</SelectItem>
+                  <SelectItem value="50">50</SelectItem>
+                </SelectContent>
+              </Select>
+              <span>{t("transactions.perPage")}</span>
+            </Pagination>
             </>
           ) : (
             <div className="flex flex-col items-center justify-center py-12">

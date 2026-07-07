@@ -1,5 +1,4 @@
 import { useEffect, useState, useMemo } from "react"
-import { useParams } from "react-router-dom"
 import { useTranslation } from "react-i18next"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -37,6 +36,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { useAuth } from "@/contexts/AuthContext"
+import { useLedger } from "@/contexts/LedgerContext"
 import {
   getEnvelopes,
   deleteEnvelope,
@@ -48,8 +48,8 @@ import {
 import { getAccounts } from "@/api/accounts"
 import { ApiError } from "@/api/client"
 import { useErrorHandler } from "@/hooks/use-error-handler"
-import { getLedgers } from "@/api/ledgers"
-import type { EnvelopeResource, LedgerResource, AccountResource, EnvelopeType, EnvelopeStatus } from "@/api/types"
+import { useConfirm } from "@/components/ui/confirm-dialog"
+import type { EnvelopeResource, AccountResource, EnvelopeType, EnvelopeStatus } from "@/api/types"
 import { Plus, Trash2, MoreHorizontal, Pencil, ChevronRight, ChevronDown, FolderOpen, Link as LinkIcon } from "lucide-react"
 import { Checkbox } from "@/components/ui/checkbox"
 
@@ -211,13 +211,13 @@ function EnvelopeRow({
 
 export function Envelopes() {
   const { t } = useTranslation()
-  const { ledgerSlug } = useParams<{ ledgerSlug?: string }>()
   const { isAuthenticated } = useAuth()
   const handleError = useErrorHandler()
+  const confirm = useConfirm()
   const [envelopes, setEnvelopes] = useState<EnvelopeResource[]>([])
   const [accounts, setAccounts] = useState<AccountResource[]>([])
-  const [ledgers, setLedgers] = useState<LedgerResource[]>([])
-  const [selectedLedgerSlug, setSelectedLedgerSlug] = useState<string | null>(ledgerSlug || null)
+  const { ledgers, currentLedger, setCurrentLedger } = useLedger()
+  const selectedLedgerSlug = currentLedger?.attributes.slug ?? null
   const [isLoading, setIsLoading] = useState(true)
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
@@ -279,22 +279,6 @@ export function Envelopes() {
 
     return envelopes.filter((e) => !excludedIds.has(e.id))
   }, [envelopes, editingEnvelope])
-
-  useEffect(() => {
-    if (!isAuthenticated) {
-      setIsLoading(false)
-      return
-    }
-
-    getLedgers()
-      .then((response) => {
-        setLedgers(response.data)
-        if (response.data.length > 0) {
-          setSelectedLedgerSlug(prev => prev ?? response.data[0].attributes.slug)
-        }
-      })
-      .catch((e) => handleError(e, "fetchFailed"))
-  }, [isAuthenticated, handleError])
 
   useEffect(() => {
     if (!selectedLedgerSlug || !isAuthenticated) {
@@ -359,7 +343,7 @@ export function Envelopes() {
       ? t("envelopes.confirmDeleteWithChildren", { count: childCount })
       : t("envelopes.confirmDelete")
 
-    if (!confirm(message)) return
+    if (!(await confirm({ description: message }))) return
 
     try {
       await deleteEnvelope(selectedLedgerSlug, envelopeId)
@@ -484,20 +468,6 @@ export function Envelopes() {
     )
   }
 
-  if (!isAuthenticated) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full">
-        <Card className="w-full max-w-md">
-          <CardHeader className="text-center">
-            <CardTitle>{t("auth.signInRequired")}</CardTitle>
-            <CardDescription>
-              {t("auth.pleaseSignIn", { resource: t("nav.envelopes").toLowerCase() })}
-            </CardDescription>
-          </CardHeader>
-        </Card>
-      </div>
-    )
-  }
 
   const selectedLedger = ledgers.find((l) => l.attributes.slug === selectedLedgerSlug)
 
@@ -781,7 +751,7 @@ export function Envelopes() {
               key={ledger.id}
               variant={selectedLedgerSlug === ledger.attributes.slug ? "default" : "outline"}
               size="sm"
-              onClick={() => setSelectedLedgerSlug(ledger.attributes.slug)}
+              onClick={() => setCurrentLedger(ledger.attributes.slug)}
             >
               {ledger.attributes.name}
             </Button>

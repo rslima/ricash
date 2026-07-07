@@ -28,10 +28,12 @@ import type { ExchangeRateResource } from "@/api/types"
 import { formatDate } from "@/lib/utils"
 import { TrendingUp, Plus, Trash2 } from "lucide-react"
 import { useErrorHandler } from "@/hooks/use-error-handler"
+import { useConfirm } from "@/components/ui/confirm-dialog"
 
 export function ExchangeRates() {
   const { t } = useTranslation()
   const handleError = useErrorHandler()
+  const confirm = useConfirm()
   const { isAuthenticated } = useAuth()
   const [exchangeRates, setExchangeRates] = useState<ExchangeRateResource[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -98,7 +100,7 @@ export function ExchangeRates() {
   }, [isAuthenticated, handleError])
 
   const handleDelete = async (id: string) => {
-    if (!confirm(t("exchangeRates.confirmDelete"))) return
+    if (!(await confirm({ description: t("exchangeRates.confirmDelete") }))) return
 
     try {
       await deleteExchangeRate(id)
@@ -123,20 +125,6 @@ export function ExchangeRates() {
     }
   }
 
-  if (!isAuthenticated) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full">
-        <Card className="w-full max-w-md">
-          <CardHeader className="text-center">
-            <CardTitle>{t("auth.signInRequired")}</CardTitle>
-            <CardDescription>
-              {t("auth.pleaseSignIn", { resource: t("nav.exchangeRates").toLowerCase() })}
-            </CardDescription>
-          </CardHeader>
-        </Card>
-      </div>
-    )
-  }
 
   return (
     <div className="space-y-4">

@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from "react"
-import { useParams, Link } from "react-router-dom"
+import { Link } from "react-router-dom"
 import { useTranslation } from "react-i18next"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -21,9 +21,9 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { useAuth } from "@/contexts/AuthContext"
+import { useLedger } from "@/contexts/LedgerContext"
 import { getEnvelopes, getBudgetSummary, allocateEnvelope } from "@/api/envelopes"
-import { getLedgers } from "@/api/ledgers"
-import type { EnvelopeResource, LedgerResource, EnvelopeBalance, EnvelopeType } from "@/api/types"
+import type { EnvelopeResource, EnvelopeBalance, EnvelopeType } from "@/api/types"
 import { formatCurrency } from "@/lib/utils"
 import { ChevronLeft, ChevronRight, FolderOpen, TrendingUp, TrendingDown, PiggyBank } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -166,14 +166,13 @@ const MONTHS = [
 
 export function Budget() {
   const { t } = useTranslation()
-  const { ledgerSlug } = useParams<{ ledgerSlug?: string }>()
   const { isAuthenticated } = useAuth()
   const handleError = useErrorHandler()
   const [envelopes, setEnvelopes] = useState<EnvelopeResource[]>([])
   const [balances, setBalances] = useState<EnvelopeBalance[]>([])
   const [toBeBudgeted, setToBeBudgeted] = useState(0)
-  const [ledgers, setLedgers] = useState<LedgerResource[]>([])
-  const [selectedLedgerSlug, setSelectedLedgerSlug] = useState<string | null>(ledgerSlug || null)
+  const { ledgers, currentLedger, setCurrentLedger } = useLedger()
+  const selectedLedgerSlug = currentLedger?.attributes.slug ?? null
   const [isLoading, setIsLoading] = useState(true)
 
   const now = new Date()
@@ -203,22 +202,6 @@ export function Budget() {
     })
     return map
   }, [balances])
-
-  useEffect(() => {
-    if (!isAuthenticated) {
-      setIsLoading(false)
-      return
-    }
-
-    getLedgers()
-      .then((response) => {
-        setLedgers(response.data)
-        if (response.data.length > 0) {
-          setSelectedLedgerSlug(prev => prev ?? response.data[0].attributes.slug)
-        }
-      })
-      .catch((e) => handleError(e, "fetchFailed"))
-  }, [isAuthenticated, handleError])
 
   useEffect(() => {
     if (!selectedLedgerSlug || !isAuthenticated) {
@@ -280,20 +263,6 @@ export function Budget() {
   const selectedLedger = ledgers.find((l) => l.attributes.slug === selectedLedgerSlug)
   const ledgerCurrency = selectedLedger?.attributes.currency ?? "BRL"
 
-  if (!isAuthenticated) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full">
-        <Card className="w-full max-w-md">
-          <CardHeader className="text-center">
-            <CardTitle>{t("auth.signInRequired")}</CardTitle>
-            <CardDescription>
-              {t("auth.pleaseSignIn", { resource: t("nav.budget").toLowerCase() })}
-            </CardDescription>
-          </CardHeader>
-        </Card>
-      </div>
-    )
-  }
 
   return (
     <div className="space-y-6">
@@ -313,7 +282,7 @@ export function Budget() {
               key={ledger.id}
               variant={selectedLedgerSlug === ledger.attributes.slug ? "default" : "outline"}
               size="sm"
-              onClick={() => setSelectedLedgerSlug(ledger.attributes.slug)}
+              onClick={() => setCurrentLedger(ledger.attributes.slug)}
             >
               {ledger.attributes.name}
             </Button>

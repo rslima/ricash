@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 import { AuthProvider as OidcAuthProvider, useAuth as useOidcAuth } from "react-oidc-context"
 import { User, UserManager, OidcClient, WebStorageStateStore } from "oidc-client-ts"
 import { apiClient } from "@/api/client"
+import { queryClient } from "@/api/queries/queryClient"
 import { isNativePlatform } from "@/lib/capacitor"
 import { NativeStorage } from "@/lib/native-storage"
 
@@ -90,6 +91,8 @@ userManager.events.addUserLoaded((user) => {
 userManager.events.addUserUnloaded(() => {
   console.log("User unloaded")
   apiClient.setAccessToken(null)
+  // Drop all cached API data when the session ends
+  queryClient.clear()
 })
 
 interface AuthProviderProps {

@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react"
-import { useParams } from "react-router-dom"
 import { useTranslation } from "react-i18next"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -37,11 +36,12 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { useAuth } from "@/contexts/AuthContext"
+import { useLedger } from "@/contexts/LedgerContext"
 import { getInstruments, createInstrument, updateInstrument, deleteInstrument } from "@/api/instruments"
-import { getLedgers } from "@/api/ledgers"
-import type { InstrumentResource, LedgerResource, InstrumentType, InstrumentStatus } from "@/api/types"
+import type { InstrumentResource, InstrumentType, InstrumentStatus } from "@/api/types"
 import { Plus, Trash2, TrendingUp, MoreHorizontal, Pencil, Briefcase } from "lucide-react"
 import { useErrorHandler } from "@/hooks/use-error-handler"
+import { useConfirm } from "@/components/ui/confirm-dialog"
 
 const instrumentTypeColors: Record<InstrumentType, "default" | "secondary" | "destructive" | "outline"> = {
   STOCK: "default",
@@ -53,12 +53,12 @@ const instrumentTypeColors: Record<InstrumentType, "default" | "secondary" | "de
 
 export function Instruments() {
   const { t } = useTranslation()
-  const { ledgerSlug } = useParams<{ ledgerSlug?: string }>()
   const { isAuthenticated } = useAuth()
   const handleError = useErrorHandler()
+  const confirm = useConfirm()
   const [instruments, setInstruments] = useState<InstrumentResource[]>([])
-  const [ledgers, setLedgers] = useState<LedgerResource[]>([])
-  const [selectedLedgerSlug, setSelectedLedgerSlug] = useState<string | null>(ledgerSlug || null)
+  const { ledgers, currentLedger, setCurrentLedger } = useLedger()
+  const selectedLedgerSlug = currentLedger?.attributes.slug ?? null
   const [isLoading, setIsLoading] = useState(true)
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
@@ -95,22 +95,6 @@ export function Instruments() {
       isin: "",
     })
   }
-
-  useEffect(() => {
-    if (!isAuthenticated) {
-      setIsLoading(false)
-      return
-    }
-
-    getLedgers()
-      .then((response) => {
-        setLedgers(response.data)
-        if (response.data.length > 0) {
-          setSelectedLedgerSlug(prev => prev ?? response.data[0].attributes.slug)
-        }
-      })
-      .catch((e) => handleError(e, "fetchFailed"))
-  }, [isAuthenticated, handleError])
 
   useEffect(() => {
     if (!selectedLedgerSlug || !isAuthenticated) {
@@ -192,7 +176,7 @@ export function Instruments() {
 
   const handleDelete = async (instrumentId: string) => {
     if (!selectedLedgerSlug) return
-    if (!confirm(t("instruments.confirmDelete"))) return
+    if (!(await confirm({ description: t("instruments.confirmDelete") }))) return
 
     try {
       await deleteInstrument(selectedLedgerSlug, instrumentId)
@@ -202,20 +186,6 @@ export function Instruments() {
     }
   }
 
-  if (!isAuthenticated) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full">
-        <Card className="w-full max-w-md">
-          <CardHeader className="text-center">
-            <CardTitle>{t("auth.signInRequired")}</CardTitle>
-            <CardDescription>
-              {t("auth.pleaseSignIn", { resource: t("nav.instruments").toLowerCase() })}
-            </CardDescription>
-          </CardHeader>
-        </Card>
-      </div>
-    )
-  }
 
   const selectedLedger = ledgers.find((l) => l.attributes.slug === selectedLedgerSlug)
 
@@ -445,7 +415,7 @@ export function Instruments() {
               key={ledger.id}
               variant={selectedLedgerSlug === ledger.attributes.slug ? "default" : "outline"}
               size="sm"
-              onClick={() => setSelectedLedgerSlug(ledger.attributes.slug)}
+              onClick={() => setCurrentLedger(ledger.attributes.slug)}
             >
               {ledger.attributes.name}
             </Button>

@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from "react"
-import { useParams, Link } from "react-router-dom"
+import { Link } from "react-router-dom"
 import { useTranslation } from "react-i18next"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -37,12 +37,13 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { useAuth } from "@/contexts/AuthContext"
+import { useLedger } from "@/contexts/LedgerContext"
 import { getAccounts, deleteAccount, createAccount, updateAccount } from "@/api/accounts"
 import { ApiError } from "@/api/client"
 import { useErrorHandler } from "@/hooks/use-error-handler"
-import { getLedgers } from "@/api/ledgers"
+import { useConfirm } from "@/components/ui/confirm-dialog"
 import { getEnvelopes, getEnvelopeMappings, setEnvelopeAccounts, getEnvelopeAccounts } from "@/api/envelopes"
-import type { AccountResource, LedgerResource, EnvelopeResource } from "@/api/types"
+import type { AccountResource, EnvelopeResource } from "@/api/types"
 import { formatCurrency } from "@/lib/utils"
 import { Plus, Trash2, Wallet, MoreHorizontal, Pencil, ChevronRight, ChevronDown } from "lucide-react"
 import { AccountAutocomplete } from "@/components/AccountAutocomplete"
@@ -195,14 +196,14 @@ function AccountRow({ node, depth, expandedIds, onToggleExpand, onEdit, onDelete
 
 export function Accounts() {
   const { t } = useTranslation()
-  const { ledgerSlug } = useParams<{ ledgerSlug?: string }>()
   const { isAuthenticated } = useAuth()
   const handleError = useErrorHandler()
+  const confirm = useConfirm()
   const [accounts, setAccounts] = useState<AccountResource[]>([])
   const [envelopes, setEnvelopes] = useState<EnvelopeResource[]>([])
   const [envelopeMappings, setEnvelopeMappings] = useState<Record<string, string>>({})
-  const [ledgers, setLedgers] = useState<LedgerResource[]>([])
-  const [selectedLedgerSlug, setSelectedLedgerSlug] = useState<string | null>(ledgerSlug || null)
+  const { ledgers, currentLedger, setCurrentLedger } = useLedger()
+  const selectedLedgerSlug = currentLedger?.attributes.slug ?? null
   const [isLoading, setIsLoading] = useState(true)
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
@@ -266,22 +267,6 @@ export function Accounts() {
 
     return accounts.filter((a) => !excludedIds.has(a.id))
   }, [accounts, editingAccount])
-
-  useEffect(() => {
-    if (!isAuthenticated) {
-      setIsLoading(false)
-      return
-    }
-
-    getLedgers()
-      .then((response) => {
-        setLedgers(response.data)
-        if (response.data.length > 0) {
-          setSelectedLedgerSlug(prev => prev ?? response.data[0].attributes.slug)
-        }
-      })
-      .catch((e) => handleError(e, "fetchFailed"))
-  }, [isAuthenticated, handleError])
 
   useEffect(() => {
     if (!selectedLedgerSlug || !isAuthenticated) {
@@ -350,7 +335,7 @@ export function Accounts() {
       ? t("accounts.confirmDeleteWithChildren", { count: childCount })
       : t("accounts.confirmDelete")
 
-    if (!confirm(message)) return
+    if (!(await confirm({ description: message }))) return
 
     try {
       await deleteAccount(selectedLedgerSlug, accountId)
@@ -482,20 +467,6 @@ export function Accounts() {
     }
   }
 
-  if (!isAuthenticated) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full">
-        <Card className="w-full max-w-md">
-          <CardHeader className="text-center">
-            <CardTitle>{t("auth.signInRequired")}</CardTitle>
-            <CardDescription>
-              {t("auth.pleaseSignIn", { resource: t("nav.accounts").toLowerCase() })}
-            </CardDescription>
-          </CardHeader>
-        </Card>
-      </div>
-    )
-  }
 
   const selectedLedger = ledgers.find((l) => l.attributes.slug === selectedLedgerSlug)
 
@@ -777,7 +748,7 @@ export function Accounts() {
               key={ledger.id}
               variant={selectedLedgerSlug === ledger.attributes.slug ? "default" : "outline"}
               size="sm"
-              onClick={() => setSelectedLedgerSlug(ledger.attributes.slug)}
+              onClick={() => setCurrentLedger(ledger.attributes.slug)}
             >
               {ledger.attributes.name}
             </Button>

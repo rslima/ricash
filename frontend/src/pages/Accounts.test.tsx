@@ -2,6 +2,9 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 import { render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { BrowserRouter } from "react-router-dom"
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
+import { LedgerProvider } from "@/contexts/LedgerContext"
+import { ConfirmDialogProvider } from "@/components/ui/confirm-dialog"
 import { Accounts } from "./Accounts"
 import * as accountsApi from "@/api/accounts"
 import * as ledgersApi from "@/api/ledgers"
@@ -62,9 +65,16 @@ const mockAccount: AccountResource = {
 }
 
 function renderAccounts() {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <BrowserRouter>
-      <Accounts />
+      <QueryClientProvider client={queryClient}>
+        <ConfirmDialogProvider>
+          <LedgerProvider>
+            <Accounts />
+          </LedgerProvider>
+        </ConfirmDialogProvider>
+      </QueryClientProvider>
     </BrowserRouter>
   )
 }
@@ -72,26 +82,6 @@ function renderAccounts() {
 describe("Accounts", () => {
   beforeEach(() => {
     vi.clearAllMocks()
-  })
-
-  describe("when not authenticated", () => {
-    beforeEach(() => {
-      vi.mocked(useAuth).mockReturnValue({
-        isAuthenticated: false,
-        user: null,
-        accessToken: null,
-        isLoading: false,
-        logout: vi.fn(),
-        startLogin: vi.fn(),
-      })
-    })
-
-    it("shows sign in required message", () => {
-      renderAccounts()
-
-      expect(screen.getByText("Sign in Required")).toBeInTheDocument()
-      expect(screen.getByText("Please sign in to view your accounts")).toBeInTheDocument()
-    })
   })
 
   describe("when authenticated", () => {
