@@ -55,7 +55,6 @@ describe("Ledgers", () => {
         isLoading: false,
         logout: vi.fn(),
         startLogin: vi.fn(),
-        exchangeCodeForToken: vi.fn(),
       })
     })
 
@@ -76,7 +75,6 @@ describe("Ledgers", () => {
         isLoading: false,
         logout: vi.fn(),
         startLogin: vi.fn(),
-        exchangeCodeForToken: vi.fn(),
       })
     })
 

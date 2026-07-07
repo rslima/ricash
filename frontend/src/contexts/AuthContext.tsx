@@ -21,7 +21,6 @@ interface AuthContextType {
   loginError: string | null
   logout: () => void
   startLogin: () => void
-  exchangeCodeForToken: (code: string) => Promise<boolean>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -130,12 +129,11 @@ function AuthProviderWrapper({ children }: AuthProviderProps) {
   const authUser = extractAuthUser(auth.user)
   const accessToken = auth.user?.access_token || null
 
-  // Update API client token whenever it changes
-  if (accessToken) {
+  // Keep the API client token in sync (the userLoaded/userUnloaded events
+  // cover renewals; this effect covers the initial restore from storage).
+  useEffect(() => {
     apiClient.setAccessToken(accessToken)
-  } else {
-    apiClient.setAccessToken(null)
-  }
+  }, [accessToken])
 
   // On native platforms, listen for deep links from the OIDC redirect
   useEffect(() => {
@@ -194,12 +192,6 @@ function AuthProviderWrapper({ children }: AuthProviderProps) {
     }
   }
 
-  // For compatibility with existing code - this is handled by the library now
-  const exchangeCodeForToken = async (): Promise<boolean> => {
-    // The library handles this automatically, but we keep the function for compatibility
-    return true
-  }
-
   const value: AuthContextType = {
     user: authUser,
     accessToken,
@@ -208,7 +200,6 @@ function AuthProviderWrapper({ children }: AuthProviderProps) {
     loginError,
     logout,
     startLogin,
-    exchangeCodeForToken,
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

@@ -83,7 +83,6 @@ describe("Accounts", () => {
         isLoading: false,
         logout: vi.fn(),
         startLogin: vi.fn(),
-        exchangeCodeForToken: vi.fn(),
       })
     })
 
@@ -104,7 +103,6 @@ describe("Accounts", () => {
         isLoading: false,
         logout: vi.fn(),
         startLogin: vi.fn(),
-        exchangeCodeForToken: vi.fn(),
       })
     })
 

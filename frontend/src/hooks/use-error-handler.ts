@@ -22,12 +22,19 @@ export function useErrorHandler() {
         toast.error(t("errors.notFound"))
         return
       }
-      if (error.status === 409) {
-        toast.error(t("errors.conflict"))
-        return
-      }
       if (error.status >= 500) {
         toast.error(t("errors.serverError"))
+        return
+      }
+      // Remaining 4xx (validation, unbalanced transaction, conflict, ...):
+      // the API's JSON:API error detail is the most useful message to show.
+      const detail = error.errors?.[0]?.detail
+      if (detail) {
+        toast.error(detail)
+        return
+      }
+      if (error.status === 409) {
+        toast.error(t("errors.conflict"))
         return
       }
     }

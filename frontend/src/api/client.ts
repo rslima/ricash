@@ -47,8 +47,12 @@ class ApiClient {
     })
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({ message: "Request failed" }))
-      throw new ApiError(response.status, error.message || "Request failed", error)
+      // The API speaks JSON:API: errors arrive as { errors: [{ status, title, detail }] }
+      const body: unknown = await response.json().catch(() => null)
+      const errors = extractJsonApiErrors(body)
+      const first = errors?.[0]
+      const message = first?.detail || first?.title || `Request failed (${response.status})`
+      throw new ApiError(response.status, message, body, errors)
     }
 
     if (response.status === 204) {
@@ -88,15 +92,30 @@ class ApiClient {
   }
 }
 
+export interface JsonApiErrorObject {
+  status?: string
+  title?: string
+  detail?: string
+}
+
+function extractJsonApiErrors(body: unknown): JsonApiErrorObject[] | undefined {
+  if (body && typeof body === "object" && Array.isArray((body as { errors?: unknown }).errors)) {
+    return (body as { errors: JsonApiErrorObject[] }).errors
+  }
+  return undefined
+}
+
 export class ApiError extends Error {
   status: number
   data?: unknown
+  errors?: JsonApiErrorObject[]
 
-  constructor(status: number, message: string, data?: unknown) {
+  constructor(status: number, message: string, data?: unknown, errors?: JsonApiErrorObject[]) {
     super(message)
     this.name = "ApiError"
     this.status = status
     this.data = data
+    this.errors = errors
   }
 }
 

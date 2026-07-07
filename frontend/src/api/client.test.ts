@@ -130,10 +130,55 @@ describe("ApiClient", () => {
 
     const { apiClient } = await import("./client")
 
-    await expect(apiClient.get("/test")).rejects.toThrow("Not Found")
+    await expect(apiClient.get("/test")).rejects.toThrow("Request failed (404)")
     await expect(apiClient.get("/test")).rejects.toMatchObject({
       status: 404,
     })
+  })
+
+  it("uses JSON:API error detail as the error message", async () => {
+    const body = {
+      errors: [
+        { status: "400", title: "Bad Request", detail: "Transaction is not balanced for currency USD" },
+      ],
+    }
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 400,
+      json: () => Promise.resolve(body),
+    })
+
+    const { apiClient } = await import("./client")
+
+    await expect(apiClient.get("/test")).rejects.toMatchObject({
+      status: 400,
+      message: "Transaction is not balanced for currency USD",
+      errors: body.errors,
+    })
+  })
+
+  it("falls back to title when detail is missing", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 404,
+      json: () => Promise.resolve({ errors: [{ status: "404", title: "Not Found" }] }),
+    })
+
+    const { apiClient } = await import("./client")
+
+    await expect(apiClient.get("/test")).rejects.toThrow("Not Found")
+  })
+
+  it("falls back to a generic message for non-JSON error responses", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 500,
+      json: () => Promise.reject(new Error("not json")),
+    })
+
+    const { apiClient } = await import("./client")
+
+    await expect(apiClient.get("/test")).rejects.toThrow("Request failed (500)")
   })
 
   it("handles 204 No Content response", async () => {
