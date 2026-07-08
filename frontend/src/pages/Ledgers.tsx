@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react"
+import { useEffect, useState } from "react"
 import { Link } from "react-router-dom"
 import { useTranslation } from "react-i18next"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -24,7 +24,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { useAuth } from "@/contexts/AuthContext"
-import { getLedgers, deleteLedger, createLedger, updateLedger } from "@/api/ledgers"
+import { useLedgers, useCreateLedger, useUpdateLedger, useDeleteLedger } from "@/api/ledgers.hooks"
 import type { LedgerResource } from "@/api/types"
 import { formatDate } from "@/lib/utils"
 import { useIsMobile } from "@/hooks/use-mobile"
@@ -42,12 +42,8 @@ export function Ledgers() {
   const { isAuthenticated } = useAuth()
   const handleError = useErrorHandler()
   const isMobile = useIsMobile()
-  const [ledgers, setLedgers] = useState<LedgerResource[]>([])
-  const [isLoading, setIsLoading] = useState(true)
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
-  const [isCreating, setIsCreating] = useState(false)
-  const [isUpdating, setIsUpdating] = useState(false)
   const [editingLedger, setEditingLedger] = useState<LedgerResource | null>(null)
   const [formData, setFormData] = useState({
     name: "",
@@ -59,55 +55,42 @@ export function Ledgers() {
     description: "",
   })
 
-  const fetchLedgers = useCallback(async () => {
-    if (!isAuthenticated) {
-      setIsLoading(false)
-      return
-    }
+  // Server state: TanStack Query owns fetching, caching, and loading flags.
+  const { data: ledgers = [], isLoading, isError, error } = useLedgers(isAuthenticated)
+  const createLedgerMutation = useCreateLedger()
+  const updateLedgerMutation = useUpdateLedger()
+  const deleteLedgerMutation = useDeleteLedger()
 
-    try {
-      const response = await getLedgers()
-      setLedgers(response.data)
-    } catch (error) {
-      handleError(error, "fetchFailed")
-    } finally {
-      setIsLoading(false)
-    }
-  }, [isAuthenticated, handleError])
-
+  // Surface fetch failures as a toast (mutations report their own errors inline).
   useEffect(() => {
-    fetchLedgers()
-  }, [fetchLedgers])
+    if (isError) handleError(error, "fetchFailed")
+  }, [isError, error, handleError])
 
-  const handleDelete = async (slug: string) => {
+  const handleDelete = (slug: string) => {
     if (!confirm(t("ledgers.confirmDelete"))) return
 
-    try {
-      await deleteLedger(slug)
-      setLedgers(ledgers.filter((l) => l.attributes.slug !== slug))
-    } catch (error) {
-      handleError(error, "deleteFailed")
-    }
+    deleteLedgerMutation.mutate(slug, {
+      onError: (err) => handleError(err, "deleteFailed"),
+    })
   }
 
-  const handleCreate = async (e: React.FormEvent) => {
+  const handleCreate = (e: React.FormEvent) => {
     e.preventDefault()
-    setIsCreating(true)
 
-    try {
-      const response = await createLedger({
+    createLedgerMutation.mutate(
+      {
         name: formData.name,
         description: formData.description || undefined,
         currency: formData.currency,
-      })
-      setLedgers([...ledgers, response.data])
-      setIsCreateDialogOpen(false)
-      setFormData({ name: "", description: "", currency: "BRL" })
-    } catch (error) {
-      handleError(error, "createFailed")
-    } finally {
-      setIsCreating(false)
-    }
+      },
+      {
+        onSuccess: () => {
+          setIsCreateDialogOpen(false)
+          setFormData({ name: "", description: "", currency: "BRL" })
+        },
+        onError: (err) => handleError(err, "createFailed"),
+      }
+    )
   }
 
   const handleEdit = (ledger: LedgerResource) => {
@@ -119,26 +102,26 @@ export function Ledgers() {
     setIsEditDialogOpen(true)
   }
 
-  const handleUpdate = async (e: React.FormEvent) => {
+  const handleUpdate = (e: React.FormEvent) => {
     e.preventDefault()
     if (!editingLedger) return
-    setIsUpdating(true)
 
-    try {
-      const response = await updateLedger(editingLedger.attributes.slug, {
-        name: editFormData.name,
-        description: editFormData.description || undefined,
-      })
-      setLedgers(ledgers.map((l) =>
-        l.id === editingLedger.id ? response.data : l
-      ))
-      setIsEditDialogOpen(false)
-      setEditingLedger(null)
-    } catch (error) {
-      handleError(error, "updateFailed")
-    } finally {
-      setIsUpdating(false)
-    }
+    updateLedgerMutation.mutate(
+      {
+        slug: editingLedger.attributes.slug,
+        data: {
+          name: editFormData.name,
+          description: editFormData.description || undefined,
+        },
+      },
+      {
+        onSuccess: () => {
+          setIsEditDialogOpen(false)
+          setEditingLedger(null)
+        },
+        onError: (err) => handleError(err, "updateFailed"),
+      }
+    )
   }
 
   if (!isAuthenticated) {
@@ -225,8 +208,8 @@ export function Ledgers() {
               >
                 {t("common.cancel")}
               </Button>
-              <Button type="submit" disabled={isCreating}>
-                {isCreating ? t("ledgers.creating") : t("ledgers.createLedger")}
+              <Button type="submit" disabled={createLedgerMutation.isPending}>
+                {createLedgerMutation.isPending ? t("ledgers.creating") : t("ledgers.createLedger")}
               </Button>
             </DialogFooter>
           </form>
@@ -275,8 +258,8 @@ export function Ledgers() {
               >
                 {t("common.cancel")}
               </Button>
-              <Button type="submit" disabled={isUpdating}>
-                {isUpdating ? t("ledgers.saving") : t("common.save")}
+              <Button type="submit" disabled={updateLedgerMutation.isPending}>
+                {updateLedgerMutation.isPending ? t("ledgers.saving") : t("common.save")}
               </Button>
             </DialogFooter>
           </form>

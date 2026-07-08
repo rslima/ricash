@@ -1,4 +1,7 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom"
+import { QueryClientProvider } from "@tanstack/react-query"
+import { ReactQueryDevtools } from "@tanstack/react-query-devtools"
+import { queryClient } from "@/lib/queryClient"
 import { AuthProvider } from "@/contexts/AuthContext"
 import { ThemeProvider } from "@/contexts/ThemeContext"
 import { Toaster } from "@/components/ui/sonner"
@@ -21,6 +24,7 @@ import { CategoryTransactions } from "@/pages/CategoryTransactions"
 
 function App() {
   return (
+    <QueryClientProvider client={queryClient}>
     <ThemeProvider>
     <AuthProvider>
       <BrowserRouter>
@@ -54,6 +58,8 @@ function App() {
       <Toaster />
     </AuthProvider>
     </ThemeProvider>
+    {import.meta.env.DEV && <ReactQueryDevtools initialIsOpen={false} />}
+    </QueryClientProvider>
   )
 }
 

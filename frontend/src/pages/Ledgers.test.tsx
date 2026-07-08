@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 import { render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { BrowserRouter } from "react-router-dom"
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { Ledgers } from "./Ledgers"
 import * as ledgersApi from "@/api/ledgers"
 import type { LedgerResource } from "@/api/types"
@@ -15,6 +16,7 @@ vi.mock("@/contexts/AuthContext", () => ({
 vi.mock("@/api/ledgers", () => ({
   getLedgers: vi.fn(),
   createLedger: vi.fn(),
+  updateLedger: vi.fn(),
   deleteLedger: vi.fn(),
 }))
 
@@ -34,10 +36,17 @@ const mockLedger: LedgerResource = {
 }
 
 function renderLedgers() {
+  // Fresh client per render so cache never bleeds between tests; retries off
+  // so a failing query surfaces immediately instead of after backoff.
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  })
   return render(
-    <BrowserRouter>
-      <Ledgers />
-    </BrowserRouter>
+    <QueryClientProvider client={queryClient}>
+      <BrowserRouter>
+        <Ledgers />
+      </BrowserRouter>
+    </QueryClientProvider>
   )
 }
 
@@ -89,7 +98,7 @@ describe("Ledgers", () => {
     })
 
     it("displays ledgers after loading", async () => {
-      vi.mocked(ledgersApi.getLedgers).mockResolvedValueOnce({
+      vi.mocked(ledgersApi.getLedgers).mockResolvedValue({
         data: [mockLedger],
       })
 
@@ -104,7 +113,7 @@ describe("Ledgers", () => {
     })
 
     it("shows empty state when no ledgers", async () => {
-      vi.mocked(ledgersApi.getLedgers).mockResolvedValueOnce({
+      vi.mocked(ledgersApi.getLedgers).mockResolvedValue({
         data: [],
       })
 
@@ -119,7 +128,7 @@ describe("Ledgers", () => {
 
     it("opens create dialog when clicking New Ledger button", async () => {
       const user = userEvent.setup()
-      vi.mocked(ledgersApi.getLedgers).mockResolvedValueOnce({
+      vi.mocked(ledgersApi.getLedgers).mockResolvedValue({
         data: [],
       })
 
@@ -139,7 +148,7 @@ describe("Ledgers", () => {
 
     it("creates a ledger when form is submitted", async () => {
       const user = userEvent.setup()
-      vi.mocked(ledgersApi.getLedgers).mockResolvedValueOnce({
+      vi.mocked(ledgersApi.getLedgers).mockResolvedValue({
         data: [],
       })
       vi.mocked(ledgersApi.createLedger).mockResolvedValueOnce({
@@ -186,7 +195,7 @@ describe("Ledgers", () => {
         },
       }
 
-      vi.mocked(ledgersApi.getLedgers).mockResolvedValueOnce({
+      vi.mocked(ledgersApi.getLedgers).mockResolvedValue({
         data: [mockLedger, ledger2],
       })
 
