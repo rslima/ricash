@@ -169,6 +169,54 @@ class ExchangeRateServiceBeanTest {
                 .hasMessageContaining("positive");
     }
 
+    // --- refreshRate tests ---
+
+    @Test
+    void refreshRate_fetchesFromExternalAndSaves_bypassingDatabaseCache() {
+        when(externalExchangeRateService.fetchRate("USD", "BRL", DATE)).thenReturn(Optional.of(new BigDecimal("5.75")));
+        when(exchangeRateRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        var result = exchangeRateService.refreshRate("USD", "BRL", DATE);
+
+        assertThat(result).isPresent();
+        assertThat(result.get().rate()).isEqualByComparingTo(new BigDecimal("5.75"));
+        assertThat(result.get().source()).isEqualTo("EXTERNAL_API");
+
+        // Force-refresh must not consult the database cache first.
+        verify(exchangeRateRepository, never()).findRate(any(), any(), any());
+        verify(exchangeRateRepository).save(any(ExchangeRate.class));
+    }
+
+    @Test
+    void refreshRate_normalizesCurrencyCasing() {
+        when(externalExchangeRateService.fetchRate("USD", "BRL", DATE)).thenReturn(Optional.of(new BigDecimal("5.75")));
+        when(exchangeRateRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        var result = exchangeRateService.refreshRate("usd", "brl", DATE);
+
+        assertThat(result).isPresent();
+        assertThat(result.get().fromCurrency()).isEqualTo("USD");
+        assertThat(result.get().toCurrency()).isEqualTo("BRL");
+    }
+
+    @Test
+    void refreshRate_externalHasNoRate_returnsEmptyAndDoesNotSave() {
+        when(externalExchangeRateService.fetchRate("USD", "BRL", DATE)).thenReturn(Optional.empty());
+
+        var result = exchangeRateService.refreshRate("USD", "BRL", DATE);
+
+        assertThat(result).isEmpty();
+        verify(exchangeRateRepository, never()).save(any());
+    }
+
+    @Test
+    void refreshRate_sameCurrency_throws() {
+        assertThatThrownBy(() -> exchangeRateService.refreshRate("USD", "USD", DATE))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("same currency");
+        verifyNoInteractions(externalExchangeRateService);
+    }
+
     // --- getLatestRate tests ---
 
     @Test

@@ -46,6 +46,18 @@ public interface ExchangeRateService {
     ExchangeRate saveRate(String fromCurrency, String toCurrency, BigDecimal rate, LocalDate effectiveDate, String source);
 
     /**
+     * Force-fetches the exchange rate from the external provider, ignoring any
+     * value already cached in the database, and persists (upserts) the result.
+     * Used by the "fetch from external API" action in the UI.
+     *
+     * @param fromCurrency source currency code
+     * @param toCurrency target currency code
+     * @param date the date for which to fetch the rate
+     * @return the saved rate, or empty if the external provider had no rate
+     */
+    Optional<ExchangeRate> refreshRate(String fromCurrency, String toCurrency, LocalDate date);
+
+    /**
      * Gets the most recent exchange rate for a currency pair.
      *
      * @param fromCurrency source currency code

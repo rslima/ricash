@@ -234,6 +234,10 @@
     "createRate": "Criar Taxa de Câmbio",
     "createRateDescription": "Adicione uma taxa de câmbio manual para conversão de moedas",
     "creating": "Criando...",
+    "fetchRate": "Buscar da API",
+    "fetchRateTitle": "Buscar Taxa de Câmbio",
+    "fetchRateDescription": "Busque a taxa de um provedor externo (Banco Central do Brasil para pares com BRL, caso contrário uma API pública que retorna a taxa mais recente). Isso sobrescreve qualquer taxa existente para a data selecionada.",
+    "fetching": "Buscando...",
     "confirmDelete": "Tem certeza que deseja excluir esta taxa de câmbio?"
   },
   "settings": {
@@ -414,6 +418,7 @@
     "fetchFailed": "Falha ao carregar dados. Por favor, tente novamente.",
     "createFailed": "Falha ao criar. Por favor, tente novamente.",
     "updateFailed": "Falha ao salvar alterações. Por favor, tente novamente.",
-    "deleteFailed": "Falha ao excluir. Por favor, tente novamente."
+    "deleteFailed": "Falha ao excluir. Por favor, tente novamente.",
+    "fetchRateFailed": "Não foi possível buscar uma taxa para este par de moedas e data. O provedor pode não tê-la."
   }
 }

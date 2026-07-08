@@ -1,6 +1,8 @@
 package com.rslima.ricash.ledgers.exchangerates;
 
 import com.github.f4b6a3.uuid.UuidCreator;
+import com.toedter.spring.hateoas.jsonapi.JsonApiError;
+import com.toedter.spring.hateoas.jsonapi.JsonApiErrors;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -12,6 +14,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.hateoas.EntityModel;
 import org.springframework.hateoas.PagedModel;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.web.bind.annotation.*;
 
@@ -31,12 +34,19 @@ public class ExchangeRateController {
 
     private final ExchangeRateRepository exchangeRateRepository;
     private final ExchangeRateMapper exchangeRateMapper;
+    private final ExchangeRateService exchangeRateService;
 
     public record CreateExchangeRateRequest(
             @NotBlank String fromCurrency,
             @NotBlank String toCurrency,
             @NotNull @Positive BigDecimal rate,
             @NotNull LocalDate effectiveDate
+    ) {}
+
+    public record FetchExchangeRateRequest(
+            @NotBlank String fromCurrency,
+            @NotBlank String toCurrency,
+            @NotNull LocalDate date
     ) {}
 
     @PostMapping
@@ -59,6 +69,23 @@ public class ExchangeRateController {
         );
 
         var saved = exchangeRateRepository.save(exchangeRate);
+        return toEntityModel(exchangeRateMapper.toResource(saved));
+    }
+
+    @PostMapping("/fetch")
+    @ResponseStatus(HttpStatus.CREATED)
+    public EntityModel<ExchangeRateResource> fetchExchangeRate(
+            JwtAuthenticationToken principal,
+            @Valid @RequestBody FetchExchangeRateRequest request) {
+
+        log.info("Fetching exchange rate from external provider: {} -> {} on {}",
+                request.fromCurrency(), request.toCurrency(), request.date());
+
+        var saved = exchangeRateService
+                .refreshRate(request.fromCurrency(), request.toCurrency(), request.date())
+                .orElseThrow(() -> new ExchangeRateNotAvailableException(
+                        request.fromCurrency(), request.toCurrency(), request.date()));
+
         return toEntityModel(exchangeRateMapper.toResource(saved));
     }
 
@@ -126,5 +153,25 @@ public class ExchangeRateController {
         }
 
         return pagedModel;
+    }
+
+    @ExceptionHandler(ExchangeRateNotAvailableException.class)
+    public ResponseEntity<JsonApiErrors> handleRateNotAvailable(ExchangeRateNotAvailableException ex) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(
+                JsonApiErrors.create().withError(
+                        JsonApiError.create()
+                                .withStatus(Integer.toString(HttpStatus.NOT_FOUND.value()))
+                                .withTitle(HttpStatus.NOT_FOUND.getReasonPhrase())
+                                .withDetail(ex.getMessage())));
+    }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<JsonApiErrors> handleIllegalArgument(IllegalArgumentException ex) {
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(
+                JsonApiErrors.create().withError(
+                        JsonApiError.create()
+                                .withStatus(Integer.toString(HttpStatus.UNPROCESSABLE_ENTITY.value()))
+                                .withTitle(HttpStatus.UNPROCESSABLE_ENTITY.getReasonPhrase())
+                                .withDetail(ex.getMessage())));
     }
 }

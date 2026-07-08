@@ -24,3 +24,17 @@ export async function createExchangeRate(input: CreateExchangeRateInput): Promis
 export async function deleteExchangeRate(id: string): Promise<void> {
   return apiClient.delete(`/exchange-rates/${id}`)
 }
+
+export interface FetchExchangeRateInput {
+  fromCurrency: string
+  toCurrency: string
+  date: string
+}
+
+/**
+ * Force-fetches a rate from the external provider and persists it, overwriting
+ * any existing rate for that pair/date. Backed by POST /exchange-rates/fetch.
+ */
+export async function fetchExchangeRate(input: FetchExchangeRateInput): Promise<JsonApiResponse<ExchangeRateResource>> {
+  return apiClient.post("/exchange-rates/fetch", input)
+}

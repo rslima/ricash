@@ -23,9 +23,9 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { useAuth } from "@/contexts/AuthContext"
-import { useExchangeRates, useCreateExchangeRate, useDeleteExchangeRate } from "@/api/exchangeRates.hooks"
+import { useExchangeRates, useCreateExchangeRate, useDeleteExchangeRate, useFetchExchangeRate } from "@/api/exchangeRates.hooks"
 import { formatDate } from "@/lib/utils"
-import { TrendingUp, Plus, Trash2 } from "lucide-react"
+import { TrendingUp, Plus, Trash2, Download } from "lucide-react"
 import { useErrorHandler } from "@/hooks/use-error-handler"
 
 export function ExchangeRates() {
@@ -33,18 +33,25 @@ export function ExchangeRates() {
   const handleError = useErrorHandler()
   const { isAuthenticated } = useAuth()
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
+  const [isFetchDialogOpen, setIsFetchDialogOpen] = useState(false)
 
-  // Form state
+  // Create form state
   const [fromCurrency, setFromCurrency] = useState("")
   const [toCurrency, setToCurrency] = useState("")
   const [rate, setRate] = useState("")
   const [effectiveDate, setEffectiveDate] = useState(new Date().toISOString().split("T")[0])
+
+  // Fetch-from-external form state
+  const [fetchFrom, setFetchFrom] = useState("")
+  const [fetchTo, setFetchTo] = useState("")
+  const [fetchDate, setFetchDate] = useState(new Date().toISOString().split("T")[0])
 
   // Server state: TanStack Query owns fetching, caching, and loading flags.
   const { data: resp, isLoading, isError, error } = useExchangeRates({ "page[size]": 50 }, isAuthenticated)
   const exchangeRates = resp?.data ?? []
   const createExchangeRateMutation = useCreateExchangeRate()
   const deleteExchangeRateMutation = useDeleteExchangeRate()
+  const fetchExchangeRateMutation = useFetchExchangeRate()
 
   // Surface fetch failures as a toast (mutations report their own errors inline).
   useEffect(() => {
@@ -95,6 +102,40 @@ export function ExchangeRates() {
     })
   }
 
+  const resetFetchForm = () => {
+    setFetchFrom("")
+    setFetchTo("")
+    setFetchDate(new Date().toISOString().split("T")[0])
+  }
+
+  const isFetchFormValid = () => {
+    return (
+      fetchFrom.trim().length === 3 &&
+      fetchTo.trim().length === 3 &&
+      fetchFrom.trim().toUpperCase() !== fetchTo.trim().toUpperCase() &&
+      !!fetchDate
+    )
+  }
+
+  const handleFetch = () => {
+    if (!isFetchFormValid()) return
+
+    fetchExchangeRateMutation.mutate(
+      {
+        fromCurrency: fetchFrom.toUpperCase(),
+        toCurrency: fetchTo.toUpperCase(),
+        date: fetchDate,
+      },
+      {
+        onSuccess: () => {
+          setIsFetchDialogOpen(false)
+          resetFetchForm()
+        },
+        onError: (err) => handleError(err, "fetchRateFailed"),
+      }
+    )
+  }
+
   const getSourceBadgeVariant = (source: string): "default" | "secondary" | "outline" => {
     switch (source) {
       case "MANUAL":
@@ -128,10 +169,16 @@ export function ExchangeRates() {
           <h1 className="text-3xl font-bold tracking-tight">{t("exchangeRates.title")}</h1>
           <p className="text-muted-foreground">{t("exchangeRates.description")}</p>
         </div>
-        <Button onClick={() => setIsCreateDialogOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          {t("exchangeRates.newRate")}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => setIsFetchDialogOpen(true)}>
+            <Download className="mr-2 h-4 w-4" />
+            {t("exchangeRates.fetchRate")}
+          </Button>
+          <Button onClick={() => setIsCreateDialogOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            {t("exchangeRates.newRate")}
+          </Button>
+        </div>
       </div>
 
       {/* Create Dialog */}
@@ -213,6 +260,70 @@ export function ExchangeRates() {
               disabled={!isFormValid() || createExchangeRateMutation.isPending}
             >
               {createExchangeRateMutation.isPending ? t("exchangeRates.creating") : t("common.create")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Fetch-from-external Dialog */}
+      <Dialog open={isFetchDialogOpen} onOpenChange={(open) => {
+        setIsFetchDialogOpen(open)
+        if (!open) resetFetchForm()
+      }}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>{t("exchangeRates.fetchRateTitle")}</DialogTitle>
+            <DialogDescription>
+              {t("exchangeRates.fetchRateDescription")}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="fetchFrom" className="text-right">
+                {t("exchangeRates.from")}
+              </Label>
+              <Input
+                id="fetchFrom"
+                value={fetchFrom}
+                onChange={(e) => setFetchFrom(e.target.value.toUpperCase())}
+                placeholder="USD"
+                maxLength={3}
+                className="col-span-3 uppercase"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="fetchTo" className="text-right">
+                {t("exchangeRates.to")}
+              </Label>
+              <Input
+                id="fetchTo"
+                value={fetchTo}
+                onChange={(e) => setFetchTo(e.target.value.toUpperCase())}
+                placeholder="BRL"
+                maxLength={3}
+                className="col-span-3 uppercase"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="fetchDate" className="text-right">
+                {t("exchangeRates.effectiveDate")}
+              </Label>
+              <Input
+                id="fetchDate"
+                type="date"
+                value={fetchDate}
+                onChange={(e) => setFetchDate(e.target.value)}
+                className="col-span-3"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              type="submit"
+              onClick={handleFetch}
+              disabled={!isFetchFormValid() || fetchExchangeRateMutation.isPending}
+            >
+              {fetchExchangeRateMutation.isPending ? t("exchangeRates.fetching") : t("exchangeRates.fetchRate")}
             </Button>
           </DialogFooter>
         </DialogContent>

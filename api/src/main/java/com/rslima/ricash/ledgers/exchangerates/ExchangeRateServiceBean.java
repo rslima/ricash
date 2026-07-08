@@ -4,7 +4,6 @@ import com.rslima.ricash.ledgers.MonetaryAmount;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -13,7 +12,6 @@ import java.time.LocalDate;
 import java.util.Optional;
 import java.util.UUID;
 
-@Service
 @RequiredArgsConstructor
 @Slf4j
 public class ExchangeRateServiceBean implements ExchangeRateService {
@@ -111,6 +109,31 @@ public class ExchangeRateServiceBean implements ExchangeRateService {
         );
 
         return exchangeRateRepository.save(exchangeRate);
+    }
+
+    @Override
+    public Optional<ExchangeRate> refreshRate(String fromCurrency, String toCurrency, LocalDate date) {
+        String from = fromCurrency.toUpperCase();
+        String to = toCurrency.toUpperCase();
+
+        if (from.equals(to)) {
+            throw new IllegalArgumentException("Cannot fetch exchange rate for same currency: " + from);
+        }
+
+        // Force-fetch from the external provider, bypassing the database cache.
+        log.info("Force-refreshing external rate {} -> {} on {}", from, to, date);
+        Optional<BigDecimal> externalRate = externalExchangeRateService.fetchRate(from, to, date);
+
+        if (externalRate.isEmpty()) {
+            log.warn("External provider returned no rate for {} -> {} on {}", from, to, date);
+            return Optional.empty();
+        }
+
+        // saveRate upserts on (from, to, effectiveDate), so an existing rate for
+        // that day is overwritten with the freshly fetched value.
+        ExchangeRate saved = saveRate(from, to, externalRate.get(), date, "EXTERNAL_API");
+        log.info("Saved refreshed external rate: {} {} -> {} = {}", from, to, saved.rate(), date);
+        return Optional.of(saved);
     }
 
     @Override
