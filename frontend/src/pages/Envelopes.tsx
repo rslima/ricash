@@ -1,12 +1,16 @@
 import { useEffect, useState, useMemo } from "react"
+import { useParams } from "react-router-dom"
 import { useTranslation } from "react-i18next"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import {
   Table,
   TableBody,
+  TableCell,
   TableHead,
   TableHeader,
   TableRow,
@@ -19,8 +23,20 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { useAuth } from "@/contexts/AuthContext"
-import { useLedger } from "@/contexts/LedgerContext"
 import {
   getEnvelopes,
   deleteEnvelope,
@@ -32,24 +48,176 @@ import {
 import { getAccounts } from "@/api/accounts"
 import { ApiError } from "@/api/client"
 import { useErrorHandler } from "@/hooks/use-error-handler"
-import { useConfirm } from "@/components/ui/confirm-dialog"
-import type { EnvelopeResource, AccountResource, EnvelopeType } from "@/api/types"
-import { Plus, FolderOpen } from "lucide-react"
+import { getLedgers } from "@/api/ledgers"
+import type { EnvelopeResource, LedgerResource, AccountResource, EnvelopeType, EnvelopeStatus } from "@/api/types"
+import { Plus, Trash2, MoreHorizontal, Pencil, ChevronRight, ChevronDown, FolderOpen, Link as LinkIcon } from "lucide-react"
 import { Checkbox } from "@/components/ui/checkbox"
-import { EnvelopeDialog, type EnvelopeFormValues } from "@/components/envelopes/EnvelopeDialog"
-import { EnvelopeRow, buildEnvelopeTree, countTreeNodes, envelopeTypeColors, type EnvelopeTreeNode } from "@/components/envelopes/EnvelopeTree"
+
+const envelopeTypeColors: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
+  EXPENSE: "destructive",
+  INCOME: "default",
+}
 
 const ENVELOPE_TYPE_ORDER: EnvelopeType[] = ["INCOME", "EXPENSE"]
 
+interface EnvelopeTreeNode {
+  envelope: EnvelopeResource
+  children: EnvelopeTreeNode[]
+}
+
+function buildEnvelopeTree(envelopes: EnvelopeResource[]): EnvelopeTreeNode[] {
+  const envelopeMap = new Map<string, EnvelopeTreeNode>()
+  const roots: EnvelopeTreeNode[] = []
+
+  envelopes.forEach((envelope) => {
+    envelopeMap.set(envelope.id, { envelope, children: [] })
+  })
+
+  envelopes.forEach((envelope) => {
+    const node = envelopeMap.get(envelope.id)!
+    const parentId = envelope.attributes.parentEnvelopeId
+
+    if (parentId && envelopeMap.has(parentId)) {
+      envelopeMap.get(parentId)!.children.push(node)
+    } else {
+      roots.push(node)
+    }
+  })
+
+  return roots
+}
+
+function countTreeNodes(nodes: EnvelopeTreeNode[]): number {
+  let count = 0
+  for (const node of nodes) {
+    count += 1 + countTreeNodes(node.children)
+  }
+  return count
+}
+
+interface EnvelopeRowProps {
+  node: EnvelopeTreeNode
+  depth: number
+  expandedIds: Set<string>
+  onToggleExpand: (id: string) => void
+  onEdit: (envelope: EnvelopeResource) => void
+  onDelete: (envelopeId: string) => void
+  onCreateChild: (envelope: EnvelopeResource) => void
+  onManageAccounts: (envelope: EnvelopeResource) => void
+  t: (key: string) => string
+}
+
+function EnvelopeRow({
+  node,
+  depth,
+  expandedIds,
+  onToggleExpand,
+  onEdit,
+  onDelete,
+  onCreateChild,
+  onManageAccounts,
+  t,
+}: EnvelopeRowProps) {
+  const { envelope, children } = node
+  const hasChildren = children.length > 0
+  const isExpanded = expandedIds.has(envelope.id)
+  const isArchived = envelope.attributes.status === "ARCHIVED"
+
+  return (
+    <>
+      <TableRow className={isArchived ? "opacity-50" : ""}>
+        <TableCell className="font-medium">
+          <div className="flex items-center gap-2" style={{ paddingLeft: `${depth * 24}px` }}>
+            {hasChildren ? (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 p-0"
+                onClick={() => onToggleExpand(envelope.id)}
+              >
+                {isExpanded ? (
+                  <ChevronDown className="h-4 w-4" />
+                ) : (
+                  <ChevronRight className="h-4 w-4" />
+                )}
+              </Button>
+            ) : (
+              <span className="w-6" />
+            )}
+            <FolderOpen className="h-4 w-4 text-muted-foreground" />
+            <span>{envelope.attributes.name}</span>
+            {isArchived && (
+              <Badge variant="outline" className="ml-2">
+                {t("envelopes.archived")}
+              </Badge>
+            )}
+          </div>
+        </TableCell>
+        <TableCell>{envelope.attributes.currency}</TableCell>
+        <TableCell>
+          <Badge variant={envelopeTypeColors[envelope.attributes.type]}>
+            {t(`envelopes.types.${envelope.attributes.type}`)}
+          </Badge>
+        </TableCell>
+        <TableCell>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon">
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => onCreateChild(envelope)}>
+                <Plus className="mr-2 h-4 w-4" />
+                {t("envelopes.createChildEnvelope")}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onManageAccounts(envelope)}>
+                <LinkIcon className="mr-2 h-4 w-4" />
+                {t("envelopes.manageAccounts")}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onEdit(envelope)}>
+                <Pencil className="mr-2 h-4 w-4" />
+                {t("common.edit")}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => onDelete(envelope.id)}
+                className="text-destructive"
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                {t("common.delete")}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </TableCell>
+      </TableRow>
+      {isExpanded &&
+        children.map((child) => (
+          <EnvelopeRow
+            key={child.envelope.id}
+            node={child}
+            depth={depth + 1}
+            expandedIds={expandedIds}
+            onToggleExpand={onToggleExpand}
+            onEdit={onEdit}
+            onDelete={onDelete}
+            onCreateChild={onCreateChild}
+            onManageAccounts={onManageAccounts}
+            t={t}
+          />
+        ))}
+    </>
+  )
+}
+
 export function Envelopes() {
   const { t } = useTranslation()
+  const { ledgerSlug } = useParams<{ ledgerSlug?: string }>()
   const { isAuthenticated } = useAuth()
   const handleError = useErrorHandler()
-  const confirm = useConfirm()
   const [envelopes, setEnvelopes] = useState<EnvelopeResource[]>([])
   const [accounts, setAccounts] = useState<AccountResource[]>([])
-  const { ledgers, currentLedger, setCurrentLedger } = useLedger()
-  const selectedLedgerSlug = currentLedger?.attributes.slug ?? null
+  const [ledgers, setLedgers] = useState<LedgerResource[]>([])
+  const [selectedLedgerSlug, setSelectedLedgerSlug] = useState<string | null>(ledgerSlug || null)
   const [isLoading, setIsLoading] = useState(true)
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
@@ -61,19 +229,19 @@ export function Envelopes() {
   const [managingEnvelope, setManagingEnvelope] = useState<EnvelopeResource | null>(null)
   const [selectedAccountIds, setSelectedAccountIds] = useState<string[]>([])
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
-  const [formData, setFormData] = useState<EnvelopeFormValues>({
+  const [formData, setFormData] = useState({
     name: "",
     description: "",
     currency: "BRL",
-    type: "EXPENSE",
+    type: "EXPENSE" as EnvelopeType,
     parentEnvelopeId: "",
   })
-  const [editFormData, setEditFormData] = useState<EnvelopeFormValues>({
+  const [editFormData, setEditFormData] = useState({
     name: "",
     description: "",
-    type: "EXPENSE",
+    type: "EXPENSE" as EnvelopeType,
     currency: "BRL",
-    status: "ACTIVE",
+    status: "ACTIVE" as EnvelopeStatus,
     parentEnvelopeId: "",
   })
 
@@ -111,6 +279,22 @@ export function Envelopes() {
 
     return envelopes.filter((e) => !excludedIds.has(e.id))
   }, [envelopes, editingEnvelope])
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setIsLoading(false)
+      return
+    }
+
+    getLedgers()
+      .then((response) => {
+        setLedgers(response.data)
+        if (response.data.length > 0) {
+          setSelectedLedgerSlug(prev => prev ?? response.data[0].attributes.slug)
+        }
+      })
+      .catch((e) => handleError(e, "fetchFailed"))
+  }, [isAuthenticated, handleError])
 
   useEffect(() => {
     if (!selectedLedgerSlug || !isAuthenticated) {
@@ -175,7 +359,7 @@ export function Envelopes() {
       ? t("envelopes.confirmDeleteWithChildren", { count: childCount })
       : t("envelopes.confirmDelete")
 
-    if (!(await confirm({ description: message }))) return
+    if (!confirm(message)) return
 
     try {
       await deleteEnvelope(selectedLedgerSlug, envelopeId)
@@ -249,7 +433,7 @@ export function Envelopes() {
         description: editFormData.description || undefined,
         type: editFormData.type,
         currency: editFormData.currency,
-        status: editFormData.status ?? "ACTIVE",
+        status: editFormData.status,
         parentEnvelopeId: editFormData.parentEnvelopeId || null,
       })
       setEnvelopes(envelopes.map((e) =>
@@ -300,6 +484,20 @@ export function Envelopes() {
     )
   }
 
+  if (!isAuthenticated) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full">
+        <Card className="w-full max-w-md">
+          <CardHeader className="text-center">
+            <CardTitle>{t("auth.signInRequired")}</CardTitle>
+            <CardDescription>
+              {t("auth.pleaseSignIn", { resource: t("nav.envelopes").toLowerCase() })}
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      </div>
+    )
+  }
 
   const selectedLedger = ledgers.find((l) => l.attributes.slug === selectedLedgerSlug)
 
@@ -318,29 +516,221 @@ export function Envelopes() {
         </Button>
       </div>
 
-      <EnvelopeDialog
-        mode="create"
-        open={isCreateDialogOpen}
-        onOpenChange={setIsCreateDialogOpen}
-        value={formData}
-        onChange={setFormData}
-        onSubmit={handleCreate}
-        isSubmitting={isCreating}
-        envelopes={envelopes}
-        parentOptions={envelopes}
-      />
+      {/* Create Dialog */}
+      <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t("envelopes.createEnvelope")}</DialogTitle>
+            <DialogDescription>
+              {t("envelopes.createDescription")}
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleCreate}>
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label htmlFor="name">{t("common.name")}</Label>
+                <Input
+                  id="name"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  placeholder={t("envelopes.namePlaceholder")}
+                  required
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="type">{t("common.type")}</Label>
+                <Select
+                  value={formData.type}
+                  onValueChange={(value: EnvelopeType) => setFormData({ ...formData, type: value })}
+                  disabled={!!formData.parentEnvelopeId}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={t("common.type")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="EXPENSE">{t("envelopes.types.EXPENSE")}</SelectItem>
+                    <SelectItem value="INCOME">{t("envelopes.types.INCOME")}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="parentEnvelope">{t("envelopes.parentEnvelope")} ({t("common.optional")})</Label>
+                <Select
+                  value={formData.parentEnvelopeId || "none"}
+                  onValueChange={(value) => {
+                    if (value === "none") {
+                      setFormData({ ...formData, parentEnvelopeId: "" })
+                    } else {
+                      const parentEnvelope = envelopes.find((e) => e.id === value)
+                      if (parentEnvelope) {
+                        setFormData({
+                          ...formData,
+                          parentEnvelopeId: value,
+                          type: parentEnvelope.attributes.type,
+                          currency: parentEnvelope.attributes.currency,
+                        })
+                      }
+                    }
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={t("envelopes.parentEnvelope")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">{t("common.none")}</SelectItem>
+                    {envelopes.map((envelope) => (
+                      <SelectItem key={envelope.id} value={envelope.id}>
+                        {envelope.attributes.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="currency">{t("common.currency")}</Label>
+                <Input
+                  id="currency"
+                  value={formData.currency}
+                  onChange={(e) => setFormData({ ...formData, currency: e.target.value })}
+                  placeholder="BRL"
+                  required
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="description">{t("common.description")} ({t("common.optional")})</Label>
+                <Input
+                  id="description"
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  placeholder={t("envelopes.descriptionPlaceholder")}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
+                {t("common.cancel")}
+              </Button>
+              <Button type="submit" disabled={isCreating}>
+                {isCreating ? t("envelopes.creating") : t("envelopes.createEnvelope")}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
-      <EnvelopeDialog
-        mode="edit"
-        open={isEditDialogOpen}
-        onOpenChange={setIsEditDialogOpen}
-        value={editFormData}
-        onChange={setEditFormData}
-        onSubmit={handleUpdate}
-        isSubmitting={isUpdating}
-        envelopes={envelopes}
-        parentOptions={validParentEnvelopesForEdit}
-      />
+      {/* Edit Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t("envelopes.editEnvelope")}</DialogTitle>
+            <DialogDescription>
+              {t("envelopes.editDescription")}
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleUpdate}>
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label htmlFor="edit-name">{t("common.name")}</Label>
+                <Input
+                  id="edit-name"
+                  value={editFormData.name}
+                  onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
+                  required
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-type">{t("common.type")}</Label>
+                <Select
+                  value={editFormData.type}
+                  onValueChange={(value: EnvelopeType) => setEditFormData({ ...editFormData, type: value })}
+                  disabled={!!editFormData.parentEnvelopeId}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={t("common.type")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="EXPENSE">{t("envelopes.types.EXPENSE")}</SelectItem>
+                    <SelectItem value="INCOME">{t("envelopes.types.INCOME")}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-status">{t("common.status")}</Label>
+                <Select
+                  value={editFormData.status}
+                  onValueChange={(value: EnvelopeStatus) => setEditFormData({ ...editFormData, status: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={t("common.status")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ACTIVE">{t("envelopes.statuses.ACTIVE")}</SelectItem>
+                    <SelectItem value="ARCHIVED">{t("envelopes.statuses.ARCHIVED")}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-parentEnvelope">{t("envelopes.parentEnvelope")} ({t("common.optional")})</Label>
+                <Select
+                  value={editFormData.parentEnvelopeId || "none"}
+                  onValueChange={(value) => {
+                    if (value === "none") {
+                      setEditFormData({ ...editFormData, parentEnvelopeId: "" })
+                    } else {
+                      const parentEnvelope = envelopes.find((e) => e.id === value)
+                      if (parentEnvelope) {
+                        setEditFormData({
+                          ...editFormData,
+                          parentEnvelopeId: value,
+                          type: parentEnvelope.attributes.type,
+                          currency: parentEnvelope.attributes.currency,
+                        })
+                      }
+                    }
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={t("envelopes.parentEnvelope")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">{t("common.none")}</SelectItem>
+                    {validParentEnvelopesForEdit.map((envelope) => (
+                      <SelectItem key={envelope.id} value={envelope.id}>
+                        {envelope.attributes.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-currency">{t("common.currency")}</Label>
+                <Input
+                  id="edit-currency"
+                  value={editFormData.currency}
+                  onChange={(e) => setEditFormData({ ...editFormData, currency: e.target.value })}
+                  required
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-description">{t("common.description")} ({t("common.optional")})</Label>
+                <Input
+                  id="edit-description"
+                  value={editFormData.description}
+                  onChange={(e) => setEditFormData({ ...editFormData, description: e.target.value })}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+                {t("common.cancel")}
+              </Button>
+              <Button type="submit" disabled={isUpdating}>
+                {isUpdating ? t("envelopes.saving") : t("common.save")}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {/* Manage Accounts Dialog */}
       <Dialog open={isAccountsDialogOpen} onOpenChange={setIsAccountsDialogOpen}>
@@ -391,7 +781,7 @@ export function Envelopes() {
               key={ledger.id}
               variant={selectedLedgerSlug === ledger.attributes.slug ? "default" : "outline"}
               size="sm"
-              onClick={() => setCurrentLedger(ledger.attributes.slug)}
+              onClick={() => setSelectedLedgerSlug(ledger.attributes.slug)}
             >
               {ledger.attributes.name}
             </Button>
@@ -472,7 +862,8 @@ export function Envelopes() {
                             onDelete={handleDelete}
                             onCreateChild={handleCreateChild}
                             onManageAccounts={handleManageAccounts}
-                                          />
+                            t={t}
+                          />
                         ))}
                       </TableBody>
                     </Table>

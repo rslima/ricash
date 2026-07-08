@@ -14,7 +14,7 @@ const savedLanguage = localStorage.getItem("language")
 const browserLanguage = navigator.language
 const defaultLanguage = savedLanguage || (browserLanguage.startsWith("pt") ? "pt-BR" : "en")
 
-void i18n.use(initReactI18next).init({
+i18n.use(initReactI18next).init({
   resources,
   lng: defaultLanguage,
   fallbackLng: "en",
@@ -31,6 +31,6 @@ export const languages = [
 ]
 
 export function changeLanguage(lang: string) {
-  void i18n.changeLanguage(lang)
+  i18n.changeLanguage(lang)
   localStorage.setItem("language", lang)
 }

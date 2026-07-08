@@ -1,7 +1,5 @@
 package com.rslima.ricash.ledgers.exchangerates;
 
-import com.rslima.ricash.configuration.JsonApiPagination;
-
 import com.github.f4b6a3.uuid.UuidCreator;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -84,12 +82,49 @@ public class ExchangeRateController {
                 .map(exchangeRateMapper::toResource)
                 .map(this::toEntityModel);
 
-        return JsonApiPagination.pagedModel(exchangeRates,
-                p -> methodOn(ExchangeRateController.class).listExchangeRates(principal, p, size));
+        return buildPagedResponse(page, size, exchangeRates, principal);
     }
 
     private EntityModel<ExchangeRateResource> toEntityModel(ExchangeRateResource resource) {
         return EntityModel.of(resource);
     }
 
+    private PagedModel<EntityModel<ExchangeRateResource>> buildPagedResponse(
+            int page,
+            int size,
+            Page<EntityModel<ExchangeRateResource>> exchangeRates,
+            JwtAuthenticationToken principal) {
+
+        var pagedModel = PagedModel.of(
+                exchangeRates.getContent(),
+                new PagedModel.PageMetadata(
+                        exchangeRates.getSize(),
+                        exchangeRates.getNumber(),
+                        exchangeRates.getTotalElements(),
+                        exchangeRates.getTotalPages()));
+
+        pagedModel.add(linkTo(methodOn(ExchangeRateController.class).listExchangeRates(principal, page, size)).withSelfRel());
+        pagedModel.add(linkTo(methodOn(ExchangeRateController.class).listExchangeRates(principal, 0, size)).withRel("first"));
+
+        if (exchangeRates.getTotalPages() > 0) {
+            pagedModel.add(linkTo(methodOn(ExchangeRateController.class).listExchangeRates(
+                    principal,
+                    exchangeRates.getTotalPages() - 1,
+                    size)).withRel("last"));
+        }
+        if (exchangeRates.hasNext()) {
+            pagedModel.add(linkTo(methodOn(ExchangeRateController.class).listExchangeRates(
+                    principal,
+                    exchangeRates.getNumber() + 1,
+                    size)).withRel("next"));
+        }
+        if (exchangeRates.hasPrevious()) {
+            pagedModel.add(linkTo(methodOn(ExchangeRateController.class).listExchangeRates(
+                    principal,
+                    exchangeRates.getNumber() - 1,
+                    size)).withRel("prev"));
+        }
+
+        return pagedModel;
+    }
 }

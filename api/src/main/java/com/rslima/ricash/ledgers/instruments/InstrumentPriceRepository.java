@@ -13,6 +13,14 @@ import java.util.Optional;
 public interface InstrumentPriceRepository {
 
     /**
+     * Finds a price by ID.
+     *
+     * @param id the price ID
+     * @return the price if found
+     */
+    Optional<InstrumentPrice> findById(String id);
+
+    /**
      * Finds the price for an instrument on a specific date.
      * If no exact match, returns the most recent price before that date.
      *
@@ -65,11 +73,9 @@ public interface InstrumentPriceRepository {
     InstrumentPrice save(InstrumentPrice price);
 
     /**
-     * Deletes a price by ID, constrained to instruments of the given ledger.
+     * Deletes a price by ID.
      *
-     * @param ledgerId the ledger ID the price's instrument must belong to
      * @param id the price ID
-     * @return true if a row was deleted
      */
-    boolean deleteById(String ledgerId, String id);
+    void deleteById(String id);
 }

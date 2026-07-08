@@ -55,7 +55,7 @@ class AccountServiceBeanTest {
         var account = createTestAccount();
         var page = new PageImpl<>(List.of(account), pageRequest, 1);
 
-        when(ledgerRepository.findIdBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(LEDGER_ID));
+        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
         when(accountRepository.listLedgerAccounts(LEDGER_ID, pageRequest)).thenReturn(page);
 
         var result = accountService.listLedgerAccounts(USER_ID, LEDGER_SLUG, pageRequest);
@@ -66,7 +66,7 @@ class AccountServiceBeanTest {
 
     @Test
     void find_delegatesToRepository() {
-        when(ledgerRepository.findIdBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(LEDGER_ID));
+        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
         when(accountRepository.findById(LEDGER_ID, ACCOUNT_ID)).thenReturn(Optional.of(createTestAccount()));
 
         var result = accountService.find(USER_ID, LEDGER_SLUG, ACCOUNT_ID);
@@ -80,7 +80,7 @@ class AccountServiceBeanTest {
         var request = new CreateAccountRequest("Checking", "Main account", "USD", AccountType.ASSET, null);
         var captor = ArgumentCaptor.forClass(Account.class);
 
-        when(ledgerRepository.findIdBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(LEDGER_ID));
+        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
         when(slugService.slugify("Checking")).thenReturn("checking");
         when(accountRepository.existsBySlug(LEDGER_ID, "checking")).thenReturn(false);
         when(accountRepository.create(eq(LEDGER_ID), any(Account.class))).thenAnswer(inv -> inv.getArgument(1));
@@ -100,7 +100,7 @@ class AccountServiceBeanTest {
     void create_slugCollisionAppendsCounter() {
         var request = new CreateAccountRequest("Checking", null, "USD", AccountType.ASSET, null);
 
-        when(ledgerRepository.findIdBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(LEDGER_ID));
+        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
         when(slugService.slugify("Checking")).thenReturn("checking");
         when(accountRepository.existsBySlug(LEDGER_ID, "checking")).thenReturn(true);
         when(accountRepository.existsBySlug(LEDGER_ID, "checking-1")).thenReturn(false);
@@ -118,7 +118,7 @@ class AccountServiceBeanTest {
         var request = new UpdateAccountRequest("Updated", "Desc", AccountType.ASSET, "USD", null);
         var updatedAccount = createTestAccount();
 
-        when(ledgerRepository.findIdBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(LEDGER_ID));
+        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
         when(accountRepository.findById(LEDGER_ID, ACCOUNT_ID)).thenReturn(Optional.of(createTestAccount()));
         when(accountRepository.update(LEDGER_ID, ACCOUNT_ID, "Updated", "Desc", AccountType.ASSET, "USD", null))
                 .thenReturn(updatedAccount);
@@ -132,7 +132,7 @@ class AccountServiceBeanTest {
     void update_notFound_throws() {
         var request = new UpdateAccountRequest("Updated", "Desc", AccountType.ASSET, "USD", null);
 
-        when(ledgerRepository.findIdBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(LEDGER_ID));
+        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
         when(accountRepository.findById(LEDGER_ID, ACCOUNT_ID)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> accountService.update(USER_ID, LEDGER_SLUG, ACCOUNT_ID, request))
@@ -141,7 +141,7 @@ class AccountServiceBeanTest {
 
     @Test
     void delete_leafAccount() {
-        when(ledgerRepository.findIdBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(LEDGER_ID));
+        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
         when(accountRepository.findById(LEDGER_ID, ACCOUNT_ID)).thenReturn(Optional.of(createTestAccount()));
         when(accountRepository.findChildAccountIds(LEDGER_ID, ACCOUNT_ID)).thenReturn(List.of());
         when(accountRepository.hasTransactions(ACCOUNT_ID)).thenReturn(false);
@@ -153,7 +153,7 @@ class AccountServiceBeanTest {
 
     @Test
     void delete_accountWithTransactions_throws() {
-        when(ledgerRepository.findIdBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(LEDGER_ID));
+        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
         when(accountRepository.findById(LEDGER_ID, ACCOUNT_ID)).thenReturn(Optional.of(createTestAccount()));
         when(accountRepository.findChildAccountIds(LEDGER_ID, ACCOUNT_ID)).thenReturn(List.of());
         when(accountRepository.hasTransactions(ACCOUNT_ID)).thenReturn(true);
@@ -166,7 +166,7 @@ class AccountServiceBeanTest {
     void delete_parentWithChildren_deletesRecursively() {
         var childId = "child-id";
 
-        when(ledgerRepository.findIdBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(LEDGER_ID));
+        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
         when(accountRepository.findById(LEDGER_ID, ACCOUNT_ID)).thenReturn(Optional.of(createTestAccount()));
         when(accountRepository.findChildAccountIds(LEDGER_ID, ACCOUNT_ID)).thenReturn(List.of(childId));
         when(accountRepository.findChildAccountIds(LEDGER_ID, childId)).thenReturn(List.of());
@@ -184,7 +184,7 @@ class AccountServiceBeanTest {
     void delete_childHasTransactions_throws() {
         var childId = "child-id";
 
-        when(ledgerRepository.findIdBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(LEDGER_ID));
+        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
         when(accountRepository.findById(LEDGER_ID, ACCOUNT_ID)).thenReturn(Optional.of(createTestAccount()));
         when(accountRepository.findChildAccountIds(LEDGER_ID, ACCOUNT_ID)).thenReturn(List.of(childId));
         when(accountRepository.findChildAccountIds(LEDGER_ID, childId)).thenReturn(List.of());

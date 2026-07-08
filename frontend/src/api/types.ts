@@ -216,10 +216,8 @@ export interface BalanceSummary {
   balanceByCurrency: Record<string, number>
 }
 
-// Pagination params (a type alias structurally satisfies the client's
-// Record<string, string | number | undefined> params type; an interface
-// would not)
-export type PaginationParams = {
+// Pagination params
+export interface PaginationParams {
   "page[number]"?: number
   "page[size]"?: number
 }

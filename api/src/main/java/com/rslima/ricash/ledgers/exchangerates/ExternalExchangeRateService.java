@@ -1,11 +1,11 @@
 package com.rslima.ricash.ledgers.exchangerates;
 
-import tools.jackson.core.JacksonException;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
-import org.springframework.web.client.RestClientException;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -16,22 +16,15 @@ import java.util.Optional;
  * Service for fetching exchange rates from external APIs.
  * Supports multiple providers with fallback logic.
  */
+@Service
+@RequiredArgsConstructor
 @Slf4j
 public class ExternalExchangeRateService {
 
-    private final RestClient restClient;
-    private final ObjectMapper objectMapper;
-    private final ExchangeRateProviderProperties properties;
+    private final RestClient restClient = RestClient.create();
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     private static final int RATE_SCALE = 6;
-
-    public ExternalExchangeRateService(RestClient.Builder restClientBuilder,
-                                       ObjectMapper objectMapper,
-                                       ExchangeRateProviderProperties properties) {
-        this.restClient = restClientBuilder.build();
-        this.objectMapper = objectMapper;
-        this.properties = properties;
-    }
 
     /**
      * Fetches exchange rate from external APIs.
@@ -94,11 +87,12 @@ public class ExternalExchangeRateService {
             String dateStr = String.format("%02d-%02d-%d",
                 date.getDayOfMonth(), date.getMonthValue(), date.getYear());
 
-            // e.g. .../CotacaoMoedaDia(moeda=@moeda,dataCotacao=@dataCotacao)?@moeda='USD'&@dataCotacao='01-30-2025'
+            // API URL: https://olinda.bcb.gov.br/olinda/servico/PTAX/versao/v1/odata/
+            // CotacaoMoedaDia(moeda=@moeda,dataCotacao=@dataCotacao)?@moeda='USD'&@dataCotacao='01-30-2025'
             String url = String.format(
-                "%s/CotacaoMoedaDia(moeda=@moeda,dataCotacao=@dataCotacao)?" +
+                "https://olinda.bcb.gov.br/olinda/servico/PTAX/versao/v1/odata/" +
+                "CotacaoMoedaDia(moeda=@moeda,dataCotacao=@dataCotacao)?" +
                 "@moeda='%s'&@dataCotacao='%s'&$format=json",
-                properties.bcbBaseUrl(),
                 bcbCurrency.equals("1") ? "USD" : "EUR",
                 dateStr
             );
@@ -124,7 +118,7 @@ public class ExternalExchangeRateService {
 
             // Get the first (most recent) rate
             JsonNode firstRate = value.get(0);
-            BigDecimal rate = firstRate.path("cotacaoVenda").decimalValue(null);
+            BigDecimal rate = firstRate.path("cotacaoVenda").decimalValue();
 
             if (rate == null || rate.compareTo(BigDecimal.ZERO) <= 0) {
                 log.debug("Invalid rate from BCB API: {}", rate);
@@ -138,7 +132,7 @@ public class ExternalExchangeRateService {
 
             return Optional.of(rate.setScale(RATE_SCALE, RoundingMode.HALF_UP));
 
-        } catch (RestClientException | JacksonException e) {
+        } catch (Exception e) {
             log.warn("Failed to fetch rate from BCB API: {}", e.getMessage());
             return Optional.empty();
         }
@@ -151,10 +145,10 @@ public class ExternalExchangeRateService {
      */
     private Optional<BigDecimal> fetchFromExchangeRateAPI(String fromCurrency, String toCurrency) {
         try {
-            // Free endpoint, no API key required
+            // Using the free endpoint (no API key required)
+            // https://open.er-api.com/v6/latest/USD
             String url = String.format(
-                "%s/latest/%s",
-                properties.exchangeRateApiBaseUrl(),
+                "https://open.er-api.com/v6/latest/%s",
                 fromCurrency
             );
 
@@ -185,7 +179,7 @@ public class ExternalExchangeRateService {
                 return Optional.empty();
             }
 
-            BigDecimal rate = rates.path(toCurrency).decimalValue(null);
+            BigDecimal rate = rates.path(toCurrency).decimalValue();
 
             if (rate == null || rate.compareTo(BigDecimal.ZERO) <= 0) {
                 log.debug("Invalid rate from ExchangeRate-API: {}", rate);
@@ -194,7 +188,7 @@ public class ExternalExchangeRateService {
 
             return Optional.of(rate.setScale(RATE_SCALE, RoundingMode.HALF_UP));
 
-        } catch (RestClientException | JacksonException e) {
+        } catch (Exception e) {
             log.warn("Failed to fetch rate from ExchangeRate-API: {}", e.getMessage());
             return Optional.empty();
         }

@@ -6,7 +6,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.List;
@@ -30,13 +29,6 @@ public class LedgerServiceBean implements LedgerService {
     }
 
     @Override
-    public String requireLedgerId(String userId, String slug) {
-        return ledgerRepository.findIdBySlug(userId, slug)
-                .orElseThrow(() -> new LedgerNotFoundException(slug));
-    }
-
-    @Override
-    @Transactional
     public Ledger create(String userId, CreateLedgerRequest request) {
         if (userRepository.findById(userId).isEmpty()) {
             userRepository.create(userId);

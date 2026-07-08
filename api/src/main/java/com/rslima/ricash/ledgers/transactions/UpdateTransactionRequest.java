@@ -25,5 +25,5 @@ public record UpdateTransactionRequest(
             String instrumentId,
             @Positive BigDecimal quantity,
             String envelopeId
-    ) implements TransactionEntryRequest {}
+    ) {}
 }
