@@ -1,14 +1,15 @@
-import { useEffect, useState } from "react"
+import { useEffect } from "react"
 import { useTranslation } from "react-i18next"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useAuth } from "@/contexts/AuthContext"
-import { getLedgers } from "@/api/ledgers"
+import { useQueries } from "@tanstack/react-query"
+import { useLedgers } from "@/api/ledgers.hooks"
 import { getBalanceSummary } from "@/api/accounts"
+import { accountKeys } from "@/api/accounts.hooks"
 import { getTransactions, getMonthlyReport } from "@/api/transactions"
-import type { MonthlyReport } from "@/api/transactions"
-import type { LedgerResource, TransactionResource } from "@/api/types"
+import { transactionKeys } from "@/api/transactions.hooks"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import { Wallet, ArrowUpRight, ArrowDownRight, BookOpen } from "lucide-react"
 import { useErrorHandler } from "@/hooks/use-error-handler"
@@ -21,68 +22,95 @@ export function Dashboard() {
   const { t } = useTranslation()
   const { isAuthenticated, user } = useAuth()
   const handleError = useErrorHandler()
-  const [ledgers, setLedgers] = useState<LedgerResource[]>([])
-  const [totalBalanceByCurrency, setTotalBalanceByCurrency] = useState<Record<string, number>>({})
-  const [transactions, setTransactions] = useState<TransactionResource[]>([])
-  const [monthlyReport, setMonthlyReport] = useState<Record<string, MonthlyReport>>({})
-  const [isLoading, setIsLoading] = useState(true)
-  const [defaultCurrency, setDefaultCurrency] = useState("BRL")
 
+  // Current month/year drive the monthly report query below.
+  const now = new Date()
+  const currentYear = now.getFullYear()
+  const currentMonth = now.getMonth() + 1
+
+  // Server state: TanStack Query owns fetching, caching, and loading flags.
+  const {
+    data: ledgersResponse,
+    isLoading: isLoadingLedgers,
+    isError: isLedgersError,
+    error: ledgersError,
+  } = useLedgers(isAuthenticated)
+  const ledgers = ledgersResponse?.data ?? []
+  // Use first ledger's currency as default
+  const defaultCurrency = ledgers[0]?.attributes.currency ?? "BRL"
+
+  // The dashboard aggregates across ALL ledgers, so fan out one query per
+  // ledger. Keys/fns match the single-ledger hooks, so a transaction mutation
+  // (which invalidates ["transactions"/"accounts", slug]) refreshes these too.
+  const balanceQueries = useQueries({
+    queries: ledgers.map((ledger) => ({
+      queryKey: accountKeys.balanceSummary(ledger.attributes.slug),
+      queryFn: () => getBalanceSummary(ledger.attributes.slug),
+      enabled: isAuthenticated,
+    })),
+  })
+
+  const transactionQueries = useQueries({
+    queries: ledgers.map((ledger) => ({
+      queryKey: transactionKeys.list(ledger.attributes.slug, { "page[size]": 20 }),
+      queryFn: () => getTransactions(ledger.attributes.slug, { "page[size]": 20 }),
+      enabled: isAuthenticated,
+    })),
+  })
+
+  const reportQueries = useQueries({
+    queries: ledgers.map((ledger) => ({
+      queryKey: transactionKeys.monthlyReport(ledger.attributes.slug, currentYear, currentMonth),
+      queryFn: () => getMonthlyReport(ledger.attributes.slug, currentYear, currentMonth),
+      enabled: isAuthenticated,
+    })),
+  })
+
+  // Combine the queries' loading flags to reproduce the old single loading flag.
+  const isLoading =
+    isLoadingLedgers ||
+    balanceQueries.some((q) => q.isLoading) ||
+    transactionQueries.some((q) => q.isLoading) ||
+    reportQueries.some((q) => q.isLoading)
+
+  // Aggregate balances across all ledgers by currency.
+  const totalBalanceByCurrency: Record<string, number> = {}
+  balanceQueries.forEach((q) => {
+    if (!q.data) return
+    Object.entries(q.data.balanceByCurrency).forEach(([currency, balance]) => {
+      totalBalanceByCurrency[currency] = (totalBalanceByCurrency[currency] || 0) + balance
+    })
+  })
+
+  // Concatenate every ledger's recent transactions, newest first.
+  const transactions = transactionQueries
+    .flatMap((q) => q.data?.data ?? [])
+    .sort((a, b) => new Date(b.attributes.date).getTime() - new Date(a.attributes.date).getTime())
+
+  // Surface fetch failures as a toast.
+  const isError =
+    isLedgersError ||
+    balanceQueries.some((q) => q.isError) ||
+    transactionQueries.some((q) => q.isError) ||
+    reportQueries.some((q) => q.isError)
+  const error =
+    ledgersError ??
+    balanceQueries.find((q) => q.error)?.error ??
+    transactionQueries.find((q) => q.error)?.error ??
+    reportQueries.find((q) => q.error)?.error
   useEffect(() => {
-    if (isAuthenticated) {
-      getLedgers()
-        .then(async (response) => {
-          setLedgers(response.data)
-
-          if (response.data.length > 0) {
-            // Use first ledger's currency as default
-            setDefaultCurrency(response.data[0].attributes.currency)
-
-            const allTransactions: TransactionResource[] = []
-            const aggregatedBalances: Record<string, number> = {}
-
-            const now = new Date()
-            const currentYear = now.getFullYear()
-            const currentMonth = now.getMonth() + 1
-
-            await Promise.all(
-              response.data.map(async (ledger) => {
-                const [balanceSummary, transactionsRes, report] = await Promise.all([
-                  getBalanceSummary(ledger.attributes.slug),
-                  getTransactions(ledger.attributes.slug, { "page[size]": 20 }),
-                  getMonthlyReport(ledger.attributes.slug, currentYear, currentMonth),
-                ])
-                Object.entries(balanceSummary.balanceByCurrency).forEach(([currency, balance]) => {
-                  aggregatedBalances[currency] = (aggregatedBalances[currency] || 0) + balance
-                })
-                allTransactions.push(...transactionsRes.data)
-                setMonthlyReport(prev => ({ ...prev, [ledger.attributes.slug]: report }))
-              })
-            )
-
-            setTotalBalanceByCurrency(aggregatedBalances)
-            // Sort transactions by date descending
-            allTransactions.sort((a, b) =>
-              new Date(b.attributes.date).getTime() - new Date(a.attributes.date).getTime()
-            )
-            setTransactions(allTransactions)
-          }
-        })
-        .catch((e) => handleError(e, "fetchFailed"))
-        .finally(() => setIsLoading(false))
-    } else {
-      setIsLoading(false)
-    }
-  }, [isAuthenticated, handleError])
+    if (isError) handleError(error, "fetchFailed")
+  }, [isError, error, handleError])
 
   // Aggregate monthly income and expenses from API reports across all ledgers
   const monthlyIncomeByCurrency: Record<string, number> = {}
   const monthlyExpensesByCurrency: Record<string, number> = {}
-  Object.values(monthlyReport).forEach((report) => {
-    Object.entries(report.incomeByCurrency).forEach(([currency, amount]) => {
+  reportQueries.forEach((q) => {
+    if (!q.data) return
+    Object.entries(q.data.incomeByCurrency).forEach(([currency, amount]) => {
       monthlyIncomeByCurrency[currency] = (monthlyIncomeByCurrency[currency] || 0) + amount
     })
-    Object.entries(report.expensesByCurrency).forEach(([currency, amount]) => {
+    Object.entries(q.data.expensesByCurrency).forEach(([currency, amount]) => {
       monthlyExpensesByCurrency[currency] = (monthlyExpensesByCurrency[currency] || 0) + amount
     })
   })

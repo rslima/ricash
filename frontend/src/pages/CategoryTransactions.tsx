@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react"
+import { useEffect, useMemo } from "react"
 import { useParams, useSearchParams, Link } from "react-router-dom"
 import { useTranslation } from "react-i18next"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -13,8 +13,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { useAuth } from "@/contexts/AuthContext"
-import { getCategoryTransactions } from "@/api/transactions"
-import type { CategoryTransactionResource } from "@/api/types"
+import { useCategoryTransactions } from "@/api/transactions.hooks"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import { ArrowLeft, ArrowLeftRight } from "lucide-react"
 import { useErrorHandler } from "@/hooks/use-error-handler"
@@ -36,8 +35,20 @@ export function CategoryTransactions() {
   const name = searchParams.get("name") ?? ""
   const currency = searchParams.get("currency") ?? "BRL"
 
-  const [transactions, setTransactions] = useState<CategoryTransactionResource[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+  // Server state: TanStack Query owns fetching, caching, and loading flags.
+  const { data: resp, isLoading, isError, error } = useCategoryTransactions(
+    ledgerSlug ?? "",
+    accountId ?? "",
+    year,
+    month,
+    isAuthenticated && !!ledgerSlug && !!accountId && !!year && !!month
+  )
+  const transactions = useMemo(() => resp?.data ?? [], [resp])
+
+  // Surface fetch failures as a toast.
+  useEffect(() => {
+    if (isError) handleError(error, "fetchFailed")
+  }, [isError, error, handleError])
 
   const monthLabel = useMemo(() => {
     if (!month || month < 1 || month > 12 || !year) return ""
@@ -48,19 +59,6 @@ export function CategoryTransactions() {
     () => transactions.reduce((sum, tx) => sum + tx.attributes.amount, 0),
     [transactions]
   )
-
-  useEffect(() => {
-    if (!isAuthenticated || !ledgerSlug || !accountId || !year || !month) {
-      setIsLoading(false)
-      return
-    }
-
-    setIsLoading(true)
-    getCategoryTransactions(ledgerSlug, accountId, year, month)
-      .then((response) => setTransactions(response.data))
-      .catch((e) => handleError(e, "fetchFailed"))
-      .finally(() => setIsLoading(false))
-  }, [isAuthenticated, ledgerSlug, accountId, year, month, handleError])
 
   if (!isAuthenticated) {
     return (

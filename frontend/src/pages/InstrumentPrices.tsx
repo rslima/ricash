@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useState, useMemo } from "react"
 import { useParams } from "react-router-dom"
 import { useTranslation } from "react-i18next"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -31,9 +31,14 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { useAuth } from "@/contexts/AuthContext"
-import { getInstrumentPrices, createInstrumentPrice, deleteInstrumentPrice, getAllInstruments } from "@/api/instruments"
-import { getLedgers } from "@/api/ledgers"
-import type { InstrumentPriceResource, InstrumentResource, LedgerResource } from "@/api/types"
+import { useLedgers } from "@/api/ledgers.hooks"
+import {
+  useInstrumentPrices,
+  useAllInstruments,
+  useCreateInstrumentPrice,
+  useDeleteInstrumentPrice,
+} from "@/api/instruments.hooks"
+import type { InstrumentPriceResource } from "@/api/types"
 import { formatDate, formatCurrency } from "@/lib/utils"
 import { Plus, Trash2, TrendingUp, DollarSign } from "lucide-react"
 import { useErrorHandler } from "@/hooks/use-error-handler"
@@ -43,13 +48,8 @@ export function InstrumentPrices() {
   const { ledgerSlug } = useParams<{ ledgerSlug?: string }>()
   const { isAuthenticated } = useAuth()
   const handleError = useErrorHandler()
-  const [prices, setPrices] = useState<InstrumentPriceResource[]>([])
-  const [instruments, setInstruments] = useState<InstrumentResource[]>([])
-  const [ledgers, setLedgers] = useState<LedgerResource[]>([])
   const [selectedLedgerSlug, setSelectedLedgerSlug] = useState<string | null>(ledgerSlug || null)
-  const [isLoading, setIsLoading] = useState(true)
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
-  const [isSubmitting, setIsSubmitting] = useState(false)
 
   // Form state
   const [instrumentId, setInstrumentId] = useState("")
@@ -62,77 +62,81 @@ export function InstrumentPrices() {
     setEffectiveDate(new Date().toISOString().split("T")[0])
   }
 
+  // Server state: TanStack Query owns fetching, caching, and loading flags.
+  const {
+    data: ledgersResponse,
+    isLoading: ledgersLoading,
+    isError: ledgersIsError,
+    error: ledgersError,
+  } = useLedgers(isAuthenticated)
+  const ledgers = useMemo(() => ledgersResponse?.data ?? [], [ledgersResponse])
+
+  // Default to the first ledger once ledgers load, unless one is already selected.
   useEffect(() => {
-    if (!isAuthenticated) {
-      setIsLoading(false)
-      return
+    if (ledgers.length > 0) {
+      setSelectedLedgerSlug(prev => prev ?? ledgers[0].attributes.slug)
     }
+  }, [ledgers])
 
-    getLedgers()
-      .then((response) => {
-        setLedgers(response.data)
-        if (response.data.length > 0) {
-          setSelectedLedgerSlug(prev => prev ?? response.data[0].attributes.slug)
-        }
-      })
-      .catch((e) => handleError(e, "fetchFailed"))
-  }, [isAuthenticated, handleError])
+  const {
+    data: pricesResponse,
+    isLoading: pricesLoading,
+    isError: pricesIsError,
+    error: pricesError,
+  } = useInstrumentPrices(
+    selectedLedgerSlug ?? "",
+    { "page[size]": 100 },
+    isAuthenticated && !!selectedLedgerSlug
+  )
+  const prices = pricesResponse?.data ?? []
 
+  const {
+    data: instrumentsResponse,
+    isLoading: instrumentsLoading,
+    isError: instrumentsIsError,
+    error: instrumentsError,
+  } = useAllInstruments(selectedLedgerSlug ?? "", isAuthenticated && !!selectedLedgerSlug)
+  const instruments = instrumentsResponse ?? []
+
+  const createPriceMutation = useCreateInstrumentPrice(selectedLedgerSlug ?? "")
+  const deletePriceMutation = useDeleteInstrumentPrice(selectedLedgerSlug ?? "")
+
+  const isLoading = ledgersLoading || pricesLoading || instrumentsLoading
+  const isError = ledgersIsError || pricesIsError || instrumentsIsError
+  const error = ledgersError ?? pricesError ?? instrumentsError
+
+  // Surface fetch failures as a toast (mutations report their own errors inline).
   useEffect(() => {
-    if (!selectedLedgerSlug || !isAuthenticated) {
-      setIsLoading(false)
-      return
-    }
+    if (isError) handleError(error, "fetchFailed")
+  }, [isError, error, handleError])
 
-    setIsLoading(true)
-    Promise.all([
-      getInstrumentPrices(selectedLedgerSlug, { "page[size]": 100 }),
-      getAllInstruments(selectedLedgerSlug),
-    ])
-      .then(([pricesResponse, instrumentsResponse]) => {
-        setPrices(pricesResponse.data)
-        setInstruments(instrumentsResponse)
-      })
-      .catch((e) => handleError(e, "fetchFailed"))
-      .finally(() => setIsLoading(false))
-  }, [selectedLedgerSlug, isAuthenticated, handleError])
-
-  const handleCreate = async (e: React.FormEvent) => {
+  const handleCreate = (e: React.FormEvent) => {
     e.preventDefault()
     if (!selectedLedgerSlug || !instrumentId || !price) return
 
-    setIsSubmitting(true)
-    try {
-      const response = await createInstrumentPrice(selectedLedgerSlug, {
+    createPriceMutation.mutate(
+      {
         instrumentId,
         price: parseFloat(price),
         effectiveDate,
-      })
-      // Add symbol to the response for display
-      const instrument = instruments.find((i) => i.id === instrumentId)
-      if (instrument) {
-        response.data.attributes.instrumentSymbol = instrument.attributes.symbol
+      },
+      {
+        onSuccess: () => {
+          setIsCreateDialogOpen(false)
+          resetForm()
+        },
+        onError: (error) => handleError(error, "createFailed"),
       }
-      setPrices([response.data, ...prices])
-      setIsCreateDialogOpen(false)
-      resetForm()
-    } catch (error) {
-      handleError(error, "createFailed")
-    } finally {
-      setIsSubmitting(false)
-    }
+    )
   }
 
-  const handleDelete = async (priceId: string) => {
+  const handleDelete = (priceId: string) => {
     if (!selectedLedgerSlug) return
     if (!confirm(t("instrumentPrices.confirmDelete"))) return
 
-    try {
-      await deleteInstrumentPrice(selectedLedgerSlug, priceId)
-      setPrices(prices.filter((p) => p.id !== priceId))
-    } catch (error) {
-      handleError(error, "deleteFailed")
-    }
+    deletePriceMutation.mutate(priceId, {
+      onError: (error) => handleError(error, "deleteFailed"),
+    })
   }
 
   // Create a map for quick instrument lookup
@@ -249,8 +253,8 @@ export function InstrumentPrices() {
               <Button type="button" variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
                 {t("common.cancel")}
               </Button>
-              <Button type="submit" disabled={isSubmitting || !instrumentId || !price}>
-                {isSubmitting ? t("instrumentPrices.creating") : t("common.create")}
+              <Button type="submit" disabled={createPriceMutation.isPending || !instrumentId || !price}>
+                {createPriceMutation.isPending ? t("instrumentPrices.creating") : t("common.create")}
               </Button>
             </DialogFooter>
           </form>

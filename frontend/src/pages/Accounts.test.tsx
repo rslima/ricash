@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 import { render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { BrowserRouter } from "react-router-dom"
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { Accounts } from "./Accounts"
 import * as accountsApi from "@/api/accounts"
 import * as ledgersApi from "@/api/ledgers"
@@ -16,6 +17,7 @@ vi.mock("@/contexts/AuthContext", () => ({
 vi.mock("@/api/accounts", () => ({
   getAccounts: vi.fn(),
   createAccount: vi.fn(),
+  updateAccount: vi.fn(),
   deleteAccount: vi.fn(),
 }))
 
@@ -62,10 +64,17 @@ const mockAccount: AccountResource = {
 }
 
 function renderAccounts() {
+  // Fresh client per render so cache never bleeds between tests; retries off
+  // so a failing query surfaces immediately instead of after backoff.
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  })
   return render(
-    <BrowserRouter>
-      <Accounts />
-    </BrowserRouter>
+    <QueryClientProvider client={queryClient}>
+      <BrowserRouter>
+        <Accounts />
+      </BrowserRouter>
+    </QueryClientProvider>
   )
 }
 
@@ -109,7 +118,7 @@ describe("Accounts", () => {
     })
 
     it("shows page title", async () => {
-      vi.mocked(ledgersApi.getLedgers).mockResolvedValueOnce({ data: [] })
+      vi.mocked(ledgersApi.getLedgers).mockResolvedValue({ data: [] })
 
       renderAccounts()
 
@@ -122,7 +131,7 @@ describe("Accounts", () => {
     })
 
     it("shows no ledger selected when there are no ledgers", async () => {
-      vi.mocked(ledgersApi.getLedgers).mockResolvedValueOnce({ data: [] })
+      vi.mocked(ledgersApi.getLedgers).mockResolvedValue({ data: [] })
 
       renderAccounts()
 
@@ -132,10 +141,10 @@ describe("Accounts", () => {
     })
 
     it("loads and displays ledgers as buttons", async () => {
-      vi.mocked(ledgersApi.getLedgers).mockResolvedValueOnce({
+      vi.mocked(ledgersApi.getLedgers).mockResolvedValue({
         data: [mockLedger],
       })
-      vi.mocked(accountsApi.getAccounts).mockResolvedValueOnce({
+      vi.mocked(accountsApi.getAccounts).mockResolvedValue({
         data: [],
       })
 
@@ -147,10 +156,10 @@ describe("Accounts", () => {
     })
 
     it("displays accounts after selecting a ledger", async () => {
-      vi.mocked(ledgersApi.getLedgers).mockResolvedValueOnce({
+      vi.mocked(ledgersApi.getLedgers).mockResolvedValue({
         data: [mockLedger],
       })
-      vi.mocked(accountsApi.getAccounts).mockResolvedValueOnce({
+      vi.mocked(accountsApi.getAccounts).mockResolvedValue({
         data: [mockAccount],
       })
 
@@ -166,10 +175,10 @@ describe("Accounts", () => {
     })
 
     it("shows empty state when no accounts in ledger", async () => {
-      vi.mocked(ledgersApi.getLedgers).mockResolvedValueOnce({
+      vi.mocked(ledgersApi.getLedgers).mockResolvedValue({
         data: [mockLedger],
       })
-      vi.mocked(accountsApi.getAccounts).mockResolvedValueOnce({
+      vi.mocked(accountsApi.getAccounts).mockResolvedValue({
         data: [],
       })
 
@@ -184,10 +193,10 @@ describe("Accounts", () => {
 
     it("opens create dialog when clicking New Account button", async () => {
       const user = userEvent.setup()
-      vi.mocked(ledgersApi.getLedgers).mockResolvedValueOnce({
+      vi.mocked(ledgersApi.getLedgers).mockResolvedValue({
         data: [mockLedger],
       })
-      vi.mocked(accountsApi.getAccounts).mockResolvedValueOnce({
+      vi.mocked(accountsApi.getAccounts).mockResolvedValue({
         data: [],
       })
 
@@ -207,10 +216,10 @@ describe("Accounts", () => {
 
     it("creates an account when form is submitted", async () => {
       const user = userEvent.setup()
-      vi.mocked(ledgersApi.getLedgers).mockResolvedValueOnce({
+      vi.mocked(ledgersApi.getLedgers).mockResolvedValue({
         data: [mockLedger],
       })
-      vi.mocked(accountsApi.getAccounts).mockResolvedValueOnce({
+      vi.mocked(accountsApi.getAccounts).mockResolvedValue({
         data: [],
       })
       vi.mocked(accountsApi.createAccount).mockResolvedValueOnce({
@@ -252,10 +261,10 @@ describe("Accounts", () => {
         { ...mockAccount, id: "4", attributes: { ...mockAccount.attributes, name: "Groceries", type: "EXPENSE" } },
       ]
 
-      vi.mocked(ledgersApi.getLedgers).mockResolvedValueOnce({
+      vi.mocked(ledgersApi.getLedgers).mockResolvedValue({
         data: [mockLedger],
       })
-      vi.mocked(accountsApi.getAccounts).mockResolvedValueOnce({
+      vi.mocked(accountsApi.getAccounts).mockResolvedValue({
         data: accounts,
       })
 
@@ -300,12 +309,12 @@ describe("Accounts", () => {
         },
       }
 
-      vi.mocked(ledgersApi.getLedgers).mockResolvedValueOnce({
+      vi.mocked(ledgersApi.getLedgers).mockResolvedValue({
         data: [mockLedger, ledger2],
       })
       vi.mocked(accountsApi.getAccounts)
         .mockResolvedValueOnce({ data: [mockAccount] })
-        .mockResolvedValueOnce({ data: [account2] })
+        .mockResolvedValue({ data: [account2] })
 
       renderAccounts()
 
@@ -326,7 +335,7 @@ describe("Accounts", () => {
     })
 
     it("disables New Account button when no ledger is selected", async () => {
-      vi.mocked(ledgersApi.getLedgers).mockResolvedValueOnce({ data: [] })
+      vi.mocked(ledgersApi.getLedgers).mockResolvedValue({ data: [] })
 
       renderAccounts()
 

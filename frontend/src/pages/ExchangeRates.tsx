@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react"
+import { useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -23,8 +23,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { useAuth } from "@/contexts/AuthContext"
-import { getExchangeRates, createExchangeRate, deleteExchangeRate } from "@/api/exchangeRates"
-import type { ExchangeRateResource } from "@/api/types"
+import { useExchangeRates, useCreateExchangeRate, useDeleteExchangeRate } from "@/api/exchangeRates.hooks"
 import { formatDate } from "@/lib/utils"
 import { TrendingUp, Plus, Trash2 } from "lucide-react"
 import { useErrorHandler } from "@/hooks/use-error-handler"
@@ -33,16 +32,24 @@ export function ExchangeRates() {
   const { t } = useTranslation()
   const handleError = useErrorHandler()
   const { isAuthenticated } = useAuth()
-  const [exchangeRates, setExchangeRates] = useState<ExchangeRateResource[]>([])
-  const [isLoading, setIsLoading] = useState(true)
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
-  const [isSubmitting, setIsSubmitting] = useState(false)
 
   // Form state
   const [fromCurrency, setFromCurrency] = useState("")
   const [toCurrency, setToCurrency] = useState("")
   const [rate, setRate] = useState("")
   const [effectiveDate, setEffectiveDate] = useState(new Date().toISOString().split("T")[0])
+
+  // Server state: TanStack Query owns fetching, caching, and loading flags.
+  const { data: resp, isLoading, isError, error } = useExchangeRates({ "page[size]": 50 }, isAuthenticated)
+  const exchangeRates = resp?.data ?? []
+  const createExchangeRateMutation = useCreateExchangeRate()
+  const deleteExchangeRateMutation = useDeleteExchangeRate()
+
+  // Surface fetch failures as a toast (mutations report their own errors inline).
+  useEffect(() => {
+    if (isError) handleError(error, "fetchFailed")
+  }, [isError, error, handleError])
 
   const resetForm = () => {
     setFromCurrency("")
@@ -60,57 +67,33 @@ export function ExchangeRates() {
     )
   }
 
-  const handleSubmit = async () => {
+  const handleSubmit = () => {
     if (!isFormValid()) return
 
-    setIsSubmitting(true)
-    try {
-      const response = await createExchangeRate({
+    createExchangeRateMutation.mutate(
+      {
         fromCurrency: fromCurrency.toUpperCase(),
         toCurrency: toCurrency.toUpperCase(),
         rate: parseFloat(rate),
         effectiveDate
-      })
-      setExchangeRates([response.data, ...exchangeRates])
-      setIsCreateDialogOpen(false)
-      resetForm()
-    } catch (error) {
-      handleError(error, "createFailed")
-    } finally {
-      setIsSubmitting(false)
-    }
+      },
+      {
+        onSuccess: () => {
+          setIsCreateDialogOpen(false)
+          resetForm()
+        },
+        onError: (err) => handleError(err, "createFailed"),
+      }
+    )
   }
 
-  const fetchExchangeRates = useCallback(async () => {
-    if (!isAuthenticated) {
-      setIsLoading(false)
-      return
-    }
-
-    try {
-      const response = await getExchangeRates({ "page[size]": 50 })
-      setExchangeRates(response.data)
-    } catch (error) {
-      handleError(error, "fetchFailed")
-    } finally {
-      setIsLoading(false)
-    }
-  }, [isAuthenticated, handleError])
-
-  const handleDelete = async (id: string) => {
+  const handleDelete = (id: string) => {
     if (!confirm(t("exchangeRates.confirmDelete"))) return
 
-    try {
-      await deleteExchangeRate(id)
-      setExchangeRates(exchangeRates.filter((r) => r.id !== id))
-    } catch (error) {
-      handleError(error, "deleteFailed")
-    }
+    deleteExchangeRateMutation.mutate(id, {
+      onError: (err) => handleError(err, "deleteFailed"),
+    })
   }
-
-  useEffect(() => {
-    fetchExchangeRates()
-  }, [fetchExchangeRates])
 
   const getSourceBadgeVariant = (source: string): "default" | "secondary" | "outline" => {
     switch (source) {
@@ -227,9 +210,9 @@ export function ExchangeRates() {
             <Button
               type="submit"
               onClick={handleSubmit}
-              disabled={!isFormValid() || isSubmitting}
+              disabled={!isFormValid() || createExchangeRateMutation.isPending}
             >
-              {isSubmitting ? t("exchangeRates.creating") : t("common.create")}
+              {createExchangeRateMutation.isPending ? t("exchangeRates.creating") : t("common.create")}
             </Button>
           </DialogFooter>
         </DialogContent>

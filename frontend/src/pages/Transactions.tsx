@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useCallback } from "react"
+import { useEffect, useState, useMemo } from "react"
 import { useParams, Link, useLocation } from "react-router-dom"
 import { useTranslation } from "react-i18next"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -39,12 +39,19 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { useAuth } from "@/contexts/AuthContext"
-import { getTransactions, deleteTransaction, createTransaction, updateTransaction, getTransactionTemplates, type TransactionEntryInput } from "@/api/transactions"
-import { getLedgers } from "@/api/ledgers"
-import { getAccounts } from "@/api/accounts"
-import { getAllInstruments } from "@/api/instruments"
-import { getEnvelopes, getEnvelopeMappings } from "@/api/envelopes"
-import type { TransactionResource, LedgerResource, AccountResource, InstrumentResource, EnvelopeResource } from "@/api/types"
+import type { TransactionEntryInput, TransactionFilters } from "@/api/transactions"
+import { useLedgers } from "@/api/ledgers.hooks"
+import { useAccounts } from "@/api/accounts.hooks"
+import { useAllInstruments } from "@/api/instruments.hooks"
+import { useEnvelopes, useEnvelopeMappings } from "@/api/envelopes.hooks"
+import {
+  useTransactions,
+  useTransactionTemplates,
+  useCreateTransaction,
+  useUpdateTransaction,
+  useDeleteTransaction,
+} from "@/api/transactions.hooks"
+import type { TransactionResource } from "@/api/types"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { useErrorHandler } from "@/hooks/use-error-handler"
@@ -81,24 +88,13 @@ export function Transactions() {
   const { isAuthenticated } = useAuth()
   const isMobile = useIsMobile()
   const locationState = location.state as LocationState | undefined
-  const [transactions, setTransactions] = useState<TransactionResource[]>([])
-  const [ledgers, setLedgers] = useState<LedgerResource[]>([])
-  const [accounts, setAccounts] = useState<AccountResource[]>([])
-  const [instruments, setInstruments] = useState<InstrumentResource[]>([])
-  const [envelopes, setEnvelopes] = useState<EnvelopeResource[]>([])
-  const [envelopeMappings, setEnvelopeMappings] = useState<Record<string, string>>({})
-  const [transactionTemplates, setTransactionTemplates] = useState<TransactionResource[]>([])
   const [selectedLedgerSlug, setSelectedLedgerSlug] = useState<string | null>(ledgerSlug || null)
   const [currentPage, setCurrentPage] = useState(0)
   const [pageSize, setPageSize] = useState(20)
-  const [totalPages, setTotalPages] = useState(0)
-  const [totalElements, setTotalElements] = useState(0)
   const [searchDescription, setSearchDescription] = useState("")
   const [activeSearch, setActiveSearch] = useState("")
-  const [isLoading, setIsLoading] = useState(true)
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
-  const [isSubmitting, setIsSubmitting] = useState(false)
   const [editingTransaction, setEditingTransaction] = useState<TransactionResource | null>(null)
 
   // Form state
@@ -114,6 +110,67 @@ export function Transactions() {
   const [editDescription, setEditDescription] = useState("")
   const [editEntries, setEditEntries] = useState<TransactionEntry[]>([])
 
+  // Server state: TanStack Query owns fetching, caching, and loading flags.
+  // Queries are gated on auth + a selected ledger; the page/search filters feed
+  // the transactions query key so changing them drives a refetch.
+  const dataEnabled = isAuthenticated && !!selectedLedgerSlug
+  const filters: TransactionFilters = {
+    "page[number]": currentPage,
+    "page[size]": pageSize,
+    ...(activeSearch ? { description: activeSearch } : {}),
+  }
+
+  const ledgersQuery = useLedgers(isAuthenticated)
+  const txQuery = useTransactions(selectedLedgerSlug ?? "", filters, dataEnabled)
+  const accountsQuery = useAccounts(selectedLedgerSlug ?? "", { "page[size]": 200 }, dataEnabled)
+  const instrumentsQuery = useAllInstruments(selectedLedgerSlug ?? "", dataEnabled)
+  const templatesQuery = useTransactionTemplates(selectedLedgerSlug ?? "", dataEnabled)
+  const envelopesQuery = useEnvelopes(selectedLedgerSlug ?? "", { "page[size]": 200 }, dataEnabled)
+  const mappingsQuery = useEnvelopeMappings(selectedLedgerSlug ?? "", dataEnabled)
+
+  const createTransactionMutation = useCreateTransaction(selectedLedgerSlug ?? "")
+  const updateTransactionMutation = useUpdateTransaction(selectedLedgerSlug ?? "")
+  const deleteTransactionMutation = useDeleteTransaction(selectedLedgerSlug ?? "")
+
+  // Read query results (hooks pass the API response straight through).
+  const ledgers = useMemo(() => ledgersQuery.data?.data ?? [], [ledgersQuery.data])
+  const transactions = txQuery.data?.data ?? []
+  const accounts = accountsQuery.data?.data ?? []
+  const instruments = instrumentsQuery.data ?? []
+  const envelopes = envelopesQuery.data?.data ?? []
+  const envelopeMappings = mappingsQuery.data ?? {}
+  const transactionTemplates = templatesQuery.data ?? []
+  const totalPages = txQuery.data?.meta?.page?.totalPages ?? 0
+  const totalElements = txQuery.data?.meta?.page?.totalElements ?? 0
+
+  // Reproduce the old single loading flag: skeleton until the ledger's data is present.
+  const isLoading =
+    ledgersQuery.isLoading ||
+    txQuery.isLoading ||
+    accountsQuery.isLoading ||
+    instrumentsQuery.isLoading ||
+    templatesQuery.isLoading ||
+    envelopesQuery.isLoading ||
+    mappingsQuery.isLoading
+
+  // Surface any fetch failure as a toast, preserving the old "fetchFailed" key.
+  const isError =
+    ledgersQuery.isError ||
+    txQuery.isError ||
+    accountsQuery.isError ||
+    instrumentsQuery.isError ||
+    templatesQuery.isError ||
+    envelopesQuery.isError ||
+    mappingsQuery.isError
+  const error =
+    ledgersQuery.error ||
+    txQuery.error ||
+    accountsQuery.error ||
+    instrumentsQuery.error ||
+    templatesQuery.error ||
+    envelopesQuery.error ||
+    mappingsQuery.error
+
   // Compute selected ledger
   const selectedLedger = useMemo(
     () => ledgers.find((l) => l.attributes.slug === selectedLedgerSlug),
@@ -121,58 +178,15 @@ export function Transactions() {
   )
 
   useEffect(() => {
-    if (!isAuthenticated) {
-      setIsLoading(false)
-      return
-    }
+    if (isError) handleError(error, "fetchFailed")
+  }, [isError, error, handleError])
 
-    getLedgers()
-      .then((response) => {
-        setLedgers(response.data)
-        if (response.data.length > 0) {
-          setSelectedLedgerSlug(prev => prev ?? response.data[0].attributes.slug)
-        }
-      })
-      .catch((e) => handleError(e, "fetchFailed"))
-  }, [isAuthenticated, handleError])
-
-  const loadTransactions = useCallback(async (ledgerSlug: string, page: number, size: number, description?: string) => {
-    const params: Record<string, string | number | undefined> = { "page[number]": page, "page[size]": size }
-    if (description) {
-      params.description = description
-    }
-    const response = await getTransactions(ledgerSlug, params)
-    setTransactions(response.data)
-    setTotalPages(response.meta?.page?.totalPages ?? 0)
-    setTotalElements(response.meta?.page?.totalElements ?? 0)
-    return response
-  }, [])
-
+  // Default to the first ledger once ledgers load (unless one is already selected).
   useEffect(() => {
-    if (!selectedLedgerSlug || !isAuthenticated) {
-      setIsLoading(false)
-      return
+    if (ledgers.length > 0) {
+      setSelectedLedgerSlug((prev) => prev ?? ledgers[0].attributes.slug)
     }
-
-    setIsLoading(true)
-    Promise.all([
-      loadTransactions(selectedLedgerSlug, currentPage, pageSize, activeSearch || undefined),
-      getAccounts(selectedLedgerSlug, { "page[size]": 200 }),
-      getAllInstruments(selectedLedgerSlug),
-      getTransactionTemplates(selectedLedgerSlug),
-      getEnvelopes(selectedLedgerSlug, { "page[size]": 200 }),
-      getEnvelopeMappings(selectedLedgerSlug),
-    ])
-      .then(([, accountsResponse, instrumentsResponse, templates, envelopesResponse, mappings]) => {
-        setAccounts(accountsResponse.data)
-        setInstruments(instrumentsResponse)
-        setTransactionTemplates(templates)
-        setEnvelopes(envelopesResponse.data)
-        setEnvelopeMappings(mappings)
-      })
-      .catch((e) => handleError(e, "fetchFailed"))
-      .finally(() => setIsLoading(false))
-  }, [selectedLedgerSlug, isAuthenticated, handleError, currentPage, pageSize, activeSearch, loadTransactions])
+  }, [ledgers])
 
   // Handle navigation state to pre-fill transaction form
   useEffect(() => {
@@ -204,16 +218,13 @@ export function Transactions() {
     }
   }, [locationState, isLoading, accounts.length, selectedLedger])
 
-  const handleDelete = async (transactionId: string) => {
+  const handleDelete = (transactionId: string) => {
     if (!selectedLedgerSlug) return
     if (!confirm(t("transactions.confirmDelete"))) return
 
-    try {
-      await deleteTransaction(selectedLedgerSlug, transactionId)
-      await loadTransactions(selectedLedgerSlug, currentPage, pageSize)
-    } catch (error) {
-      handleError(error, "deleteFailed")
-    }
+    deleteTransactionMutation.mutate(transactionId, {
+      onError: (error) => handleError(error, "deleteFailed"),
+    })
   }
 
   const resetForm = () => {
@@ -512,45 +523,38 @@ export function Transactions() {
     return isBalanced(entryList)
   }
 
-  const handleSubmit = async () => {
+  const handleSubmit = () => {
     if (!selectedLedgerSlug || !isFormValid(entries, date, description)) return
 
-    setIsSubmitting(true)
-    try {
-      const transactionEntries: TransactionEntryInput[] = entries.map((e) => ({
-        accountId: e.accountId,
-        amount: parseFloat(e.amount),
-        currency: e.currency,
-        toAmount: e.toAmount ? parseFloat(e.toAmount) : undefined,
-        toCurrency: e.toCurrency || undefined,
-        type: e.type,
-        instrumentId: e.instrumentId || undefined,
-        quantity: e.quantity ? parseFloat(e.quantity) : undefined,
-        envelopeId: e.envelopeId || undefined,
-      }))
+    const transactionEntries: TransactionEntryInput[] = entries.map((e) => ({
+      accountId: e.accountId,
+      amount: parseFloat(e.amount),
+      currency: e.currency,
+      toAmount: e.toAmount ? parseFloat(e.toAmount) : undefined,
+      toCurrency: e.toCurrency || undefined,
+      type: e.type,
+      instrumentId: e.instrumentId || undefined,
+      quantity: e.quantity ? parseFloat(e.quantity) : undefined,
+      envelopeId: e.envelopeId || undefined,
+    }))
 
-      const response = await createTransaction(selectedLedgerSlug, {
+    createTransactionMutation.mutate(
+      {
         date,
         description,
         entries: transactionEntries,
-      })
-
-      // Update template cache with the new transaction (replaces existing template for this description)
-      setTransactionTemplates((prev) => {
-        const filtered = prev.filter((t) => t.attributes.description !== description)
-        return [...filtered, response.data].sort((a, b) =>
-          a.attributes.description.localeCompare(b.attributes.description)
-        )
-      })
-      setCurrentPage(0)
-      await loadTransactions(selectedLedgerSlug, 0, pageSize)
-      setIsCreateDialogOpen(false)
-      resetForm()
-    } catch (error) {
-      handleError(error, "createFailed")
-    } finally {
-      setIsSubmitting(false)
-    }
+      },
+      {
+        onSuccess: () => {
+          // Jump to the first page so the new transaction is visible; the mutation
+          // already invalidated transactions (incl. templates), accounts, envelopes.
+          setCurrentPage(0)
+          setIsCreateDialogOpen(false)
+          resetForm()
+        },
+        onError: (error) => handleError(error, "createFailed"),
+      }
+    )
   }
 
   const handleEdit = (transaction: TransactionResource) => {
@@ -579,37 +583,38 @@ export function Transactions() {
     setIsEditDialogOpen(true)
   }
 
-  const handleUpdate = async () => {
+  const handleUpdate = () => {
     if (!selectedLedgerSlug || !editingTransaction || !isFormValid(editEntries, editDate, editDescription)) return
 
-    setIsSubmitting(true)
-    try {
-      const transactionEntries: TransactionEntryInput[] = editEntries.map((e) => ({
-        accountId: e.accountId,
-        amount: parseFloat(e.amount),
-        currency: e.currency,
-        toAmount: e.toAmount ? parseFloat(e.toAmount) : undefined,
-        toCurrency: e.toCurrency || undefined,
-        type: e.type,
-        instrumentId: e.instrumentId || undefined,
-        quantity: e.quantity ? parseFloat(e.quantity) : undefined,
-        envelopeId: e.envelopeId || undefined,
-      }))
+    const transactionEntries: TransactionEntryInput[] = editEntries.map((e) => ({
+      accountId: e.accountId,
+      amount: parseFloat(e.amount),
+      currency: e.currency,
+      toAmount: e.toAmount ? parseFloat(e.toAmount) : undefined,
+      toCurrency: e.toCurrency || undefined,
+      type: e.type,
+      instrumentId: e.instrumentId || undefined,
+      quantity: e.quantity ? parseFloat(e.quantity) : undefined,
+      envelopeId: e.envelopeId || undefined,
+    }))
 
-      await updateTransaction(selectedLedgerSlug, editingTransaction.id, {
-        date: editDate,
-        description: editDescription,
-        entries: transactionEntries,
-      })
-
-      await loadTransactions(selectedLedgerSlug, currentPage, pageSize)
-      setIsEditDialogOpen(false)
-      setEditingTransaction(null)
-    } catch (error) {
-      handleError(error, "updateFailed")
-    } finally {
-      setIsSubmitting(false)
-    }
+    updateTransactionMutation.mutate(
+      {
+        transactionId: editingTransaction.id,
+        data: {
+          date: editDate,
+          description: editDescription,
+          entries: transactionEntries,
+        },
+      },
+      {
+        onSuccess: () => {
+          setIsEditDialogOpen(false)
+          setEditingTransaction(null)
+        },
+        onError: (error) => handleError(error, "updateFailed"),
+      }
+    )
   }
 
   if (!isAuthenticated) {
@@ -868,9 +873,9 @@ export function Transactions() {
             <Button
               type="submit"
               onClick={handleSubmit}
-              disabled={!isFormValid(entries, date, description) || isSubmitting}
+              disabled={!isFormValid(entries, date, description) || createTransactionMutation.isPending}
             >
-              {isSubmitting ? t("transactions.creating") : t("transactions.createTransaction")}
+              {createTransactionMutation.isPending ? t("transactions.creating") : t("transactions.createTransaction")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -923,9 +928,9 @@ export function Transactions() {
             <Button
               type="submit"
               onClick={handleUpdate}
-              disabled={!isFormValid(editEntries, editDate, editDescription) || isSubmitting}
+              disabled={!isFormValid(editEntries, editDate, editDescription) || updateTransactionMutation.isPending}
             >
-              {isSubmitting ? t("transactions.saving") : t("common.save")}
+              {updateTransactionMutation.isPending ? t("transactions.saving") : t("common.save")}
             </Button>
           </DialogFooter>
         </DialogContent>

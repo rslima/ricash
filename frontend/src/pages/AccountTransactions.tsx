@@ -27,10 +27,10 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { useAuth } from "@/contexts/AuthContext"
-import { getTransactions } from "@/api/transactions"
-import { getAccounts } from "@/api/accounts"
-import { getLedgers } from "@/api/ledgers"
-import type { TransactionResource, AccountResource, LedgerResource } from "@/api/types"
+import { useLedgers } from "@/api/ledgers.hooks"
+import { useAccounts } from "@/api/accounts.hooks"
+import { useTransactions } from "@/api/transactions.hooks"
+import type { AccountResource } from "@/api/types"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import { ArrowLeft, ArrowLeftRight, ChevronRight, Plus, ChevronDown, ChevronLeft, ChevronsLeft, ChevronsRight } from "lucide-react"
 import { useErrorHandler } from "@/hooks/use-error-handler"
@@ -63,14 +63,43 @@ export function AccountTransactions() {
   const { isAuthenticated } = useAuth()
   const handleError = useErrorHandler()
   const navigate = useNavigate()
-  const [transactions, setTransactions] = useState<TransactionResource[]>([])
-  const [accounts, setAccounts] = useState<AccountResource[]>([])
-  const [ledger, setLedger] = useState<LedgerResource | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
   const [currentPage, setCurrentPage] = useState(0)
   const [pageSize, setPageSize] = useState(20)
-  const [totalPages, setTotalPages] = useState(0)
-  const [totalElements, setTotalElements] = useState(0)
+
+  // Server state: TanStack Query owns fetching, caching, and loading flags.
+  // Gate every query on auth + route params so nothing fires until they exist.
+  const enabled = isAuthenticated && !!ledgerSlug && !!accountId
+  const {
+    data: accountsResp,
+    isLoading: accountsLoading,
+    isError: accountsError,
+    error: accountsErr,
+  } = useAccounts(ledgerSlug ?? "", undefined, enabled)
+  const {
+    data: ledgersResp,
+    isLoading: ledgersLoading,
+    isError: ledgersError,
+    error: ledgersErr,
+  } = useLedgers(enabled)
+  const {
+    data: txResp,
+    isLoading: txLoading,
+    isError: txError,
+    error: txErr,
+  } = useTransactions(
+    ledgerSlug ?? "",
+    { accountId, "page[number]": currentPage, "page[size]": pageSize },
+    enabled
+  )
+
+  const accounts = useMemo(() => accountsResp?.data ?? [], [accountsResp])
+  const transactions = txResp?.data ?? []
+  const ledger = ledgersResp?.data.find((l) => l.attributes.slug === ledgerSlug) ?? null
+  const totalPages = txResp?.meta?.page?.totalPages ?? 0
+  const totalElements = txResp?.meta?.page?.totalElements ?? 0
+  const isLoading = accountsLoading || ledgersLoading || txLoading
+  const isError = accountsError || ledgersError || txError
+  const error = accountsErr ?? ledgersErr ?? txErr
 
   const account = useMemo(
     () => accounts.find((a) => a.id === accountId),
@@ -101,44 +130,10 @@ export function AccountTransactions() {
     setCurrentPage(0)
   }, [accountId])
 
-  // Load account/ledger metadata (independent of pagination)
+  // Surface fetch failures as a toast.
   useEffect(() => {
-    if (!isAuthenticated || !ledgerSlug || !accountId) {
-      return
-    }
-
-    Promise.all([getAccounts(ledgerSlug), getLedgers()])
-      .then(([accountsResponse, ledgersResponse]) => {
-        setAccounts(accountsResponse.data)
-        const foundLedger = ledgersResponse.data.find(
-          (l) => l.attributes.slug === ledgerSlug
-        )
-        setLedger(foundLedger || null)
-      })
-      .catch((e) => handleError(e, "fetchFailed"))
-  }, [isAuthenticated, ledgerSlug, accountId, handleError])
-
-  // Load transactions for the current page
-  useEffect(() => {
-    if (!isAuthenticated || !ledgerSlug || !accountId) {
-      setIsLoading(false)
-      return
-    }
-
-    setIsLoading(true)
-    getTransactions(ledgerSlug, {
-      accountId,
-      "page[number]": currentPage,
-      "page[size]": pageSize,
-    })
-      .then((transactionsResponse) => {
-        setTransactions(transactionsResponse.data)
-        setTotalPages(transactionsResponse.meta?.page?.totalPages ?? 0)
-        setTotalElements(transactionsResponse.meta?.page?.totalElements ?? 0)
-      })
-      .catch((e) => handleError(e, "fetchFailed"))
-      .finally(() => setIsLoading(false))
-  }, [isAuthenticated, ledgerSlug, accountId, currentPage, pageSize, handleError])
+    if (isError) handleError(error, "fetchFailed")
+  }, [isError, error, handleError])
 
   if (!isAuthenticated) {
     return (

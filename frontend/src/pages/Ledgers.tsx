@@ -56,7 +56,8 @@ export function Ledgers() {
   })
 
   // Server state: TanStack Query owns fetching, caching, and loading flags.
-  const { data: ledgers = [], isLoading, isError, error } = useLedgers(isAuthenticated)
+  const { data: ledgersResponse, isLoading, isError, error } = useLedgers(isAuthenticated)
+  const ledgers = ledgersResponse?.data ?? []
   const createLedgerMutation = useCreateLedger()
   const updateLedgerMutation = useUpdateLedger()
   const deleteLedgerMutation = useDeleteLedger()

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useState, useMemo } from "react"
 import { useParams } from "react-router-dom"
 import { useTranslation } from "react-i18next"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -37,9 +37,9 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { useAuth } from "@/contexts/AuthContext"
-import { getInstruments, createInstrument, updateInstrument, deleteInstrument } from "@/api/instruments"
-import { getLedgers } from "@/api/ledgers"
-import type { InstrumentResource, LedgerResource, InstrumentType, InstrumentStatus } from "@/api/types"
+import { useLedgers } from "@/api/ledgers.hooks"
+import { useInstruments, useCreateInstrument, useUpdateInstrument, useDeleteInstrument } from "@/api/instruments.hooks"
+import type { InstrumentResource, InstrumentType, InstrumentStatus } from "@/api/types"
 import { Plus, Trash2, TrendingUp, MoreHorizontal, Pencil, Briefcase } from "lucide-react"
 import { useErrorHandler } from "@/hooks/use-error-handler"
 
@@ -56,13 +56,9 @@ export function Instruments() {
   const { ledgerSlug } = useParams<{ ledgerSlug?: string }>()
   const { isAuthenticated } = useAuth()
   const handleError = useErrorHandler()
-  const [instruments, setInstruments] = useState<InstrumentResource[]>([])
-  const [ledgers, setLedgers] = useState<LedgerResource[]>([])
   const [selectedLedgerSlug, setSelectedLedgerSlug] = useState<string | null>(ledgerSlug || null)
-  const [isLoading, setIsLoading] = useState(true)
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
-  const [isSubmitting, setIsSubmitting] = useState(false)
   const [editingInstrument, setEditingInstrument] = useState<InstrumentResource | null>(null)
 
   // Form state
@@ -96,59 +92,63 @@ export function Instruments() {
     })
   }
 
+  // Server state: TanStack Query owns fetching, caching, and loading flags.
+  const { data: ledgersResponse, isLoading: isLedgersLoading, isError: isLedgersError, error: ledgersError } = useLedgers(isAuthenticated)
+  const ledgers = useMemo(() => ledgersResponse?.data ?? [], [ledgersResponse])
+  const {
+    data: instrumentsResponse,
+    isLoading: isInstrumentsLoading,
+    isError: isInstrumentsError,
+    error: instrumentsError,
+  } = useInstruments(
+    selectedLedgerSlug ?? "",
+    { "page[size]": 100 },
+    isAuthenticated && !!selectedLedgerSlug
+  )
+  const instruments = instrumentsResponse?.data ?? []
+  const isLoading = isLedgersLoading || isInstrumentsLoading
+
+  const createInstrumentMutation = useCreateInstrument(selectedLedgerSlug ?? "")
+  const updateInstrumentMutation = useUpdateInstrument(selectedLedgerSlug ?? "")
+  const deleteInstrumentMutation = useDeleteInstrument(selectedLedgerSlug ?? "")
+
+  // Default the selected ledger to the first one once ledgers have loaded.
   useEffect(() => {
-    if (!isAuthenticated) {
-      setIsLoading(false)
-      return
+    if (ledgers.length > 0) {
+      setSelectedLedgerSlug(prev => prev ?? ledgers[0].attributes.slug)
     }
+  }, [ledgers])
 
-    getLedgers()
-      .then((response) => {
-        setLedgers(response.data)
-        if (response.data.length > 0) {
-          setSelectedLedgerSlug(prev => prev ?? response.data[0].attributes.slug)
-        }
-      })
-      .catch((e) => handleError(e, "fetchFailed"))
-  }, [isAuthenticated, handleError])
+  // Surface fetch failures as a toast (mutations report their own errors inline).
+  useEffect(() => {
+    if (isLedgersError) handleError(ledgersError, "fetchFailed")
+  }, [isLedgersError, ledgersError, handleError])
 
   useEffect(() => {
-    if (!selectedLedgerSlug || !isAuthenticated) {
-      setIsLoading(false)
-      return
-    }
+    if (isInstrumentsError) handleError(instrumentsError, "fetchFailed")
+  }, [isInstrumentsError, instrumentsError, handleError])
 
-    setIsLoading(true)
-    getInstruments(selectedLedgerSlug, { "page[size]": 100 })
-      .then((response) => {
-        setInstruments(response.data)
-      })
-      .catch((e) => handleError(e, "fetchFailed"))
-      .finally(() => setIsLoading(false))
-  }, [selectedLedgerSlug, isAuthenticated, handleError])
-
-  const handleCreate = async (e: React.FormEvent) => {
+  const handleCreate = (e: React.FormEvent) => {
     e.preventDefault()
     if (!selectedLedgerSlug) return
 
-    setIsSubmitting(true)
-    try {
-      const response = await createInstrument(selectedLedgerSlug, {
+    createInstrumentMutation.mutate(
+      {
         symbol: formData.symbol.toUpperCase(),
         name: formData.name,
         type: formData.type,
         currency: formData.currency.toUpperCase(),
         market: formData.market || undefined,
         isin: formData.isin || undefined,
-      })
-      setInstruments([...instruments, response.data])
-      setIsCreateDialogOpen(false)
-      resetForm()
-    } catch (error) {
-      handleError(error, "createFailed")
-    } finally {
-      setIsSubmitting(false)
-    }
+      },
+      {
+        onSuccess: () => {
+          setIsCreateDialogOpen(false)
+          resetForm()
+        },
+        onError: (error) => handleError(error, "createFailed"),
+      }
+    )
   }
 
   const handleEdit = (instrument: InstrumentResource) => {
@@ -165,41 +165,40 @@ export function Instruments() {
     setIsEditDialogOpen(true)
   }
 
-  const handleUpdate = async (e: React.FormEvent) => {
+  const handleUpdate = (e: React.FormEvent) => {
     e.preventDefault()
     if (!selectedLedgerSlug || !editingInstrument) return
 
-    setIsSubmitting(true)
-    try {
-      const response = await updateInstrument(selectedLedgerSlug, editingInstrument.id, {
-        symbol: editFormData.symbol.toUpperCase(),
-        name: editFormData.name,
-        type: editFormData.type,
-        currency: editFormData.currency.toUpperCase(),
-        market: editFormData.market || undefined,
-        isin: editFormData.isin || undefined,
-        status: editFormData.status,
-      })
-      setInstruments(instruments.map((i) => (i.id === editingInstrument.id ? response.data : i)))
-      setIsEditDialogOpen(false)
-      setEditingInstrument(null)
-    } catch (error) {
-      handleError(error, "updateFailed")
-    } finally {
-      setIsSubmitting(false)
-    }
+    updateInstrumentMutation.mutate(
+      {
+        instrumentId: editingInstrument.id,
+        input: {
+          symbol: editFormData.symbol.toUpperCase(),
+          name: editFormData.name,
+          type: editFormData.type,
+          currency: editFormData.currency.toUpperCase(),
+          market: editFormData.market || undefined,
+          isin: editFormData.isin || undefined,
+          status: editFormData.status,
+        },
+      },
+      {
+        onSuccess: () => {
+          setIsEditDialogOpen(false)
+          setEditingInstrument(null)
+        },
+        onError: (error) => handleError(error, "updateFailed"),
+      }
+    )
   }
 
-  const handleDelete = async (instrumentId: string) => {
+  const handleDelete = (instrumentId: string) => {
     if (!selectedLedgerSlug) return
     if (!confirm(t("instruments.confirmDelete"))) return
 
-    try {
-      await deleteInstrument(selectedLedgerSlug, instrumentId)
-      setInstruments(instruments.filter((i) => i.id !== instrumentId))
-    } catch (error) {
-      handleError(error, "deleteFailed")
-    }
+    deleteInstrumentMutation.mutate(instrumentId, {
+      onError: (error) => handleError(error, "deleteFailed"),
+    })
   }
 
   if (!isAuthenticated) {
@@ -321,8 +320,8 @@ export function Instruments() {
               <Button type="button" variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
                 {t("common.cancel")}
               </Button>
-              <Button type="submit" disabled={isSubmitting || !formData.symbol || !formData.name}>
-                {isSubmitting ? t("instruments.creating") : t("common.create")}
+              <Button type="submit" disabled={createInstrumentMutation.isPending || !formData.symbol || !formData.name}>
+                {createInstrumentMutation.isPending ? t("instruments.creating") : t("common.create")}
               </Button>
             </DialogFooter>
           </form>
@@ -430,8 +429,8 @@ export function Instruments() {
               <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)}>
                 {t("common.cancel")}
               </Button>
-              <Button type="submit" disabled={isSubmitting || !editFormData.symbol || !editFormData.name}>
-                {isSubmitting ? t("instruments.saving") : t("common.save")}
+              <Button type="submit" disabled={updateInstrumentMutation.isPending || !editFormData.symbol || !editFormData.name}>
+                {updateInstrumentMutation.isPending ? t("instruments.saving") : t("common.save")}
               </Button>
             </DialogFooter>
           </form>

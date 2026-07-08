@@ -37,12 +37,13 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { useAuth } from "@/contexts/AuthContext"
-import { getAccounts, deleteAccount, createAccount, updateAccount } from "@/api/accounts"
+import { useAccounts, useCreateAccount, useUpdateAccount, useDeleteAccount } from "@/api/accounts.hooks"
 import { ApiError } from "@/api/client"
 import { useErrorHandler } from "@/hooks/use-error-handler"
-import { getLedgers } from "@/api/ledgers"
-import { getEnvelopes, getEnvelopeMappings, setEnvelopeAccounts, getEnvelopeAccounts } from "@/api/envelopes"
-import type { AccountResource, LedgerResource, EnvelopeResource } from "@/api/types"
+import { useLedgers } from "@/api/ledgers.hooks"
+import { useEnvelopes, useEnvelopeMappings, useSetEnvelopeAccounts } from "@/api/envelopes.hooks"
+import { getEnvelopeAccounts } from "@/api/envelopes"
+import type { AccountResource } from "@/api/types"
 import { formatCurrency } from "@/lib/utils"
 import { Plus, Trash2, Wallet, MoreHorizontal, Pencil, ChevronRight, ChevronDown } from "lucide-react"
 import { AccountAutocomplete } from "@/components/AccountAutocomplete"
@@ -198,16 +199,9 @@ export function Accounts() {
   const { ledgerSlug } = useParams<{ ledgerSlug?: string }>()
   const { isAuthenticated } = useAuth()
   const handleError = useErrorHandler()
-  const [accounts, setAccounts] = useState<AccountResource[]>([])
-  const [envelopes, setEnvelopes] = useState<EnvelopeResource[]>([])
-  const [envelopeMappings, setEnvelopeMappings] = useState<Record<string, string>>({})
-  const [ledgers, setLedgers] = useState<LedgerResource[]>([])
   const [selectedLedgerSlug, setSelectedLedgerSlug] = useState<string | null>(ledgerSlug || null)
-  const [isLoading, setIsLoading] = useState(true)
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
-  const [isCreating, setIsCreating] = useState(false)
-  const [isUpdating, setIsUpdating] = useState(false)
   const [editingAccount, setEditingAccount] = useState<AccountResource | null>(null)
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
   const [formData, setFormData] = useState({
@@ -226,6 +220,52 @@ export function Accounts() {
     parentAccountId: "",
     envelopeId: "",
   })
+
+  // Server state: TanStack Query owns fetching, caching, and loading flags.
+  const {
+    data: ledgersResponse,
+    isLoading: isLedgersLoading,
+    isError: isLedgersError,
+    error: ledgersError,
+  } = useLedgers(isAuthenticated)
+  const ledgers = useMemo(() => ledgersResponse?.data ?? [], [ledgersResponse])
+
+  const {
+    data: accountsResponse,
+    isLoading: isAccountsLoading,
+    isError: isAccountsError,
+    error: accountsError,
+  } = useAccounts(selectedLedgerSlug ?? "", { "page[size]": 200 }, isAuthenticated)
+  const accounts = useMemo(() => accountsResponse?.data ?? [], [accountsResponse])
+
+  const {
+    data: envelopesResponse,
+    isLoading: isEnvelopesLoading,
+    isError: isEnvelopesError,
+    error: envelopesError,
+  } = useEnvelopes(selectedLedgerSlug ?? "", { "page[size]": 200 }, isAuthenticated)
+  const envelopes = useMemo(() => envelopesResponse?.data ?? [], [envelopesResponse])
+
+  const {
+    data: envelopeMappingsData,
+    isLoading: isMappingsLoading,
+    isError: isMappingsError,
+    error: mappingsError,
+  } = useEnvelopeMappings(selectedLedgerSlug ?? "", isAuthenticated)
+  const envelopeMappings = envelopeMappingsData ?? {}
+
+  const createAccountMutation = useCreateAccount(selectedLedgerSlug ?? "")
+  const updateAccountMutation = useUpdateAccount(selectedLedgerSlug ?? "")
+  const deleteAccountMutation = useDeleteAccount(selectedLedgerSlug ?? "")
+  const setEnvelopeAccountsMutation = useSetEnvelopeAccounts(selectedLedgerSlug ?? "")
+
+  const isLoading = isLedgersLoading || isAccountsLoading || isEnvelopesLoading || isMappingsLoading
+  const isCreating = createAccountMutation.isPending || setEnvelopeAccountsMutation.isPending
+  const isUpdating = updateAccountMutation.isPending || setEnvelopeAccountsMutation.isPending
+
+  // Combine query failures into a single fetch-error signal for the toast.
+  const isError = isLedgersError || isAccountsError || isEnvelopesError || isMappingsError
+  const error = ledgersError || accountsError || envelopesError || mappingsError
 
   const accountTree = useMemo(() => buildAccountTree(accounts), [accounts])
 
@@ -267,44 +307,22 @@ export function Accounts() {
     return accounts.filter((a) => !excludedIds.has(a.id))
   }, [accounts, editingAccount])
 
+  // Surface fetch failures as a toast (mutations report their own errors inline).
   useEffect(() => {
-    if (!isAuthenticated) {
-      setIsLoading(false)
-      return
-    }
+    if (isError) handleError(error, "fetchFailed")
+  }, [isError, error, handleError])
 
-    getLedgers()
-      .then((response) => {
-        setLedgers(response.data)
-        if (response.data.length > 0) {
-          setSelectedLedgerSlug(prev => prev ?? response.data[0].attributes.slug)
-        }
-      })
-      .catch((e) => handleError(e, "fetchFailed"))
-  }, [isAuthenticated, handleError])
-
+  // Default to the first ledger once ledgers load (unless one is already chosen).
   useEffect(() => {
-    if (!selectedLedgerSlug || !isAuthenticated) {
-      setIsLoading(false)
-      return
+    if (ledgers.length > 0) {
+      setSelectedLedgerSlug((prev) => prev ?? ledgers[0].attributes.slug)
     }
+  }, [ledgers])
 
-    setIsLoading(true)
-    Promise.all([
-      getAccounts(selectedLedgerSlug, { "page[size]": 200 }),
-      getEnvelopes(selectedLedgerSlug, { "page[size]": 200 }),
-      getEnvelopeMappings(selectedLedgerSlug),
-    ])
-      .then(([accountsResponse, envelopesResponse, mappingsResponse]) => {
-        setAccounts(accountsResponse.data)
-        setEnvelopes(envelopesResponse.data)
-        setEnvelopeMappings(mappingsResponse)
-        // Expand all accounts by default
-        setExpandedIds(new Set(accountsResponse.data.map((a) => a.id)))
-      })
-      .catch((e) => handleError(e, "fetchFailed"))
-      .finally(() => setIsLoading(false))
-  }, [selectedLedgerSlug, isAuthenticated, handleError])
+  // Expand all accounts by default whenever the account list (re)loads.
+  useEffect(() => {
+    setExpandedIds(new Set(accounts.map((a) => a.id)))
+  }, [accounts])
 
   const handleToggleExpand = (id: string) => {
     setExpandedIds((prev) => {
@@ -341,7 +359,7 @@ export function Accounts() {
     return descendants
   }
 
-  const handleDelete = async (accountId: string) => {
+  const handleDelete = (accountId: string) => {
     if (!selectedLedgerSlug) return
 
     const childCount = getAllDescendantIds(accountId).length - 1
@@ -352,27 +370,25 @@ export function Accounts() {
 
     if (!confirm(message)) return
 
-    try {
-      await deleteAccount(selectedLedgerSlug, accountId)
-      // Remove the account and all its descendants from state
-      const idsToRemove = new Set(getAllDescendantIds(accountId))
-      setAccounts(accounts.filter((a) => !idsToRemove.has(a.id)))
-    } catch (error) {
-      if (error instanceof ApiError && error.status === 409) {
-        handleError(error, "conflict")
-      } else {
-        handleError(error, "deleteFailed")
-      }
-    }
+    // The delete mutation invalidates the account cache, so the removed account
+    // (and its descendants, cascaded server-side) drop out on the refetch.
+    deleteAccountMutation.mutate(accountId, {
+      onError: (error) => {
+        if (error instanceof ApiError && error.status === 409) {
+          handleError(error, "conflict")
+        } else {
+          handleError(error, "deleteFailed")
+        }
+      },
+    })
   }
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!selectedLedgerSlug) return
-    setIsCreating(true)
 
     try {
-      const response = await createAccount(selectedLedgerSlug, {
+      const response = await createAccountMutation.mutateAsync({
         name: formData.name,
         description: formData.description || undefined,
         currency: formData.currency,
@@ -380,21 +396,21 @@ export function Accounts() {
         parentAccountId: formData.parentAccountId || undefined,
       })
 
-      // Set envelope mapping if selected
+      // Set envelope mapping if selected. The current membership is only known at
+      // submit time, so we read it imperatively and write it via the mutation
+      // hook (which invalidates the account/envelope caches on success).
       if (formData.envelopeId) {
         const currentAccounts = await getEnvelopeAccounts(selectedLedgerSlug, formData.envelopeId)
-        await setEnvelopeAccounts(selectedLedgerSlug, formData.envelopeId, [...currentAccounts.accountIds, response.data.id])
-        setEnvelopeMappings((prev) => ({ ...prev, [response.data.id]: formData.envelopeId }))
+        await setEnvelopeAccountsMutation.mutateAsync({
+          envelopeId: formData.envelopeId,
+          accountIds: [...currentAccounts.accountIds, response.data.id],
+        })
       }
 
-      setAccounts([...accounts, response.data])
-      setExpandedIds((prev) => new Set([...prev, response.data.id]))
       setIsCreateDialogOpen(false)
       setFormData({ name: "", description: "", currency: "BRL", type: "ASSET", parentAccountId: "", envelopeId: "" })
     } catch (error) {
       handleError(error, "createFailed")
-    } finally {
-      setIsCreating(false)
     }
   }
 
@@ -426,15 +442,17 @@ export function Accounts() {
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!selectedLedgerSlug || !editingAccount) return
-    setIsUpdating(true)
 
     try {
-      const response = await updateAccount(selectedLedgerSlug, editingAccount.id, {
-        name: editFormData.name,
-        description: editFormData.description || undefined,
-        type: editFormData.type,
-        currency: editFormData.currency,
-        parentAccountId: editFormData.parentAccountId || null,
+      await updateAccountMutation.mutateAsync({
+        accountId: editingAccount.id,
+        data: {
+          name: editFormData.name,
+          description: editFormData.description || undefined,
+          type: editFormData.type,
+          currency: editFormData.currency,
+          parentAccountId: editFormData.parentAccountId || null,
+        },
       })
 
       // Update envelope mapping
@@ -445,40 +463,26 @@ export function Accounts() {
         // Remove from old envelope
         if (currentEnvelopeId) {
           const oldEnvelopeAccounts = await getEnvelopeAccounts(selectedLedgerSlug, currentEnvelopeId)
-          await setEnvelopeAccounts(
-            selectedLedgerSlug,
-            currentEnvelopeId,
-            oldEnvelopeAccounts.accountIds.filter((id) => id !== editingAccount.id)
-          )
+          await setEnvelopeAccountsMutation.mutateAsync({
+            envelopeId: currentEnvelopeId,
+            accountIds: oldEnvelopeAccounts.accountIds.filter((id) => id !== editingAccount.id),
+          })
         }
 
         // Add to new envelope
         if (newEnvelopeId) {
           const newEnvelopeAccounts = await getEnvelopeAccounts(selectedLedgerSlug, newEnvelopeId)
-          await setEnvelopeAccounts(selectedLedgerSlug, newEnvelopeId, [...newEnvelopeAccounts.accountIds, editingAccount.id])
+          await setEnvelopeAccountsMutation.mutateAsync({
+            envelopeId: newEnvelopeId,
+            accountIds: [...newEnvelopeAccounts.accountIds, editingAccount.id],
+          })
         }
-
-        // Update local state
-        setEnvelopeMappings((prev) => {
-          const updated = { ...prev }
-          if (newEnvelopeId) {
-            updated[editingAccount.id] = newEnvelopeId
-          } else {
-            delete updated[editingAccount.id]
-          }
-          return updated
-        })
       }
 
-      setAccounts(accounts.map((a) =>
-        a.id === editingAccount.id ? response.data : a
-      ))
       setIsEditDialogOpen(false)
       setEditingAccount(null)
     } catch (error) {
       handleError(error, "updateFailed")
-    } finally {
-      setIsUpdating(false)
     }
   }
 

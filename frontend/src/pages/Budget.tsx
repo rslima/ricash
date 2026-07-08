@@ -21,9 +21,9 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { useAuth } from "@/contexts/AuthContext"
-import { getEnvelopes, getBudgetSummary, allocateEnvelope } from "@/api/envelopes"
-import { getLedgers } from "@/api/ledgers"
-import type { EnvelopeResource, LedgerResource, EnvelopeBalance, EnvelopeType } from "@/api/types"
+import { useEnvelopes, useBudgetSummary, useAllocateEnvelope } from "@/api/envelopes.hooks"
+import { useLedgers } from "@/api/ledgers.hooks"
+import type { EnvelopeResource, EnvelopeBalance, EnvelopeType } from "@/api/types"
 import { formatCurrency } from "@/lib/utils"
 import { ChevronLeft, ChevronRight, FolderOpen, TrendingUp, TrendingDown, PiggyBank } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -169,16 +169,49 @@ export function Budget() {
   const { ledgerSlug } = useParams<{ ledgerSlug?: string }>()
   const { isAuthenticated } = useAuth()
   const handleError = useErrorHandler()
-  const [envelopes, setEnvelopes] = useState<EnvelopeResource[]>([])
-  const [balances, setBalances] = useState<EnvelopeBalance[]>([])
-  const [toBeBudgeted, setToBeBudgeted] = useState(0)
-  const [ledgers, setLedgers] = useState<LedgerResource[]>([])
   const [selectedLedgerSlug, setSelectedLedgerSlug] = useState<string | null>(ledgerSlug || null)
-  const [isLoading, setIsLoading] = useState(true)
 
   const now = new Date()
   const [selectedYear, setSelectedYear] = useState(now.getFullYear())
   const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1)
+
+  // Server state: TanStack Query owns fetching, caching, and loading flags.
+  const {
+    data: ledgersResponse,
+    isError: isLedgersError,
+    error: ledgersError,
+  } = useLedgers(isAuthenticated)
+  const ledgers = useMemo(() => ledgersResponse?.data ?? [], [ledgersResponse])
+
+  const {
+    data: envelopesResponse,
+    isLoading: isEnvelopesLoading,
+    isError: isEnvelopesError,
+    error: envelopesError,
+  } = useEnvelopes(
+    selectedLedgerSlug ?? "",
+    { "page[size]": 200 },
+    isAuthenticated && !!selectedLedgerSlug
+  )
+  const envelopes = useMemo(() => envelopesResponse?.data ?? [], [envelopesResponse])
+
+  const {
+    data: budgetSummary,
+    isLoading: isBudgetLoading,
+    isError: isBudgetError,
+    error: budgetError,
+  } = useBudgetSummary(
+    selectedLedgerSlug ?? "",
+    selectedYear,
+    selectedMonth,
+    isAuthenticated && !!selectedLedgerSlug
+  )
+  const balances = useMemo(() => budgetSummary?.envelopeBalances ?? [], [budgetSummary])
+  const toBeBudgeted = budgetSummary?.toBeBudgeted ?? 0
+
+  const isLoading = isEnvelopesLoading || isBudgetLoading
+
+  const allocateEnvelopeMutation = useAllocateEnvelope(selectedLedgerSlug ?? "")
 
   const envelopesByType = useMemo(() => {
     const grouped: Record<EnvelopeType, EnvelopeResource[]> = {
@@ -204,41 +237,25 @@ export function Budget() {
     return map
   }, [balances])
 
+  // Default the selected ledger to the first one once ledgers load.
   useEffect(() => {
-    if (!isAuthenticated) {
-      setIsLoading(false)
-      return
+    if (ledgers.length > 0) {
+      setSelectedLedgerSlug(prev => prev ?? ledgers[0].attributes.slug)
     }
+  }, [ledgers])
 
-    getLedgers()
-      .then((response) => {
-        setLedgers(response.data)
-        if (response.data.length > 0) {
-          setSelectedLedgerSlug(prev => prev ?? response.data[0].attributes.slug)
-        }
-      })
-      .catch((e) => handleError(e, "fetchFailed"))
-  }, [isAuthenticated, handleError])
+  // Surface fetch failures as a toast (mutations report their own errors inline).
+  useEffect(() => {
+    if (isLedgersError) handleError(ledgersError, "fetchFailed")
+  }, [isLedgersError, ledgersError, handleError])
 
   useEffect(() => {
-    if (!selectedLedgerSlug || !isAuthenticated) {
-      setIsLoading(false)
-      return
-    }
+    if (isEnvelopesError) handleError(envelopesError, "fetchFailed")
+  }, [isEnvelopesError, envelopesError, handleError])
 
-    setIsLoading(true)
-    Promise.all([
-      getEnvelopes(selectedLedgerSlug, { "page[size]": 200 }),
-      getBudgetSummary(selectedLedgerSlug, selectedYear, selectedMonth),
-    ])
-      .then(([envelopesResponse, budgetResponse]) => {
-        setEnvelopes(envelopesResponse.data)
-        setBalances(budgetResponse.envelopeBalances)
-        setToBeBudgeted(budgetResponse.toBeBudgeted)
-      })
-      .catch((e) => handleError(e, "fetchFailed"))
-      .finally(() => setIsLoading(false))
-  }, [selectedLedgerSlug, selectedYear, selectedMonth, isAuthenticated, handleError])
+  useEffect(() => {
+    if (isBudgetError) handleError(budgetError, "fetchFailed")
+  }, [isBudgetError, budgetError, handleError])
 
   const handlePreviousMonth = () => {
     if (selectedMonth === 1) {
@@ -258,23 +275,23 @@ export function Budget() {
     }
   }
 
-  const handleAllocate = async (envelopeId: string, amount: number) => {
+  const handleAllocate = (envelopeId: string, amount: number) => {
     if (!selectedLedgerSlug) return
 
-    try {
-      await allocateEnvelope(selectedLedgerSlug, envelopeId, {
-        year: selectedYear,
-        month: selectedMonth,
-        allocatedAmount: amount,
-      })
-
-      // Refresh budget summary
-      const budgetResponse = await getBudgetSummary(selectedLedgerSlug, selectedYear, selectedMonth)
-      setBalances(budgetResponse.envelopeBalances)
-      setToBeBudgeted(budgetResponse.toBeBudgeted)
-    } catch (error) {
-      handleError(error, "updateFailed")
-    }
+    // The hook invalidates the budget/envelope keys on success, so no manual refetch.
+    allocateEnvelopeMutation.mutate(
+      {
+        envelopeId,
+        data: {
+          year: selectedYear,
+          month: selectedMonth,
+          allocatedAmount: amount,
+        },
+      },
+      {
+        onError: (err) => handleError(err, "updateFailed"),
+      }
+    )
   }
 
   const selectedLedger = ledgers.find((l) => l.attributes.slug === selectedLedgerSlug)

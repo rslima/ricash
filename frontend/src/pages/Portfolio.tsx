@@ -14,9 +14,9 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { useAuth } from "@/contexts/AuthContext"
-import { getPortfolio } from "@/api/instruments"
-import { getLedgers } from "@/api/ledgers"
-import type { InstrumentPositionResource, LedgerResource, InstrumentType } from "@/api/types"
+import { useLedgers } from "@/api/ledgers.hooks"
+import { usePortfolio } from "@/api/instruments.hooks"
+import type { InstrumentType } from "@/api/types"
 import { formatCurrency } from "@/lib/utils"
 import { TrendingUp, Briefcase, PieChart, DollarSign } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -35,41 +35,32 @@ export function Portfolio() {
   const { ledgerSlug } = useParams<{ ledgerSlug?: string }>()
   const { isAuthenticated } = useAuth()
   const handleError = useErrorHandler()
-  const [positions, setPositions] = useState<InstrumentPositionResource[]>([])
-  const [ledgers, setLedgers] = useState<LedgerResource[]>([])
   const [selectedLedgerSlug, setSelectedLedgerSlug] = useState<string | null>(ledgerSlug || null)
-  const [isLoading, setIsLoading] = useState(true)
+
+  // Server state: TanStack Query owns fetching, caching, and loading flags.
+  const { data: ledgersResponse, isLoading: isLedgersLoading, isError: isLedgersError, error: ledgersError } = useLedgers(isAuthenticated)
+  const ledgers = ledgersResponse?.data ?? []
+
+  // Resolve the ledger slug from the current selection, falling back to the
+  // first ledger once the list loads (mirrors the previous default-to-first behavior).
+  const resolvedLedgerSlug = selectedLedgerSlug ?? ledgers[0]?.attributes.slug ?? null
+
+  const { data: portfolioResponse, isLoading: isPortfolioLoading, isError: isPortfolioError, error: portfolioError } = usePortfolio(
+    resolvedLedgerSlug ?? "",
+    isAuthenticated && !!resolvedLedgerSlug
+  )
+  const positions = portfolioResponse?.data ?? []
+
+  const isLoading = isLedgersLoading || isPortfolioLoading
+
+  // Surface fetch failures as a toast.
+  useEffect(() => {
+    if (isLedgersError) handleError(ledgersError, "fetchFailed")
+  }, [isLedgersError, ledgersError, handleError])
 
   useEffect(() => {
-    if (!isAuthenticated) {
-      setIsLoading(false)
-      return
-    }
-
-    getLedgers()
-      .then((response) => {
-        setLedgers(response.data)
-        if (response.data.length > 0) {
-          setSelectedLedgerSlug(prev => prev ?? response.data[0].attributes.slug)
-        }
-      })
-      .catch((e) => handleError(e, "fetchFailed"))
-  }, [isAuthenticated, handleError])
-
-  useEffect(() => {
-    if (!selectedLedgerSlug || !isAuthenticated) {
-      setIsLoading(false)
-      return
-    }
-
-    setIsLoading(true)
-    getPortfolio(selectedLedgerSlug)
-      .then((response) => {
-        setPositions(response.data)
-      })
-      .catch((e) => handleError(e, "fetchFailed"))
-      .finally(() => setIsLoading(false))
-  }, [selectedLedgerSlug, isAuthenticated, handleError])
+    if (isPortfolioError) handleError(portfolioError, "fetchFailed")
+  }, [isPortfolioError, portfolioError, handleError])
 
   if (!isAuthenticated) {
     return (
@@ -86,7 +77,7 @@ export function Portfolio() {
     )
   }
 
-  const selectedLedger = ledgers.find((l) => l.attributes.slug === selectedLedgerSlug)
+  const selectedLedger = ledgers.find((l) => l.attributes.slug === resolvedLedgerSlug)
 
   // Group totals by currency
   const totalsByCurrency = positions.reduce((acc, p) => {
@@ -120,7 +111,7 @@ export function Portfolio() {
           {ledgers.map((ledger) => (
             <Button
               key={ledger.id}
-              variant={selectedLedgerSlug === ledger.attributes.slug ? "default" : "outline"}
+              variant={resolvedLedgerSlug === ledger.attributes.slug ? "default" : "outline"}
               size="sm"
               onClick={() => setSelectedLedgerSlug(ledger.attributes.slug)}
             >

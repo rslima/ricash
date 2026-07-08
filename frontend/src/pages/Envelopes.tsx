@@ -37,19 +37,19 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { useAuth } from "@/contexts/AuthContext"
-import {
-  getEnvelopes,
-  deleteEnvelope,
-  createEnvelope,
-  updateEnvelope,
-  getEnvelopeAccounts,
-  setEnvelopeAccounts,
-} from "@/api/envelopes"
-import { getAccounts } from "@/api/accounts"
+import { getEnvelopeAccounts } from "@/api/envelopes"
 import { ApiError } from "@/api/client"
 import { useErrorHandler } from "@/hooks/use-error-handler"
-import { getLedgers } from "@/api/ledgers"
-import type { EnvelopeResource, LedgerResource, AccountResource, EnvelopeType, EnvelopeStatus } from "@/api/types"
+import {
+  useEnvelopes,
+  useCreateEnvelope,
+  useUpdateEnvelope,
+  useDeleteEnvelope,
+  useSetEnvelopeAccounts,
+} from "@/api/envelopes.hooks"
+import { useAccounts } from "@/api/accounts.hooks"
+import { useLedgers } from "@/api/ledgers.hooks"
+import type { EnvelopeResource, EnvelopeType, EnvelopeStatus } from "@/api/types"
 import { Plus, Trash2, MoreHorizontal, Pencil, ChevronRight, ChevronDown, FolderOpen, Link as LinkIcon } from "lucide-react"
 import { Checkbox } from "@/components/ui/checkbox"
 
@@ -214,17 +214,10 @@ export function Envelopes() {
   const { ledgerSlug } = useParams<{ ledgerSlug?: string }>()
   const { isAuthenticated } = useAuth()
   const handleError = useErrorHandler()
-  const [envelopes, setEnvelopes] = useState<EnvelopeResource[]>([])
-  const [accounts, setAccounts] = useState<AccountResource[]>([])
-  const [ledgers, setLedgers] = useState<LedgerResource[]>([])
   const [selectedLedgerSlug, setSelectedLedgerSlug] = useState<string | null>(ledgerSlug || null)
-  const [isLoading, setIsLoading] = useState(true)
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [isAccountsDialogOpen, setIsAccountsDialogOpen] = useState(false)
-  const [isCreating, setIsCreating] = useState(false)
-  const [isUpdating, setIsUpdating] = useState(false)
-  const [isSavingAccounts, setIsSavingAccounts] = useState(false)
   const [editingEnvelope, setEditingEnvelope] = useState<EnvelopeResource | null>(null)
   const [managingEnvelope, setManagingEnvelope] = useState<EnvelopeResource | null>(null)
   const [selectedAccountIds, setSelectedAccountIds] = useState<string[]>([])
@@ -244,6 +237,36 @@ export function Envelopes() {
     status: "ACTIVE" as EnvelopeStatus,
     parentEnvelopeId: "",
   })
+
+  // Server state: TanStack Query owns fetching, caching, and loading flags.
+  const {
+    data: ledgersResponse,
+    isLoading: isLoadingLedgers,
+    isError: isLedgersError,
+    error: ledgersError,
+  } = useLedgers(isAuthenticated)
+  const ledgers = useMemo(() => ledgersResponse?.data ?? [], [ledgersResponse])
+
+  const envelopesQuery = useEnvelopes(
+    selectedLedgerSlug ?? "",
+    { "page[size]": 200 },
+    isAuthenticated && !!selectedLedgerSlug
+  )
+  const envelopes = useMemo(() => envelopesQuery.data?.data ?? [], [envelopesQuery.data])
+
+  const accountsQuery = useAccounts(
+    selectedLedgerSlug ?? "",
+    { "page[size]": 200 },
+    isAuthenticated && !!selectedLedgerSlug
+  )
+  const accounts = accountsQuery.data?.data ?? []
+
+  const createEnvelopeMutation = useCreateEnvelope(selectedLedgerSlug ?? "")
+  const updateEnvelopeMutation = useUpdateEnvelope(selectedLedgerSlug ?? "")
+  const deleteEnvelopeMutation = useDeleteEnvelope(selectedLedgerSlug ?? "")
+  const setEnvelopeAccountsMutation = useSetEnvelopeAccounts(selectedLedgerSlug ?? "")
+
+  const isLoading = isLoadingLedgers || envelopesQuery.isLoading || accountsQuery.isLoading
 
   const envelopeTree = useMemo(() => buildEnvelopeTree(envelopes), [envelopes])
 
@@ -280,41 +303,26 @@ export function Envelopes() {
     return envelopes.filter((e) => !excludedIds.has(e.id))
   }, [envelopes, editingEnvelope])
 
+  // Default the selected ledger to the first one once ledgers load.
   useEffect(() => {
-    if (!isAuthenticated) {
-      setIsLoading(false)
-      return
+    if (ledgers.length > 0) {
+      setSelectedLedgerSlug((prev) => prev ?? ledgers[0].attributes.slug)
     }
+  }, [ledgers])
 
-    getLedgers()
-      .then((response) => {
-        setLedgers(response.data)
-        if (response.data.length > 0) {
-          setSelectedLedgerSlug(prev => prev ?? response.data[0].attributes.slug)
-        }
-      })
-      .catch((e) => handleError(e, "fetchFailed"))
-  }, [isAuthenticated, handleError])
-
+  // Expand all envelopes whenever a fresh list arrives (mirrors prior fetch behavior).
   useEffect(() => {
-    if (!selectedLedgerSlug || !isAuthenticated) {
-      setIsLoading(false)
-      return
+    if (envelopesQuery.data) {
+      setExpandedIds(new Set(envelopesQuery.data.data.map((e) => e.id)))
     }
+  }, [envelopesQuery.data])
 
-    setIsLoading(true)
-    Promise.all([
-      getEnvelopes(selectedLedgerSlug, { "page[size]": 200 }),
-      getAccounts(selectedLedgerSlug, { "page[size]": 200 }),
-    ])
-      .then(([envelopesResponse, accountsResponse]) => {
-        setEnvelopes(envelopesResponse.data)
-        setAccounts(accountsResponse.data)
-        setExpandedIds(new Set(envelopesResponse.data.map((e) => e.id)))
-      })
-      .catch((e) => handleError(e, "fetchFailed"))
-      .finally(() => setIsLoading(false))
-  }, [selectedLedgerSlug, isAuthenticated, handleError])
+  // Surface fetch failures as a toast (mutations report their own errors inline).
+  const isError = isLedgersError || envelopesQuery.isError || accountsQuery.isError
+  const error = ledgersError ?? envelopesQuery.error ?? accountsQuery.error
+  useEffect(() => {
+    if (isError) handleError(error, "fetchFailed")
+  }, [isError, error, handleError])
 
   const handleToggleExpand = (id: string) => {
     setExpandedIds((prev) => {
@@ -350,7 +358,7 @@ export function Envelopes() {
     return descendants
   }
 
-  const handleDelete = async (envelopeId: string) => {
+  const handleDelete = (envelopeId: string) => {
     if (!selectedLedgerSlug) return
 
     const childCount = getAllDescendantIds(envelopeId).length - 1
@@ -361,41 +369,38 @@ export function Envelopes() {
 
     if (!confirm(message)) return
 
-    try {
-      await deleteEnvelope(selectedLedgerSlug, envelopeId)
-      const idsToRemove = new Set(getAllDescendantIds(envelopeId))
-      setEnvelopes(envelopes.filter((e) => !idsToRemove.has(e.id)))
-    } catch (error) {
-      if (error instanceof ApiError && error.status === 409) {
-        handleError(error, "conflict")
-      } else {
-        handleError(error, "deleteFailed")
-      }
-    }
+    deleteEnvelopeMutation.mutate(envelopeId, {
+      onError: (error) => {
+        if (error instanceof ApiError && error.status === 409) {
+          handleError(error, "conflict")
+        } else {
+          handleError(error, "deleteFailed")
+        }
+      },
+    })
   }
 
-  const handleCreate = async (e: React.FormEvent) => {
+  const handleCreate = (e: React.FormEvent) => {
     e.preventDefault()
     if (!selectedLedgerSlug) return
-    setIsCreating(true)
 
-    try {
-      const response = await createEnvelope(selectedLedgerSlug, {
+    createEnvelopeMutation.mutate(
+      {
         name: formData.name,
         description: formData.description || undefined,
         currency: formData.currency,
         type: formData.type,
         parentEnvelopeId: formData.parentEnvelopeId || undefined,
-      })
-      setEnvelopes([...envelopes, response.data])
-      setExpandedIds((prev) => new Set([...prev, response.data.id]))
-      setIsCreateDialogOpen(false)
-      setFormData({ name: "", description: "", currency: "BRL", type: "EXPENSE", parentEnvelopeId: "" })
-    } catch (error) {
-      handleError(error, "createFailed")
-    } finally {
-      setIsCreating(false)
-    }
+      },
+      {
+        onSuccess: (response) => {
+          setExpandedIds((prev) => new Set([...prev, response.data.id]))
+          setIsCreateDialogOpen(false)
+          setFormData({ name: "", description: "", currency: "BRL", type: "EXPENSE", parentEnvelopeId: "" })
+        },
+        onError: (error) => handleError(error, "createFailed"),
+      }
+    )
   }
 
   const handleCreateChild = (parentEnvelope: EnvelopeResource) => {
@@ -422,30 +427,30 @@ export function Envelopes() {
     setIsEditDialogOpen(true)
   }
 
-  const handleUpdate = async (e: React.FormEvent) => {
+  const handleUpdate = (e: React.FormEvent) => {
     e.preventDefault()
     if (!selectedLedgerSlug || !editingEnvelope) return
-    setIsUpdating(true)
 
-    try {
-      const response = await updateEnvelope(selectedLedgerSlug, editingEnvelope.id, {
-        name: editFormData.name,
-        description: editFormData.description || undefined,
-        type: editFormData.type,
-        currency: editFormData.currency,
-        status: editFormData.status,
-        parentEnvelopeId: editFormData.parentEnvelopeId || null,
-      })
-      setEnvelopes(envelopes.map((e) =>
-        e.id === editingEnvelope.id ? response.data : e
-      ))
-      setIsEditDialogOpen(false)
-      setEditingEnvelope(null)
-    } catch (error) {
-      handleError(error, "updateFailed")
-    } finally {
-      setIsUpdating(false)
-    }
+    updateEnvelopeMutation.mutate(
+      {
+        envelopeId: editingEnvelope.id,
+        data: {
+          name: editFormData.name,
+          description: editFormData.description || undefined,
+          type: editFormData.type,
+          currency: editFormData.currency,
+          status: editFormData.status,
+          parentEnvelopeId: editFormData.parentEnvelopeId || null,
+        },
+      },
+      {
+        onSuccess: () => {
+          setIsEditDialogOpen(false)
+          setEditingEnvelope(null)
+        },
+        onError: (error) => handleError(error, "updateFailed"),
+      }
+    )
   }
 
   const handleManageAccounts = async (envelope: EnvelopeResource) => {
@@ -461,19 +466,19 @@ export function Envelopes() {
     }
   }
 
-  const handleSaveAccounts = async () => {
+  const handleSaveAccounts = () => {
     if (!selectedLedgerSlug || !managingEnvelope) return
-    setIsSavingAccounts(true)
 
-    try {
-      await setEnvelopeAccounts(selectedLedgerSlug, managingEnvelope.id, selectedAccountIds)
-      setIsAccountsDialogOpen(false)
-      setManagingEnvelope(null)
-    } catch (error) {
-      handleError(error, "updateFailed")
-    } finally {
-      setIsSavingAccounts(false)
-    }
+    setEnvelopeAccountsMutation.mutate(
+      { envelopeId: managingEnvelope.id, accountIds: selectedAccountIds },
+      {
+        onSuccess: () => {
+          setIsAccountsDialogOpen(false)
+          setManagingEnvelope(null)
+        },
+        onError: (error) => handleError(error, "updateFailed"),
+      }
+    )
   }
 
   const toggleAccountSelection = (accountId: string) => {
@@ -610,8 +615,8 @@ export function Envelopes() {
               <Button type="button" variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
                 {t("common.cancel")}
               </Button>
-              <Button type="submit" disabled={isCreating}>
-                {isCreating ? t("envelopes.creating") : t("envelopes.createEnvelope")}
+              <Button type="submit" disabled={createEnvelopeMutation.isPending}>
+                {createEnvelopeMutation.isPending ? t("envelopes.creating") : t("envelopes.createEnvelope")}
               </Button>
             </DialogFooter>
           </form>
@@ -724,8 +729,8 @@ export function Envelopes() {
               <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)}>
                 {t("common.cancel")}
               </Button>
-              <Button type="submit" disabled={isUpdating}>
-                {isUpdating ? t("envelopes.saving") : t("common.save")}
+              <Button type="submit" disabled={updateEnvelopeMutation.isPending}>
+                {updateEnvelopeMutation.isPending ? t("envelopes.saving") : t("common.save")}
               </Button>
             </DialogFooter>
           </form>
@@ -767,8 +772,8 @@ export function Envelopes() {
             <Button type="button" variant="outline" onClick={() => setIsAccountsDialogOpen(false)}>
               {t("common.cancel")}
             </Button>
-            <Button onClick={handleSaveAccounts} disabled={isSavingAccounts}>
-              {isSavingAccounts ? t("common.saving") : t("common.save")}
+            <Button onClick={handleSaveAccounts} disabled={setEnvelopeAccountsMutation.isPending}>
+              {setEnvelopeAccountsMutation.isPending ? t("common.saving") : t("common.save")}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -16,11 +16,17 @@ export const ledgerKeys = {
   all: ["ledgers"] as const,
 }
 
-/** Fetches the current user's ledgers. Pass `enabled` to gate on auth. */
+/**
+ * Fetches the current user's ledgers. Pass `enabled` to gate on auth.
+ *
+ * Convention (shared by every query hook in this app): the hook passes the API
+ * function's return value straight through, so callers read `.data` / `.meta`
+ * exactly as they would from the raw API function.
+ */
 export function useLedgers(enabled = true) {
   return useQuery({
     queryKey: ledgerKeys.all,
-    queryFn: async () => (await getLedgers()).data,
+    queryFn: () => getLedgers(),
     enabled,
   })
 }

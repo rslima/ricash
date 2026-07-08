@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
+import { useQueries } from "@tanstack/react-query"
 import { useNavigate } from "react-router-dom"
 import { useTranslation } from "react-i18next"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -19,13 +20,15 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { useAuth } from "@/contexts/AuthContext"
-import { getLedgers } from "@/api/ledgers"
 import { getAccounts } from "@/api/accounts"
 import {
   getMonthlyIncomeBreakdown,
   getMonthlyExpenseBreakdown,
 } from "@/api/transactions"
-import type { LedgerResource, AccountResource } from "@/api/types"
+import { useLedgers } from "@/api/ledgers.hooks"
+import { accountKeys } from "@/api/accounts.hooks"
+import { transactionKeys } from "@/api/transactions.hooks"
+import type { AccountResource } from "@/api/types"
 import { formatCurrency } from "@/lib/utils"
 import { useErrorHandler } from "@/hooks/use-error-handler"
 import { ArrowUpRight, ArrowDownRight, Scale } from "lucide-react"
@@ -143,13 +146,6 @@ export function Reports() {
   const { isAuthenticated } = useAuth()
   const handleError = useErrorHandler()
 
-  const [ledgers, setLedgers] = useState<LedgerResource[]>([])
-  const [accounts, setAccounts] = useState<AccountResource[]>([])
-  const [ledgerSlugByAccountId, setLedgerSlugByAccountId] = useState<Record<string, string>>({})
-  const [incomeByAccountId, setIncomeByAccountId] = useState<Record<string, number>>({})
-  const [expenseByAccountId, setExpenseByAccountId] = useState<Record<string, number>>({})
-  const [isLoading, setIsLoading] = useState(true)
-
   const now = useMemo(() => new Date(), [])
   const [selectedYear, setSelectedYear] = useState(now.getFullYear())
   const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1)
@@ -162,69 +158,106 @@ export function Reports() {
     )
   }
 
-  // Load ledgers once.
-  useEffect(() => {
-    if (!isAuthenticated) {
-      setIsLoading(false)
-      return
-    }
-    getLedgers()
-      .then((response) => setLedgers(response.data))
-      .catch((e) => handleError(e, "fetchFailed"))
-  }, [isAuthenticated, handleError])
+  // Server state: TanStack Query owns fetching, caching, and loading flags.
+  // Reports aggregate across every ledger, so the per-ledger account and
+  // breakdown fetches fan out with `useQueries` (the single-ledger hooks can't
+  // be called in a loop). Query keys mirror the account/transaction hooks so
+  // cache entries and invalidations stay in sync.
+  const {
+    data: ledgersResponse,
+    isLoading: ledgersLoading,
+    isError: ledgersIsError,
+    error: ledgersError,
+  } = useLedgers(isAuthenticated)
+  const ledgers = useMemo(() => ledgersResponse?.data ?? [], [ledgersResponse])
 
-  // Load INCOME/EXPENSE accounts whenever the set of ledgers changes.
-  useEffect(() => {
-    if (ledgers.length === 0) return
-    Promise.all(ledgers.map((l) => getAccounts(l.attributes.slug, { "page[size]": 200 })))
-      .then((responses) => {
-        const collected: AccountResource[] = []
-        const slugByAccountId: Record<string, string> = {}
-        responses.forEach((res, index) => {
-          const ledgerSlug = ledgers[index].attributes.slug
-          for (const account of res.data) {
-            if (account.attributes.type === "INCOME" || account.attributes.type === "EXPENSE") {
-              collected.push(account)
-              slugByAccountId[account.id] = ledgerSlug
-            }
-          }
-        })
-        setAccounts(collected)
-        setLedgerSlugByAccountId(slugByAccountId)
-      })
-      .catch((e) => handleError(e, "fetchFailed"))
-  }, [ledgers, handleError])
+  const accountQueries = useQueries({
+    queries: ledgers.map((l) => ({
+      queryKey: accountKeys.list(l.attributes.slug, { "page[size]": 200 }),
+      queryFn: () => getAccounts(l.attributes.slug, { "page[size]": 200 }),
+      enabled: isAuthenticated,
+    })),
+  })
 
-  // Load the income/expense breakdowns for the selected month.
-  useEffect(() => {
-    if (ledgers.length === 0) {
-      setIsLoading(false)
-      return
+  const incomeQueries = useQueries({
+    queries: ledgers.map((l) => ({
+      queryKey: transactionKeys.incomeBreakdown(l.attributes.slug, selectedYear, selectedMonth),
+      queryFn: () => getMonthlyIncomeBreakdown(l.attributes.slug, selectedYear, selectedMonth),
+      enabled: isAuthenticated,
+    })),
+  })
+
+  const expenseQueries = useQueries({
+    queries: ledgers.map((l) => ({
+      queryKey: transactionKeys.expenseBreakdown(l.attributes.slug, selectedYear, selectedMonth),
+      queryFn: () => getMonthlyExpenseBreakdown(l.attributes.slug, selectedYear, selectedMonth),
+      enabled: isAuthenticated,
+    })),
+  })
+
+  const isLoading =
+    ledgersLoading ||
+    accountQueries.some((q) => q.isLoading) ||
+    incomeQueries.some((q) => q.isLoading) ||
+    expenseQueries.some((q) => q.isLoading)
+
+  // Collect the INCOME/EXPENSE accounts across all ledgers, tracking which
+  // ledger each account belongs to (for category deep links).
+  const { accounts, ledgerSlugByAccountId } = useMemo(() => {
+    const collected: AccountResource[] = []
+    const slugByAccountId: Record<string, string> = {}
+    accountQueries.forEach((query, index) => {
+      const ledger = ledgers[index]
+      if (!ledger || !query.data) return
+      const ledgerSlug = ledger.attributes.slug
+      for (const account of query.data.data) {
+        if (account.attributes.type === "INCOME" || account.attributes.type === "EXPENSE") {
+          collected.push(account)
+          slugByAccountId[account.id] = ledgerSlug
+        }
+      }
+    })
+    return { accounts: collected, ledgerSlugByAccountId: slugByAccountId }
+  }, [accountQueries, ledgers])
+
+  // Sum the income breakdowns across every ledger for the selected month.
+  const incomeByAccountId = useMemo(() => {
+    const income: Record<string, number> = {}
+    for (const query of incomeQueries) {
+      if (!query.data) continue
+      for (const [accountId, amount] of Object.entries(query.data.incomeByAccountId ?? {})) {
+        income[accountId] = (income[accountId] ?? 0) + Number(amount)
+      }
     }
-    setIsLoading(true)
-    Promise.all([
-      Promise.all(ledgers.map((l) => getMonthlyIncomeBreakdown(l.attributes.slug, selectedYear, selectedMonth))),
-      Promise.all(ledgers.map((l) => getMonthlyExpenseBreakdown(l.attributes.slug, selectedYear, selectedMonth))),
-    ])
-      .then(([incomeReports, expenseReports]) => {
-        const income: Record<string, number> = {}
-        for (const report of incomeReports) {
-          for (const [accountId, amount] of Object.entries(report.incomeByAccountId ?? {})) {
-            income[accountId] = (income[accountId] ?? 0) + Number(amount)
-          }
-        }
-        const expense: Record<string, number> = {}
-        for (const report of expenseReports) {
-          for (const [accountId, amount] of Object.entries(report.expensesByAccountId ?? {})) {
-            expense[accountId] = (expense[accountId] ?? 0) + Number(amount)
-          }
-        }
-        setIncomeByAccountId(income)
-        setExpenseByAccountId(expense)
-      })
-      .catch((e) => handleError(e, "fetchFailed"))
-      .finally(() => setIsLoading(false))
-  }, [ledgers, selectedYear, selectedMonth, handleError])
+    return income
+  }, [incomeQueries])
+
+  // Sum the expense breakdowns across every ledger for the selected month.
+  const expenseByAccountId = useMemo(() => {
+    const expense: Record<string, number> = {}
+    for (const query of expenseQueries) {
+      if (!query.data) continue
+      for (const [accountId, amount] of Object.entries(query.data.expensesByAccountId ?? {})) {
+        expense[accountId] = (expense[accountId] ?? 0) + Number(amount)
+      }
+    }
+    return expense
+  }, [expenseQueries])
+
+  // Surface any fetch failure as a toast.
+  const isError =
+    ledgersIsError ||
+    accountQueries.some((q) => q.isError) ||
+    incomeQueries.some((q) => q.isError) ||
+    expenseQueries.some((q) => q.isError)
+  const error =
+    ledgersError ??
+    accountQueries.find((q) => q.isError)?.error ??
+    incomeQueries.find((q) => q.isError)?.error ??
+    expenseQueries.find((q) => q.isError)?.error
+  useEffect(() => {
+    if (isError) handleError(error, "fetchFailed")
+  }, [isError, error, handleError])
 
   const yearOptions = useMemo(() => {
     const current = now.getFullYear()
