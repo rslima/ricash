@@ -1,7 +1,7 @@
 package com.rslima.ricash.ledgers.exchangerates;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -22,7 +22,7 @@ import java.util.Optional;
 public class ExternalExchangeRateService {
 
     private final RestClient restClient = RestClient.create();
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ObjectMapper objectMapper;
 
     private static final int RATE_SCALE = 6;
 
@@ -166,9 +166,9 @@ public class ExternalExchangeRateService {
             JsonNode root = objectMapper.readTree(response);
 
             // Check if request was successful
-            String result = root.path("result").asText();
+            String result = root.path("result").asString();
             if (!"success".equals(result)) {
-                log.warn("ExchangeRate-API returned error: {}", root.path("error-type").asText());
+                log.warn("ExchangeRate-API returned error: {}", root.path("error-type").asString());
                 return Optional.empty();
             }
 
