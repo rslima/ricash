@@ -42,16 +42,16 @@ export class NativeStorage implements Storage {
 
   setItem(key: string, value: string): void {
     this.cache.set(key, value)
-    void Preferences.set({ key, value })
+    Preferences.set({ key, value })
   }
 
   removeItem(key: string): void {
     this.cache.delete(key)
-    void Preferences.remove({ key })
+    Preferences.remove({ key })
   }
 
   clear(): void {
     this.cache.clear()
-    void Preferences.clear()
+    Preferences.clear()
   }
 }

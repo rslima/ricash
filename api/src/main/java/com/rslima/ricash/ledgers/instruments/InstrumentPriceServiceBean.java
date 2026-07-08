@@ -69,10 +69,8 @@ public class InstrumentPriceServiceBean implements InstrumentPriceService {
     }
 
     @Override
-    public void delete(String ledgerId, String id) {
-        log.info("Deleting price {} from ledger {}", id, ledgerId);
-        if (!instrumentPriceRepository.deleteById(ledgerId, id)) {
-            throw new InstrumentPriceNotFoundException(id);
-        }
+    public void delete(String id) {
+        log.info("Deleting price {}", id);
+        instrumentPriceRepository.deleteById(id);
     }
 }

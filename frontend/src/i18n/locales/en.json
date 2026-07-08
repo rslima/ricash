@@ -27,16 +27,13 @@
     "next": "Next",
     "previous": "Previous",
     "all": "All",
-    "none": "None",
-    "confirmTitle": "Are you sure?",
-    "pageOf": "Page {{page}} of {{total}}"
+    "none": "None"
   },
   "auth": {
     "signIn": "Sign In",
     "signOut": "Sign Out",
     "signInRequired": "Sign in Required",
-    "pleaseSignIn": "Please sign in to view your {{resource}}",
-    "pleaseSignInGeneric": "Please sign in to continue"
+    "pleaseSignIn": "Please sign in to view your {{resource}}"
   },
   "nav": {
     "dashboard": "Dashboard",

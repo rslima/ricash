@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react"
+import { useParams } from "react-router-dom"
 import { useTranslation } from "react-i18next"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -13,9 +14,9 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { useAuth } from "@/contexts/AuthContext"
-import { useLedger } from "@/contexts/LedgerContext"
 import { getPortfolio } from "@/api/instruments"
-import type { InstrumentPositionResource, InstrumentType } from "@/api/types"
+import { getLedgers } from "@/api/ledgers"
+import type { InstrumentPositionResource, LedgerResource, InstrumentType } from "@/api/types"
 import { formatCurrency } from "@/lib/utils"
 import { TrendingUp, Briefcase, PieChart, DollarSign } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -31,12 +32,29 @@ const instrumentTypeColors: Record<InstrumentType, "default" | "secondary" | "de
 
 export function Portfolio() {
   const { t } = useTranslation()
+  const { ledgerSlug } = useParams<{ ledgerSlug?: string }>()
   const { isAuthenticated } = useAuth()
   const handleError = useErrorHandler()
   const [positions, setPositions] = useState<InstrumentPositionResource[]>([])
-  const { ledgers, currentLedger, setCurrentLedger } = useLedger()
-  const selectedLedgerSlug = currentLedger?.attributes.slug ?? null
+  const [ledgers, setLedgers] = useState<LedgerResource[]>([])
+  const [selectedLedgerSlug, setSelectedLedgerSlug] = useState<string | null>(ledgerSlug || null)
   const [isLoading, setIsLoading] = useState(true)
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setIsLoading(false)
+      return
+    }
+
+    getLedgers()
+      .then((response) => {
+        setLedgers(response.data)
+        if (response.data.length > 0) {
+          setSelectedLedgerSlug(prev => prev ?? response.data[0].attributes.slug)
+        }
+      })
+      .catch((e) => handleError(e, "fetchFailed"))
+  }, [isAuthenticated, handleError])
 
   useEffect(() => {
     if (!selectedLedgerSlug || !isAuthenticated) {
@@ -53,6 +71,20 @@ export function Portfolio() {
       .finally(() => setIsLoading(false))
   }, [selectedLedgerSlug, isAuthenticated, handleError])
 
+  if (!isAuthenticated) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full">
+        <Card className="w-full max-w-md">
+          <CardHeader className="text-center">
+            <CardTitle>{t("auth.signInRequired")}</CardTitle>
+            <CardDescription>
+              {t("auth.pleaseSignIn", { resource: t("nav.portfolio").toLowerCase() })}
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      </div>
+    )
+  }
 
   const selectedLedger = ledgers.find((l) => l.attributes.slug === selectedLedgerSlug)
 
@@ -90,7 +122,7 @@ export function Portfolio() {
               key={ledger.id}
               variant={selectedLedgerSlug === ledger.attributes.slug ? "default" : "outline"}
               size="sm"
-              onClick={() => setCurrentLedger(ledger.attributes.slug)}
+              onClick={() => setSelectedLedgerSlug(ledger.attributes.slug)}
             >
               {ledger.attributes.name}
             </Button>

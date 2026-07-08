@@ -12,13 +12,12 @@ import java.util.Optional;
 public interface InstrumentService {
 
     /**
-     * Finds an instrument by ID within a ledger.
+     * Finds an instrument by ID.
      *
-     * @param ledgerId the ledger ID the instrument must belong to
      * @param id the instrument ID
-     * @return the instrument if found in the given ledger
+     * @return the instrument if found
      */
-    Optional<Instrument> findById(String ledgerId, String id);
+    Optional<Instrument> findById(String id);
 
     /**
      * Finds an instrument by ledger and symbol.
@@ -62,9 +61,8 @@ public interface InstrumentService {
                       String currency, String market, String isin);
 
     /**
-     * Updates an existing instrument within a ledger.
+     * Updates an existing instrument.
      *
-     * @param ledgerId the ledger ID the instrument must belong to
      * @param id the instrument ID
      * @param symbol the new symbol
      * @param name the new name
@@ -75,14 +73,13 @@ public interface InstrumentService {
      * @param status the new status
      * @return the updated instrument
      */
-    Instrument update(String ledgerId, String id, String symbol, String name, InstrumentType type,
+    Instrument update(String id, String symbol, String name, InstrumentType type,
                       String currency, String market, String isin, InstrumentStatus status);
 
     /**
-     * Deletes an instrument within a ledger.
+     * Deletes an instrument.
      *
-     * @param ledgerId the ledger ID the instrument must belong to
      * @param id the instrument ID
      */
-    void delete(String ledgerId, String id);
+    void delete(String id);
 }

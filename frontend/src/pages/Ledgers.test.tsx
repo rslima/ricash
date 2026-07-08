@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 import { render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { BrowserRouter } from "react-router-dom"
-import { ConfirmDialogProvider } from "@/components/ui/confirm-dialog"
 import { Ledgers } from "./Ledgers"
 import * as ledgersApi from "@/api/ledgers"
 import type { LedgerResource } from "@/api/types"
@@ -37,9 +36,7 @@ const mockLedger: LedgerResource = {
 function renderLedgers() {
   return render(
     <BrowserRouter>
-      <ConfirmDialogProvider>
-        <Ledgers />
-      </ConfirmDialogProvider>
+      <Ledgers />
     </BrowserRouter>
   )
 }
@@ -47,6 +44,27 @@ function renderLedgers() {
 describe("Ledgers", () => {
   beforeEach(() => {
     vi.clearAllMocks()
+  })
+
+  describe("when not authenticated", () => {
+    beforeEach(() => {
+      vi.mocked(useAuth).mockReturnValue({
+        isAuthenticated: false,
+        user: null,
+        accessToken: null,
+        isLoading: false,
+        logout: vi.fn(),
+        startLogin: vi.fn(),
+        exchangeCodeForToken: vi.fn(),
+      })
+    })
+
+    it("shows sign in required message", () => {
+      renderLedgers()
+
+      expect(screen.getByText("Sign in Required")).toBeInTheDocument()
+      expect(screen.getByText("Please sign in to view your ledgers")).toBeInTheDocument()
+    })
   })
 
   describe("when authenticated", () => {
@@ -58,6 +76,7 @@ describe("Ledgers", () => {
         isLoading: false,
         logout: vi.fn(),
         startLogin: vi.fn(),
+        exchangeCodeForToken: vi.fn(),
       })
     })
 

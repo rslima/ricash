@@ -62,6 +62,20 @@ export function CategoryTransactions() {
       .finally(() => setIsLoading(false))
   }, [isAuthenticated, ledgerSlug, accountId, year, month, handleError])
 
+  if (!isAuthenticated) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full">
+        <Card className="w-full max-w-md">
+          <CardHeader className="text-center">
+            <CardTitle>{t("auth.signInRequired")}</CardTitle>
+            <CardDescription>
+              {t("auth.pleaseSignIn", { resource: t("nav.reports").toLowerCase() })}
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">

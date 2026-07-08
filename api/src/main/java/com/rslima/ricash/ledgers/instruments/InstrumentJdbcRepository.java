@@ -20,16 +20,15 @@ public class InstrumentJdbcRepository implements InstrumentRepository {
     private final JdbcClient jdbcClient;
 
     @Override
-    public Optional<Instrument> findById(String ledgerId, String id) {
-        log.debug("Finding instrument by id {} in ledger {}", id, ledgerId);
+    public Optional<Instrument> findById(String id) {
+        log.debug("Finding instrument by id {}", id);
 
         return jdbcClient.sql("""
                 SELECT id, ledger_id, symbol, name, type, currency, market, isin, status, created_at
                 FROM instruments
-                WHERE id = :id AND ledger_id = :ledgerId
+                WHERE id = :id
                 """)
             .param("id", id)
-            .param("ledgerId", ledgerId)
             .query(this::mapRow)
             .optional();
     }
@@ -134,10 +133,9 @@ public class InstrumentJdbcRepository implements InstrumentRepository {
                 UPDATE instruments
                 SET symbol = :symbol, name = :name, type = :type, currency = :currency,
                     market = :market, isin = :isin, status = :status
-                WHERE id = :id AND ledger_id = :ledgerId
+                WHERE id = :id
                 """)
             .param("id", instrument.id())
-            .param("ledgerId", instrument.ledgerId())
             .param("symbol", instrument.symbol())
             .param("name", instrument.name())
             .param("type", instrument.type().name())
@@ -151,12 +149,11 @@ public class InstrumentJdbcRepository implements InstrumentRepository {
     }
 
     @Override
-    public boolean deleteById(String ledgerId, String id) {
-        log.debug("Deleting instrument with id {} in ledger {}", id, ledgerId);
-        return jdbcClient.sql("DELETE FROM instruments WHERE id = :id AND ledger_id = :ledgerId")
+    public void deleteById(String id) {
+        log.debug("Deleting instrument with id {}", id);
+        jdbcClient.sql("DELETE FROM instruments WHERE id = :id")
             .param("id", id)
-            .param("ledgerId", ledgerId)
-            .update() > 0;
+            .update();
     }
 
     private Instrument mapRow(java.sql.ResultSet rs, int rowNum) throws java.sql.SQLException {

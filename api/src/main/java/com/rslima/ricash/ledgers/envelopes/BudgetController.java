@@ -37,8 +37,8 @@ public class BudgetController {
             @RequestParam int month,
             JwtAuthenticationToken principal) {
 
-        var balances = envelopeService.getBudgetSummary(principal.getName(), ledgerSlug, year, month);
-        var toBeBudgeted = envelopeService.getToBeBudgeted(principal.getName(), ledgerSlug, year, month);
+        var balances = envelopeService.getBudgetSummary(getUserId(principal), ledgerSlug, year, month);
+        var toBeBudgeted = envelopeService.getToBeBudgeted(getUserId(principal), ledgerSlug, year, month);
 
         var resource = new BudgetSummaryResource(
                 String.format("%d-%02d", year, month),
@@ -56,8 +56,21 @@ public class BudgetController {
             @PathVariable String ledgerSlug,
             JwtAuthenticationToken principal) {
 
-        Map<String, String> mappings = envelopeService.getAllEnvelopeMappings(principal.getName(), ledgerSlug);
+        Map<String, String> mappings = envelopeService.getAllEnvelopeMappings(getUserId(principal), ledgerSlug);
         return ResponseEntity.ok(mappings);
     }
 
+    private static @Nullable String getUserId(JwtAuthenticationToken principal) {
+        return principal.getName();
+    }
+
+    @ExceptionHandler(LedgerNotFoundException.class)
+    public ResponseEntity<JsonApiErrors> handleLedgerNotFoundException(LedgerNotFoundException ex) {
+        return ResponseEntity.status(NOT_FOUND).body(
+                JsonApiErrors.create().withError(
+                        JsonApiError.create()
+                                .withStatus(Integer.toString(NOT_FOUND.value()))
+                                .withTitle(NOT_FOUND.getReasonPhrase())
+                                .withDetail(ex.getMessage())));
+    }
 }

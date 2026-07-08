@@ -432,36 +432,7 @@ public class TransactionJdbcRepository implements TransactionRepository {
                 .param("createdAt", Timestamp.from(transaction.createdAt()))
                 .update();
 
-        insertEntries(transaction);
-
-        return transaction;
-    }
-
-    @Override
-    public Transaction update(String ledgerId, Transaction transaction) {
-        // Update transaction
-        jdbcClient.sql("""
-                        UPDATE transactions SET date = :date, description = :description
-                        WHERE id = :id AND ledger_id = :ledgerId
-                        """)
-                .param("id", transaction.id())
-                .param("ledgerId", ledgerId)
-                .param("date", java.sql.Date.valueOf(transaction.date()))
-                .param("description", transaction.description())
-                .update();
-
-        // Delete existing entries
-        jdbcClient.sql("DELETE FROM transaction_entries WHERE transaction_id = :transactionId")
-                .param("transactionId", transaction.id())
-                .update();
-
-        insertEntries(transaction);
-
-        return transaction;
-    }
-
-
-    private void insertEntries(Transaction transaction) {
+        // Insert all entries
         List<TransactionEntry> allEntries = new ArrayList<>();
         allEntries.addAll(transaction.debitEntries());
         allEntries.addAll(transaction.creditEntries());
@@ -484,6 +455,53 @@ public class TransactionJdbcRepository implements TransactionRepository {
                     .param("envelopeId", entry.envelopeId())
                     .update();
         }
+
+        return transaction;
+    }
+
+    @Override
+    public Transaction update(String ledgerId, Transaction transaction) {
+        // Update transaction
+        jdbcClient.sql("""
+                        UPDATE transactions SET date = :date, description = :description
+                        WHERE id = :id AND ledger_id = :ledgerId
+                        """)
+                .param("id", transaction.id())
+                .param("ledgerId", ledgerId)
+                .param("date", java.sql.Date.valueOf(transaction.date()))
+                .param("description", transaction.description())
+                .update();
+
+        // Delete existing entries
+        jdbcClient.sql("DELETE FROM transaction_entries WHERE transaction_id = :transactionId")
+                .param("transactionId", transaction.id())
+                .update();
+
+        // Insert new entries
+        List<TransactionEntry> allEntries = new ArrayList<>();
+        allEntries.addAll(transaction.debitEntries());
+        allEntries.addAll(transaction.creditEntries());
+
+        for (var entry : allEntries) {
+            jdbcClient.sql("""
+                            INSERT INTO transaction_entries (id, transaction_id, account_id, amount, type, currency, to_amount, to_currency, instrument_id, quantity, envelope_id)
+                            VALUES (:id, :transactionId, :accountId, :amount, :type, :currency, :toAmount, :toCurrency, :instrumentId, :quantity, :envelopeId)
+                            """)
+                    .param("id", UuidCreator.getTimeOrderedEpoch().toString())
+                    .param("transactionId", transaction.id())
+                    .param("accountId", entry.accountId())
+                    .param("amount", entry.amount().amount())
+                    .param("type", entry.type().name())
+                    .param("currency", entry.amount().currency())
+                    .param("toAmount", entry.convertedAmount() != null ? entry.convertedAmount().amount() : null)
+                    .param("toCurrency", entry.convertedAmount() != null ? entry.convertedAmount().currency() : null)
+                    .param("instrumentId", entry.instrumentId())
+                    .param("quantity", entry.quantity())
+                    .param("envelopeId", entry.envelopeId())
+                    .update();
+        }
+
+        return transaction;
     }
 
     @Override

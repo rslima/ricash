@@ -99,7 +99,7 @@ export function BudgetUtilizationChart({ ledgers, defaultCurrency }: Props) {
           <ResponsiveContainer width="100%" height={chartHeight}>
             <BarChart data={data} layout="vertical">
               <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-              <XAxis type="number" className="text-xs" tickFormatter={(v) => formatCurrency(Number(v), defaultCurrency)} />
+              <XAxis type="number" className="text-xs" tickFormatter={(v) => formatCurrency(v, defaultCurrency)} />
               <YAxis type="category" dataKey="name" className="text-xs" width={100} />
               <Tooltip
                 formatter={(value) => formatCurrency(Number(value), defaultCurrency)}

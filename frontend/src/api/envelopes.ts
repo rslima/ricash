@@ -15,7 +15,7 @@ export async function getEnvelopes(
   ledgerSlug: string,
   params?: PaginationParams
 ): Promise<JsonApiListResponse<EnvelopeResource>> {
-  return apiClient.get(`/ledgers/${ledgerSlug}/envelopes`, params)
+  return apiClient.get(`/ledgers/${ledgerSlug}/envelopes`, params as Record<string, string | number | undefined>)
 }
 
 export async function getEnvelope(

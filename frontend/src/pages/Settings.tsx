@@ -17,9 +17,23 @@ import { languages, changeLanguage } from "@/i18n"
 
 export function Settings() {
   const { t, i18n } = useTranslation()
-  const { user, logout } = useAuth()
+  const { user, isAuthenticated, logout } = useAuth()
   const { theme, setTheme } = useTheme()
 
+  if (!isAuthenticated) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full">
+        <Card className="w-full max-w-md">
+          <CardHeader className="text-center">
+            <CardTitle>{t("auth.signInRequired")}</CardTitle>
+            <CardDescription>
+              {t("settings.signInToView")}
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6 max-w-2xl">

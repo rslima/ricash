@@ -1,4 +1,4 @@
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "https://ricash.app/api/v1"
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "https://ricash.app/api/v1"
 
 interface RequestOptions extends RequestInit {
   params?: Record<string, string | number | undefined>
@@ -49,19 +49,15 @@ class ApiClient {
     })
 
     if (!response.ok) {
-      // The API speaks JSON:API: errors arrive as { errors: [{ status, title, detail }] }
-      const body: unknown = await response.json().catch(() => null)
-      const errors = extractJsonApiErrors(body)
-      const first = errors?.[0]
-      const message = first?.detail || first?.title || `Request failed (${response.status})`
-      throw new ApiError(response.status, message, body, errors)
+      const error = await response.json().catch(() => ({ message: "Request failed" }))
+      throw new ApiError(response.status, error.message || "Request failed", error)
     }
 
     if (response.status === 204) {
       return {} as T
     }
 
-    return response.json() as Promise<T>
+    return response.json()
   }
 
   async get<T>(endpoint: string, params?: Record<string, string | number | undefined>): Promise<T> {
@@ -94,30 +90,15 @@ class ApiClient {
   }
 }
 
-export interface JsonApiErrorObject {
-  status?: string
-  title?: string
-  detail?: string
-}
-
-function extractJsonApiErrors(body: unknown): JsonApiErrorObject[] | undefined {
-  if (body && typeof body === "object" && Array.isArray((body as { errors?: unknown }).errors)) {
-    return (body as { errors: JsonApiErrorObject[] }).errors
-  }
-  return undefined
-}
-
 export class ApiError extends Error {
   status: number
   data?: unknown
-  errors?: JsonApiErrorObject[]
 
-  constructor(status: number, message: string, data?: unknown, errors?: JsonApiErrorObject[]) {
+  constructor(status: number, message: string, data?: unknown) {
     super(message)
     this.name = "ApiError"
     this.status = status
     this.data = data
-    this.errors = errors
   }
 }
 

@@ -9,7 +9,7 @@ export interface CreateExchangeRateInput {
 }
 
 export async function getExchangeRates(params?: PaginationParams): Promise<JsonApiListResponse<ExchangeRateResource>> {
-  return apiClient.get("/exchange-rates", params)
+  return apiClient.get("/exchange-rates", params as Record<string, string | number | undefined>)
 }
 
 export async function createExchangeRate(input: CreateExchangeRateInput): Promise<JsonApiResponse<ExchangeRateResource>> {
