@@ -4,13 +4,11 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
 import java.math.BigDecimal;
 import java.sql.Timestamp;
-import java.time.Instant;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -21,57 +19,9 @@ import java.util.Optional;
 public class AccountJdbcRepository implements AccountRepository {
     private final JdbcClient jdbcClient;
 
-    record DBAccount(String id, String ledgerId, String parentAccountId, String slug, String name, String description,
-                     String currency, String type, String status, BigDecimal balance, Instant createdAt) {
-    }
-
     @Override
-    public Page<Account> listLedgerAccounts(String ledgerId, PageRequest pageRequest) {
-        final var dbAccounts = jdbcClient.sql("""
-                        WITH RECURSIVE account_tree AS (
-                            -- Base case: each account includes itself
-                            SELECT id, id as root_id
-                            FROM accounts
-                            WHERE ledger_id = :ledgerId
-
-                            UNION ALL
-
-                            -- Recursive case: find children and link them to the same root
-                            SELECT a.id, at.root_id
-                            FROM accounts a
-                            INNER JOIN account_tree at ON a.parent_account_id = at.id
-                            WHERE a.ledger_id = :ledgerId
-                        )
-                        SELECT
-                            a.id,
-                            a.ledger_id,
-                            a.parent_account_id,
-                            a.slug,
-                            a.name,
-                            a.description,
-                            a.currency,
-                            a.type,
-                            a.status,
-                            COALESCE(
-                                CASE
-                                    WHEN a.type IN ('ASSET', 'EXPENSE') THEN
-                                        SUM(bs.debit_total) - SUM(bs.credit_total)
-                                    ELSE
-                                        SUM(bs.credit_total) - SUM(bs.debit_total)
-                                END,
-                                0
-                            ) AS balance,
-                            a.created_at
-                        FROM
-                            accounts a
-                        LEFT JOIN
-                            account_tree at ON at.root_id = a.id
-                        LEFT JOIN
-                            account_balance_summary bs ON bs.account_id = at.id AND bs.currency = a.currency
-                        WHERE
-                            a.ledger_id = :ledgerId
-                        GROUP BY a.id, a.ledger_id, a.parent_account_id, a.slug, a.name, a.description,
-                                 a.currency, a.type, a.status, a.created_at
+    public Page<Account> listLedgerAccounts(String ledgerId, Pageable pageRequest) {
+        final var dbAccounts = jdbcClient.sql(AccountTreeSql.SELECT_LEDGER_ACCOUNTS_WITH_BALANCE + """
                         ORDER BY a.name
                         OFFSET :offset
                         LIMIT :limit
@@ -79,7 +29,7 @@ public class AccountJdbcRepository implements AccountRepository {
                 .param("ledgerId", ledgerId)
                 .param("offset", pageRequest.getOffset())
                 .param("limit", pageRequest.getPageSize())
-                .query(DBAccount.class)
+                .query(AccountTreeSql.DBAccount.class)
                 .list();
 
         final var total = jdbcClient.sql("""
@@ -90,7 +40,7 @@ public class AccountJdbcRepository implements AccountRepository {
                 .single();
 
         List<Account> accounts = dbAccounts.stream()
-                .map(this::toAccount)
+                .map(AccountTreeSql.DBAccount::toAccount)
                 .toList();
 
         return new PageImpl<>(accounts, pageRequest, total);
@@ -123,15 +73,9 @@ public class AccountJdbcRepository implements AccountRepository {
                             a.currency,
                             a.type,
                             a.status,
-                            COALESCE(
-                                CASE
-                                    WHEN a.type IN ('ASSET', 'EXPENSE') THEN
-                                        SUM(bs.debit_total) - SUM(bs.credit_total)
-                                    ELSE
-                                        SUM(bs.credit_total) - SUM(bs.debit_total)
-                                END,
-                                0
-                            ) AS balance,
+                        """
+                        + AccountTreeSql.BALANCE_COLUMN
+                        + """
                             a.created_at
                         FROM
                             accounts a
@@ -142,14 +86,28 @@ public class AccountJdbcRepository implements AccountRepository {
                         WHERE
                             a.ledger_id = :ledgerId AND
                             a.id = :accountId
-                        GROUP BY a.id, a.ledger_id, a.parent_account_id, a.slug, a.name, a.description,
-                                 a.currency, a.type, a.status, a.created_at
-                        """)
+                        """
+                        + AccountTreeSql.ACCOUNT_GROUP_BY)
                 .param("ledgerId", ledgerId)
                 .param("accountId", accountId)
-                .query(DBAccount.class)
+                .query(AccountTreeSql.DBAccount.class)
                 .optional()
-                .map(this::toAccount);
+                .map(AccountTreeSql.DBAccount::toAccount);
+    }
+
+    @Override
+    public List<AccountRef> findRefsByIds(String ledgerId, java.util.Collection<String> accountIds) {
+        if (accountIds.isEmpty()) {
+            return List.of();
+        }
+        return jdbcClient.sql("""
+                        SELECT id, name, currency FROM accounts
+                        WHERE ledger_id = :ledgerId AND id IN (:accountIds)
+                        """)
+                .param("ledgerId", ledgerId)
+                .param("accountIds", List.copyOf(accountIds))
+                .query(AccountRef.class)
+                .list();
     }
 
     @Override
@@ -200,22 +158,6 @@ public class AccountJdbcRepository implements AccountRepository {
                 .param("slug", slug)
                 .query(Long.class)
                 .single() > 0;
-    }
-
-    private Account toAccount(DBAccount dbAccount) {
-        return new Account(
-                dbAccount.id(),
-                dbAccount.slug(),
-                dbAccount.name(),
-                dbAccount.description(),
-                dbAccount.currency(),
-                AccountType.valueOf(dbAccount.type()),
-                AccountStatus.valueOf(dbAccount.status()),
-                dbAccount.balance() != null ? dbAccount.balance() : BigDecimal.ZERO,
-                dbAccount.createdAt(),
-                dbAccount.parentAccountId(),
-                new ArrayList<>()
-        );
     }
 
     @Override

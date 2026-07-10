@@ -5,7 +5,8 @@ import com.rslima.ricash.users.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.List;
@@ -19,7 +20,7 @@ public class LedgerServiceBean implements LedgerService {
     private final UserRepository userRepository;
 
     @Override
-    public Page<Ledger> listUserLedgers(String userId, PageRequest pageRequest) {
+    public Page<Ledger> listUserLedgers(String userId, Pageable pageRequest) {
         return ledgerRepository.listUserLedgers(userId, pageRequest);
     }
 
@@ -29,13 +30,14 @@ public class LedgerServiceBean implements LedgerService {
     }
 
     @Override
+    @Transactional
     public Ledger create(String userId, CreateLedgerRequest request) {
         if (userRepository.findById(userId).isEmpty()) {
             userRepository.create(userId);
         }
 
         final var baseSlug = slugService.slugify(request.name());
-        final var slug = generateUniqueSlug(userId, baseSlug);
+        final var slug = SlugService.uniqueSlug(baseSlug, s -> ledgerRepository.existsBySlug(userId, s));
 
         final var ledger = new Ledger(
                 UuidCreator.getTimeOrderedEpoch().toString(),
@@ -45,30 +47,18 @@ public class LedgerServiceBean implements LedgerService {
                 request.description(),
                 request.currency(),
                 Instant.now(),
-                List.of(),
                 List.of()
         );
         return ledgerRepository.create(ledger);
     }
 
     @Override
+    @Transactional
     public Ledger update(String userId, String slug, UpdateLedgerRequest request) {
         // Verify ledger exists
         ledgerRepository.findBySlug(userId, slug)
                 .orElseThrow(() -> new LedgerNotFoundException(slug));
 
         return ledgerRepository.update(userId, slug, request.name(), request.description());
-    }
-
-    private String generateUniqueSlug(String userId, String baseSlug) {
-        String slug = baseSlug;
-        int counter = 1;
-
-        while (ledgerRepository.existsBySlug(userId, slug)) {
-            slug = baseSlug + "-" + counter;
-            counter++;
-        }
-
-        return slug;
     }
 }

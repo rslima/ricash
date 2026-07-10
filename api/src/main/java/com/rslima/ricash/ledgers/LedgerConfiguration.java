@@ -25,6 +25,8 @@ import com.rslima.ricash.ledgers.instruments.InstrumentPriceServiceBean;
 import com.rslima.ricash.ledgers.instruments.InstrumentRepository;
 import com.rslima.ricash.ledgers.instruments.InstrumentService;
 import com.rslima.ricash.ledgers.instruments.InstrumentServiceBean;
+import com.rslima.ricash.ledgers.instruments.PortfolioJdbcRepository;
+import com.rslima.ricash.ledgers.instruments.PortfolioRepository;
 import com.rslima.ricash.ledgers.instruments.PortfolioService;
 import com.rslima.ricash.ledgers.instruments.PortfolioServiceBean;
 import com.rslima.ricash.ledgers.transactions.TransactionJdbcRepository;
@@ -32,17 +34,38 @@ import com.rslima.ricash.ledgers.transactions.TransactionRepository;
 import com.rslima.ricash.ledgers.transactions.TransactionService;
 import com.rslima.ricash.ledgers.transactions.TransactionServiceBean;
 import com.rslima.ricash.users.UserRepository;
+import com.rslima.ricash.configuration.ExchangeRateProviderProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.web.client.RestClient;
 
 @Configuration
 public class LedgerConfiguration {
 
+    @Bean
+    public SlugService slugService() {
+        return new SlugService();
+    }
+
+    @Bean
+    public LedgerAccess ledgerAccess(LedgerRepository ledgerRepository) {
+        return new LedgerAccess(ledgerRepository);
+    }
+
+    @Bean
+    public ExternalExchangeRateService externalExchangeRateService(
+            RestClient.Builder restClientBuilder,
+            ExchangeRateProviderProperties exchangeRateProviderProperties
+    ) {
+        // Timeouts come from the auto-configured builder (spring.http.client.*).
+        return new ExternalExchangeRateService(restClientBuilder.build(), exchangeRateProviderProperties);
+    }
+
     // Instrument beans
     @Bean
-    public InstrumentService instrumentService(InstrumentRepository instrumentRepository) {
-        return new InstrumentServiceBean(instrumentRepository);
+    public InstrumentService instrumentService(InstrumentRepository instrumentRepository, LedgerAccess ledgerAccess) {
+        return new InstrumentServiceBean(instrumentRepository, ledgerAccess);
     }
 
     @Bean
@@ -51,8 +74,12 @@ public class LedgerConfiguration {
     }
 
     @Bean
-    public InstrumentPriceService instrumentPriceService(InstrumentPriceRepository instrumentPriceRepository) {
-        return new InstrumentPriceServiceBean(instrumentPriceRepository);
+    public InstrumentPriceService instrumentPriceService(
+            InstrumentPriceRepository instrumentPriceRepository,
+            InstrumentRepository instrumentRepository,
+            LedgerAccess ledgerAccess
+    ) {
+        return new InstrumentPriceServiceBean(instrumentPriceRepository, instrumentRepository, ledgerAccess);
     }
 
     @Bean
@@ -61,12 +88,18 @@ public class LedgerConfiguration {
     }
 
     @Bean
+    public PortfolioRepository portfolioRepository(JdbcClient jdbcClient) {
+        return new PortfolioJdbcRepository(jdbcClient);
+    }
+
+    @Bean
     public PortfolioService portfolioService(
-            JdbcClient jdbcClient,
+            PortfolioRepository portfolioRepository,
             InstrumentRepository instrumentRepository,
-            InstrumentPriceRepository instrumentPriceRepository
+            InstrumentPriceRepository instrumentPriceRepository,
+            LedgerAccess ledgerAccess
     ) {
-        return new PortfolioServiceBean(jdbcClient, instrumentRepository, instrumentPriceRepository);
+        return new PortfolioServiceBean(portfolioRepository, instrumentRepository, instrumentPriceRepository, ledgerAccess);
     }
 
     @Bean
@@ -80,8 +113,8 @@ public class LedgerConfiguration {
     }
 
     @Bean
-    public AccountService accountService(AccountRepository accountRepository, LedgerRepository ledgerRepository, SlugService slugService) {
-        return new AccountServiceBean(accountRepository, ledgerRepository, slugService);
+    public AccountService accountService(AccountRepository accountRepository, LedgerAccess ledgerAccess, SlugService slugService) {
+        return new AccountServiceBean(accountRepository, ledgerAccess, slugService);
     }
 
     @Bean
@@ -92,11 +125,11 @@ public class LedgerConfiguration {
     @Bean
     public TransactionService transactionService(
             TransactionRepository transactionRepository,
-            LedgerRepository ledgerRepository,
+            LedgerAccess ledgerAccess,
             AccountRepository accountRepository,
             ExchangeRateService exchangeRateService
     ) {
-        return new TransactionServiceBean(transactionRepository, ledgerRepository, accountRepository, exchangeRateService);
+        return new TransactionServiceBean(transactionRepository, ledgerAccess, accountRepository, exchangeRateService);
     }
 
     @Bean
@@ -123,9 +156,9 @@ public class LedgerConfiguration {
             EnvelopeRepository envelopeRepository,
             EnvelopeAllocationRepository allocationRepository,
             EnvelopeAccountMappingRepository mappingRepository,
-            LedgerRepository ledgerRepository
+            LedgerAccess ledgerAccess
     ) {
-        return new EnvelopeServiceBean(envelopeRepository, allocationRepository, mappingRepository, ledgerRepository);
+        return new EnvelopeServiceBean(envelopeRepository, allocationRepository, mappingRepository, ledgerAccess);
     }
 
     @Bean

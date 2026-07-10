@@ -8,8 +8,13 @@ spring:
   flyway:
     enabled: on
 
+  http:
+    client:
+      connect-timeout: 5s
+      read-timeout: 10s
+
   datasource:
-    url: jdbc:postgresql://localhost:5432/postgres
+    url: jdbc:postgresql://localhost:5432/ricash
     username: ricash
     password: secret
   security:
@@ -17,10 +22,6 @@ spring:
       resourceserver:
         jwt:
           issuer-uri: http://localhost:9180/realms/Ricash
-  mvc:
-    problemdetails:
-      enabled: on
-
 ricash:
   security:
     jwt:

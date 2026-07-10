@@ -2,12 +2,13 @@ package com.rslima.ricash.ledgers;
 
 import com.rslima.ricash.ledgers.accounts.AccountMapper;
 import com.rslima.ricash.users.UserResource;
+import org.mapstruct.InjectionStrategy;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.MappingConstants;
 import org.mapstruct.Named;
 
-@Mapper(componentModel = MappingConstants.ComponentModel.SPRING, uses = {AccountMapper.class})
+@Mapper(componentModel = MappingConstants.ComponentModel.SPRING, uses = {AccountMapper.class}, injectionStrategy = InjectionStrategy.CONSTRUCTOR)
 public interface LedgerMapper {
 
     @Mapping(source = "userId", target = "user", qualifiedByName = "toUserResource")

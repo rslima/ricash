@@ -1,11 +1,14 @@
 package com.rslima.ricash.ledgers;
 
 import tools.jackson.databind.ObjectMapper;
-import com.rslima.ricash.TestRicashApplication;
+import com.rslima.ricash.configuration.SecurityConfiguration;
+import com.rslima.ricash.ledgers.accounts.AccountMapperImpl;
+import com.rslima.ricash.testsupport.WebTestConfiguration;
+import com.toedter.spring.hateoas.jsonapi.JsonApiMediaTypeConfiguration;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
-import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -16,6 +19,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
+import static com.rslima.ricash.testsupport.WebTestConfiguration.jwtFor;
 import static com.toedter.spring.hateoas.jsonapi.MediaTypes.JSON_API_VALUE;
 import static org.hamcrest.Matchers.endsWith;
 import static org.hamcrest.Matchers.hasSize;
@@ -23,16 +27,15 @@ import static org.hamcrest.Matchers.is;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@SpringBootTest
-@AutoConfigureMockMvc
-@Import(TestRicashApplication.class)
+@WebMvcTest(LedgerController.class)
+@ImportAutoConfiguration(JsonApiMediaTypeConfiguration.class)
+@Import({WebTestConfiguration.class, SecurityConfiguration.class, LedgerMapperImpl.class, AccountMapperImpl.class})
 class LedgerControllerTest {
 
     @Autowired
@@ -43,9 +46,6 @@ class LedgerControllerTest {
 
     @MockitoBean
     private LedgerService ledgerService;
-
-    @Autowired
-    private LedgerMapper ledgerMapper;
 
     private static final String USER_ID = "test-user";
     private static final String LEDGER_ID = "01234567-89ab-cdef-0123-456789abcdef";
@@ -59,7 +59,7 @@ class LedgerControllerTest {
         when(ledgerService.listUserLedgers(any(), any(PageRequest.class))).thenReturn(page);
 
         mockMvc.perform(get("/v1/ledgers")
-                        .with(jwt().jwt(builder -> builder.claim("preferred_username", USER_ID)))
+                        .with(jwtFor(USER_ID))
                         .accept(JSON_API_VALUE))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data", hasSize(1)))
@@ -78,7 +78,7 @@ class LedgerControllerTest {
         mockMvc.perform(get("/v1/ledgers")
                         .param("page[number]", "1")
                         .param("page[size]", "10")
-                        .with(jwt().jwt(builder -> builder.claim("preferred_username", USER_ID)))
+                        .with(jwtFor(USER_ID))
                         .accept(JSON_API_VALUE))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data", hasSize(1)));
@@ -98,7 +98,7 @@ class LedgerControllerTest {
         when(ledgerService.findBySlug(any(), eq(LEDGER_SLUG))).thenReturn(Optional.of(ledger));
 
         mockMvc.perform(get("/v1/ledgers/{slug}", LEDGER_SLUG)
-                        .with(jwt().jwt(builder -> builder.claim("preferred_username", USER_ID)))
+                        .with(jwtFor(USER_ID))
                         .accept(JSON_API_VALUE))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.id", is(LEDGER_ID)))
@@ -112,7 +112,7 @@ class LedgerControllerTest {
         when(ledgerService.findBySlug(any(), eq(LEDGER_SLUG))).thenReturn(Optional.empty());
 
         mockMvc.perform(get("/v1/ledgers/{slug}", LEDGER_SLUG)
-                        .with(jwt().jwt(builder -> builder.claim("preferred_username", USER_ID)))
+                        .with(jwtFor(USER_ID))
                         .accept(JSON_API_VALUE))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.errors[0].status", is("404")))
@@ -129,12 +129,12 @@ class LedgerControllerTest {
     @Test
     void createLedger_returnsCreatedLedger() throws Exception {
         var request = new CreateLedgerRequest("New Ledger", "Description", "EUR");
-        var ledger = new Ledger(LEDGER_ID, USER_ID, "new-ledger", "New Ledger", "Description", "EUR", Instant.now(), List.of(), List.of());
+        var ledger = new Ledger(LEDGER_ID, USER_ID, "new-ledger", "New Ledger", "Description", "EUR", Instant.now(), List.of());
 
         when(ledgerService.create(any(), any(CreateLedgerRequest.class))).thenReturn(ledger);
 
         mockMvc.perform(post("/v1/ledgers")
-                        .with(jwt().jwt(builder -> builder.claim("preferred_username", USER_ID)))
+                        .with(jwtFor(USER_ID))
                         .contentType("application/json")
                         .accept(JSON_API_VALUE)
                         .content(objectMapper.writeValueAsString(request)))
@@ -146,15 +146,16 @@ class LedgerControllerTest {
     }
 
     @Test
-    void createLedger_withoutName_returnsBadRequest() throws Exception {
+    void createLedger_withoutName_returnsBadRequestWithJsonApiErrors() throws Exception {
         var request = new CreateLedgerRequest(null, "Description", "EUR");
 
         mockMvc.perform(post("/v1/ledgers")
-                        .with(jwt().jwt(builder -> builder.claim("preferred_username", USER_ID)))
+                        .with(jwtFor(USER_ID))
                         .contentType("application/json")
                         .accept(JSON_API_VALUE)
                         .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].status", is("400")));
     }
 
     @Test
@@ -162,7 +163,7 @@ class LedgerControllerTest {
         var request = new CreateLedgerRequest("Name", "Description", null);
 
         mockMvc.perform(post("/v1/ledgers")
-                        .with(jwt().jwt(builder -> builder.claim("preferred_username", USER_ID)))
+                        .with(jwtFor(USER_ID))
                         .contentType("application/json")
                         .accept(JSON_API_VALUE)
                         .content(objectMapper.writeValueAsString(request)))
@@ -181,6 +182,6 @@ class LedgerControllerTest {
     }
 
     private Ledger createTestLedger() {
-        return new Ledger(LEDGER_ID, USER_ID, LEDGER_SLUG, "Test Ledger", "Test Description", "USD", Instant.now(), List.of(), List.of());
+        return new Ledger(LEDGER_ID, USER_ID, LEDGER_SLUG, "Test Ledger", "Test Description", "USD", Instant.now(), List.of());
     }
 }

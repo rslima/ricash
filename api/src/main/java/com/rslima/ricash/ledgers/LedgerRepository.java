@@ -1,14 +1,12 @@
 package com.rslima.ricash.ledgers;
 
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 
 import java.util.Optional;
 
 public interface LedgerRepository {
-    Page<Ledger> listUserLedgers(String userId, PageRequest pageRequest);
-
-    Optional<Ledger> findById(String userId, String id);
+    Page<Ledger> listUserLedgers(String userId, Pageable pageRequest);
 
     Optional<Ledger> findBySlug(String userId, String slug);
 

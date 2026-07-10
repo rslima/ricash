@@ -24,4 +24,9 @@ public final class DateRanges {
     public static Date monthEnd(int year, int month) {
         return Date.valueOf(LocalDate.of(year, month, 1).plusMonths(1));
     }
+
+    /** Canonical identifier of a month period, e.g. {@code 2026-07}. */
+    public static String periodId(int year, int month) {
+        return String.format("%d-%02d", year, month);
+    }
 }

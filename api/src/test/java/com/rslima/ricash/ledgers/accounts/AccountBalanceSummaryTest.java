@@ -2,6 +2,7 @@ package com.rslima.ricash.ledgers.accounts;
 
 import com.rslima.ricash.TestRicashApplication;
 import com.rslima.ricash.ledgers.LedgerJdbcRepository;
+import com.rslima.ricash.testsupport.DbFixtures;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -12,9 +13,6 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.sql.Date;
-import java.sql.Timestamp;
-import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -36,42 +34,39 @@ class AccountBalanceSummaryTest {
 
     private AccountJdbcRepository accountRepository;
     private LedgerJdbcRepository ledgerRepository;
+    private DbFixtures fixtures;
 
     @BeforeEach
     void setUp() {
         accountRepository = new AccountJdbcRepository(jdbcClient);
         ledgerRepository = new LedgerJdbcRepository(jdbcClient);
+        fixtures = new DbFixtures(jdbcClient);
 
-        jdbcClient.sql("DELETE FROM transaction_entries").update();
-        jdbcClient.sql("DELETE FROM transactions").update();
-        jdbcClient.sql("DELETE FROM accounts").update();
-        jdbcClient.sql("DELETE FROM ledgers").update();
-        jdbcClient.sql("DELETE FROM users").update();
-
-        jdbcClient.sql("INSERT INTO users (id) VALUES ('user-1')").update();
-        insertLedger("ledger-1", "user-1", "Main", "USD");
+        fixtures.cleanAll();
+        fixtures.insertUser("user-1");
+        fixtures.insertLedger("ledger-1", "user-1", "Main", "USD");
 
         // assets (parent) -> checking (child); plus income, expenses, and a EUR brokerage.
-        insertAccount("assets", "ledger-1", null, "Assets", "USD", "ASSET");
-        insertAccount("checking", "ledger-1", "assets", "Checking", "USD", "ASSET");
-        insertAccount("income", "ledger-1", null, "Income", "USD", "INCOME");
-        insertAccount("expenses", "ledger-1", null, "Expenses", "USD", "EXPENSE");
-        insertAccount("brokerage", "ledger-1", null, "Brokerage", "EUR", "ASSET");
+        fixtures.insertAccount("assets", "ledger-1", null, "Assets", "USD", "ASSET");
+        fixtures.insertAccount("checking", "ledger-1", "assets", "Checking", "USD", "ASSET");
+        fixtures.insertAccount("income", "ledger-1", null, "Income", "USD", "INCOME");
+        fixtures.insertAccount("expenses", "ledger-1", null, "Expenses", "USD", "EXPENSE");
+        fixtures.insertAccount("brokerage", "ledger-1", null, "Brokerage", "EUR", "ASSET");
 
         // T1 salary: checking +1000, income +1000
-        insertTransaction("t1", "ledger-1", "Salary", LocalDate.of(2026, 1, 5));
-        insertEntry("t1", "checking", "1000.00", "DEBIT", "USD", null, null);
-        insertEntry("t1", "income", "1000.00", "CREDIT", "USD", null, null);
+        fixtures.insertTransaction("t1", "ledger-1", "Salary", LocalDate.of(2026, 1, 5));
+        fixtures.insertEntry("t1", "checking", "1000.00", "DEBIT", "USD", null, null);
+        fixtures.insertEntry("t1", "income", "1000.00", "CREDIT", "USD", null, null);
 
         // T2 groceries: expenses +200, checking -200
-        insertTransaction("t2", "ledger-1", "Groceries", LocalDate.of(2026, 1, 10));
-        insertEntry("t2", "expenses", "200.00", "DEBIT", "USD", null, null);
-        insertEntry("t2", "checking", "200.00", "CREDIT", "USD", null, null);
+        fixtures.insertTransaction("t2", "ledger-1", "Groceries", LocalDate.of(2026, 1, 10));
+        fixtures.insertEntry("t2", "expenses", "200.00", "DEBIT", "USD", null, null);
+        fixtures.insertEntry("t2", "checking", "200.00", "CREDIT", "USD", null, null);
 
         // T3 USD->EUR transfer: checking -100 USD, brokerage +90 EUR (converted)
-        insertTransaction("t3", "ledger-1", "Buy EUR", LocalDate.of(2026, 1, 15));
-        insertEntry("t3", "brokerage", "100.00", "DEBIT", "USD", "90.00", "EUR");
-        insertEntry("t3", "checking", "100.00", "CREDIT", "USD", null, null);
+        fixtures.insertTransaction("t3", "ledger-1", "Buy EUR", LocalDate.of(2026, 1, 15));
+        fixtures.insertEntry("t3", "brokerage", "100.00", "DEBIT", "USD", "90.00", "EUR");
+        fixtures.insertEntry("t3", "checking", "100.00", "CREDIT", "USD", null, null);
     }
 
     @Test
@@ -173,65 +168,4 @@ class AccountBalanceSummaryTest {
                 .balance();
     }
 
-    private void insertLedger(String id, String userId, String name, String currency) {
-        jdbcClient.sql("""
-                        INSERT INTO ledgers (id, user_id, slug, name, description, currency, created_at)
-                        VALUES (:id, :userId, :slug, :name, :description, :currency, :createdAt)
-                        """)
-                .param("id", id)
-                .param("userId", userId)
-                .param("slug", name.toLowerCase())
-                .param("name", name)
-                .param("description", null)
-                .param("currency", currency)
-                .param("createdAt", Timestamp.from(Instant.now()))
-                .update();
-    }
-
-    private void insertAccount(String id, String ledgerId, String parentId, String name, String currency, String type) {
-        jdbcClient.sql("""
-                        INSERT INTO accounts (id, ledger_id, parent_account_id, slug, name, description, currency, type, status, created_at)
-                        VALUES (:id, :ledgerId, :parentId, :slug, :name, :description, :currency, :type, 'ACTIVE', :createdAt)
-                        """)
-                .param("id", id)
-                .param("ledgerId", ledgerId)
-                .param("parentId", parentId)
-                .param("slug", id)
-                .param("name", name)
-                .param("description", null)
-                .param("currency", currency)
-                .param("type", type)
-                .param("createdAt", Timestamp.from(Instant.now()))
-                .update();
-    }
-
-    private void insertTransaction(String id, String ledgerId, String description, LocalDate date) {
-        jdbcClient.sql("""
-                        INSERT INTO transactions (id, ledger_id, description, date, created_at)
-                        VALUES (:id, :ledgerId, :description, :date, :createdAt)
-                        """)
-                .param("id", id)
-                .param("ledgerId", ledgerId)
-                .param("description", description)
-                .param("date", Date.valueOf(date))
-                .param("createdAt", Timestamp.from(Instant.now()))
-                .update();
-    }
-
-    private void insertEntry(String transactionId, String accountId, String amount, String type,
-                             String currency, String toAmount, String toCurrency) {
-        jdbcClient.sql("""
-                        INSERT INTO transaction_entries (id, transaction_id, account_id, amount, type, currency, to_amount, to_currency)
-                        VALUES (:id, :transactionId, :accountId, :amount, :type, :currency, :toAmount, :toCurrency)
-                        """)
-                .param("id", java.util.UUID.randomUUID().toString())
-                .param("transactionId", transactionId)
-                .param("accountId", accountId)
-                .param("amount", new BigDecimal(amount))
-                .param("type", type)
-                .param("currency", currency)
-                .param("toAmount", toAmount != null ? new BigDecimal(toAmount) : null)
-                .param("toCurrency", toCurrency)
-                .update();
-    }
 }

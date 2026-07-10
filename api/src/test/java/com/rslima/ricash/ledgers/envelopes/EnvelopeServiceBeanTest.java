@@ -1,6 +1,7 @@
 package com.rslima.ricash.ledgers.envelopes;
 
 import com.rslima.ricash.ledgers.Ledger;
+import com.rslima.ricash.ledgers.LedgerAccess;
 import com.rslima.ricash.ledgers.LedgerRepository;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -49,7 +50,7 @@ class EnvelopeServiceBeanTest {
 
     @BeforeEach
     void setUp() {
-        envelopeService = new EnvelopeServiceBean(envelopeRepository, allocationRepository, mappingRepository, ledgerRepository);
+        envelopeService = new EnvelopeServiceBean(envelopeRepository, allocationRepository, mappingRepository, new LedgerAccess(ledgerRepository));
     }
 
     @Test
@@ -182,17 +183,9 @@ class EnvelopeServiceBeanTest {
         when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
         when(envelopeRepository.findById(LEDGER_ID, ENVELOPE_ID)).thenReturn(Optional.of(createTestEnvelope()));
 
-        // Current month: allocated 500, spent 300
-        when(allocationRepository.findByEnvelopeIdAndPeriod(ENVELOPE_ID, 2026, 3))
-                .thenReturn(Optional.of(new EnvelopeAllocation("id", ENVELOPE_ID, 2026, 3, new BigDecimal("500"), null, Instant.now(), Instant.now())));
-        when(allocationRepository.calculateSpentForEnvelope(ENVELOPE_ID, 2026, 3))
-                .thenReturn(new BigDecimal("300"));
-
-        // Previous month: no activity -> rollover = 0
-        when(allocationRepository.findByEnvelopeIdAndPeriod(ENVELOPE_ID, 2026, 2))
-                .thenReturn(Optional.empty());
-        when(allocationRepository.calculateSpentForEnvelope(ENVELOPE_ID, 2026, 2))
-                .thenReturn(BigDecimal.ZERO);
+        // Current month: allocated 500, spent 300; no earlier activity -> rollover = 0
+        when(allocationRepository.findMonthlyActivityByEnvelope(ENVELOPE_ID, 2026, 3))
+                .thenReturn(List.of(activity(2026, 3, "500", "300")));
 
         var result = envelopeService.getBalance(USER_ID, LEDGER_SLUG, ENVELOPE_ID, 2026, 3);
 
@@ -207,23 +200,11 @@ class EnvelopeServiceBeanTest {
         when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
         when(envelopeRepository.findById(LEDGER_ID, ENVELOPE_ID)).thenReturn(Optional.of(createTestEnvelope()));
 
-        // Current month (March): allocated 500, spent 100
-        when(allocationRepository.findByEnvelopeIdAndPeriod(ENVELOPE_ID, 2026, 3))
-                .thenReturn(Optional.of(new EnvelopeAllocation("id", ENVELOPE_ID, 2026, 3, new BigDecimal("500"), null, Instant.now(), Instant.now())));
-        when(allocationRepository.calculateSpentForEnvelope(ENVELOPE_ID, 2026, 3))
-                .thenReturn(new BigDecimal("100"));
-
-        // Previous month (February): allocated 400, spent 200 -> rollover available = 200
-        when(allocationRepository.findByEnvelopeIdAndPeriod(ENVELOPE_ID, 2026, 2))
-                .thenReturn(Optional.of(new EnvelopeAllocation("id2", ENVELOPE_ID, 2026, 2, new BigDecimal("400"), null, Instant.now(), Instant.now())));
-        when(allocationRepository.calculateSpentForEnvelope(ENVELOPE_ID, 2026, 2))
-                .thenReturn(new BigDecimal("200"));
-
-        // January: no activity (stops recursion)
-        when(allocationRepository.findByEnvelopeIdAndPeriod(ENVELOPE_ID, 2026, 1))
-                .thenReturn(Optional.empty());
-        when(allocationRepository.calculateSpentForEnvelope(ENVELOPE_ID, 2026, 1))
-                .thenReturn(BigDecimal.ZERO);
+        // February: allocated 400, spent 200 -> 200 rolls into March.
+        when(allocationRepository.findMonthlyActivityByEnvelope(ENVELOPE_ID, 2026, 3))
+                .thenReturn(List.of(
+                        activity(2026, 2, "400", "200"),
+                        activity(2026, 3, "500", "100")));
 
         var result = envelopeService.getBalance(USER_ID, LEDGER_SLUG, ENVELOPE_ID, 2026, 3);
 
@@ -231,6 +212,41 @@ class EnvelopeServiceBeanTest {
         assertThat(result.allocated()).isEqualByComparingTo(new BigDecimal("500"));
         assertThat(result.spent()).isEqualByComparingTo(new BigDecimal("100"));
         assertThat(result.available()).isEqualByComparingTo(new BigDecimal("600"));
+    }
+
+    @Test
+    void getBalance_overspentMonthClampsCarryButKeepsChain() {
+        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
+        when(envelopeRepository.findById(LEDGER_ID, ENVELOPE_ID)).thenReturn(Optional.of(createTestEnvelope()));
+
+        // Jan avail 60, Feb overspends to -30 (clamps to 0), Mar avail 30 -> rolls into April.
+        when(allocationRepository.findMonthlyActivityByEnvelope(ENVELOPE_ID, 2026, 4))
+                .thenReturn(List.of(
+                        activity(2026, 1, "100", "40"),
+                        activity(2026, 2, "100", "190"),
+                        activity(2026, 3, "50", "20")));
+
+        var result = envelopeService.getBalance(USER_ID, LEDGER_SLUG, ENVELOPE_ID, 2026, 4);
+
+        assertThat(result.rollover()).isEqualByComparingTo(new BigDecimal("30"));
+        assertThat(result.available()).isEqualByComparingTo(new BigDecimal("30"));
+    }
+
+    @Test
+    void getBalance_gapMonthBreaksRolloverChain() {
+        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
+        when(envelopeRepository.findById(LEDGER_ID, ENVELOPE_ID)).thenReturn(Optional.of(createTestEnvelope()));
+
+        // January's 200 leftover must not survive the inactive February.
+        when(allocationRepository.findMonthlyActivityByEnvelope(ENVELOPE_ID, 2026, 3))
+                .thenReturn(List.of(
+                        activity(2026, 1, "200", "0"),
+                        activity(2026, 3, "50", "10")));
+
+        var result = envelopeService.getBalance(USER_ID, LEDGER_SLUG, ENVELOPE_ID, 2026, 3);
+
+        assertThat(result.rollover()).isEqualByComparingTo(BigDecimal.ZERO);
+        assertThat(result.available()).isEqualByComparingTo(new BigDecimal("40"));
     }
 
     @Test
@@ -250,24 +266,17 @@ class EnvelopeServiceBeanTest {
         var envelope2 = new Envelope("env-2", "Rent", null, "USD", EnvelopeType.EXPENSE, EnvelopeStatus.ACTIVE, Instant.now(), null, List.of());
 
         when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
-        when(envelopeRepository.listLedgerEnvelopes(eq(LEDGER_ID), any(PageRequest.class)))
-                .thenReturn(new PageImpl<>(List.of(envelope1, envelope2)));
-
-        // env-1 balance
-        when(allocationRepository.findByEnvelopeIdAndPeriod("env-1", 2026, 3)).thenReturn(Optional.empty());
-        when(allocationRepository.calculateSpentForEnvelope("env-1", 2026, 3)).thenReturn(BigDecimal.ZERO);
-        when(allocationRepository.findByEnvelopeIdAndPeriod("env-1", 2026, 2)).thenReturn(Optional.empty());
-        when(allocationRepository.calculateSpentForEnvelope("env-1", 2026, 2)).thenReturn(BigDecimal.ZERO);
-
-        // env-2 balance
-        when(allocationRepository.findByEnvelopeIdAndPeriod("env-2", 2026, 3)).thenReturn(Optional.empty());
-        when(allocationRepository.calculateSpentForEnvelope("env-2", 2026, 3)).thenReturn(BigDecimal.ZERO);
-        when(allocationRepository.findByEnvelopeIdAndPeriod("env-2", 2026, 2)).thenReturn(Optional.empty());
-        when(allocationRepository.calculateSpentForEnvelope("env-2", 2026, 2)).thenReturn(BigDecimal.ZERO);
+        when(envelopeRepository.findAllByLedger(LEDGER_ID)).thenReturn(List.of(envelope1, envelope2));
+        when(allocationRepository.findMonthlyActivityByLedger(LEDGER_ID, 2026, 3))
+                .thenReturn(List.of(activity("env-1", 2026, 3, "100", "25")));
 
         var result = envelopeService.getBudgetSummary(USER_ID, LEDGER_SLUG, 2026, 3);
 
         assertThat(result).hasSize(2);
+        assertThat(result.getFirst().envelopeId()).isEqualTo("env-1");
+        assertThat(result.getFirst().available()).isEqualByComparingTo(new BigDecimal("75"));
+        assertThat(result.getLast().envelopeId()).isEqualTo("env-2");
+        assertThat(result.getLast().available()).isEqualByComparingTo(BigDecimal.ZERO);
     }
 
     @Test
@@ -294,8 +303,17 @@ class EnvelopeServiceBeanTest {
         assertThat(result).containsEntry("acc-1", "env-1");
     }
 
+    private EnvelopeAllocationRepository.MonthlyActivity activity(int year, int month, String allocated, String spent) {
+        return activity(ENVELOPE_ID, year, month, allocated, spent);
+    }
+
+    private EnvelopeAllocationRepository.MonthlyActivity activity(String envelopeId, int year, int month, String allocated, String spent) {
+        return new EnvelopeAllocationRepository.MonthlyActivity(
+                envelopeId, year, month, new BigDecimal(allocated), new BigDecimal(spent));
+    }
+
     private Ledger createTestLedger() {
-        return new Ledger(LEDGER_ID, USER_ID, LEDGER_SLUG, "Test Ledger", "Description", "USD", Instant.now(), List.of(), List.of());
+        return new Ledger(LEDGER_ID, USER_ID, LEDGER_SLUG, "Test Ledger", "Description", "USD", Instant.now(), List.of());
     }
 
     private Envelope createTestEnvelope() {

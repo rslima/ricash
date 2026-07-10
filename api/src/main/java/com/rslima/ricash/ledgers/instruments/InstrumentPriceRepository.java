@@ -3,40 +3,12 @@ package com.rslima.ricash.ledgers.instruments;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
-import java.time.LocalDate;
 import java.util.List;
-import java.util.Optional;
 
 /**
  * Repository for managing instrument prices.
  */
 public interface InstrumentPriceRepository {
-
-    /**
-     * Finds a price by ID.
-     *
-     * @param id the price ID
-     * @return the price if found
-     */
-    Optional<InstrumentPrice> findById(String id);
-
-    /**
-     * Finds the price for an instrument on a specific date.
-     * If no exact match, returns the most recent price before that date.
-     *
-     * @param instrumentId the instrument ID
-     * @param date the effective date
-     * @return the price if found
-     */
-    Optional<InstrumentPrice> findPrice(String instrumentId, LocalDate date);
-
-    /**
-     * Finds the latest price for an instrument.
-     *
-     * @param instrumentId the instrument ID
-     * @return the latest price if found
-     */
-    Optional<InstrumentPrice> findLatestPrice(String instrumentId);
 
     /**
      * Finds all prices for an instrument with pagination.
@@ -73,9 +45,11 @@ public interface InstrumentPriceRepository {
     InstrumentPrice save(InstrumentPrice price);
 
     /**
-     * Deletes a price by ID.
+     * Deletes a price by ID, only if its instrument belongs to the given ledger.
      *
+     * @param ledgerId the ledger the price's instrument must belong to
      * @param id the price ID
+     * @return number of rows deleted (0 when the price is absent or foreign)
      */
-    void deleteById(String id);
+    int deleteById(String ledgerId, String id);
 }

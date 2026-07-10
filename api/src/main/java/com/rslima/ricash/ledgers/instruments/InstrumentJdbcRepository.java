@@ -1,5 +1,6 @@
 package com.rslima.ricash.ledgers.instruments;
 
+import com.github.f4b6a3.uuid.UuidCreator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -11,7 +12,6 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 
 @RequiredArgsConstructor
 @Slf4j
@@ -20,15 +20,16 @@ public class InstrumentJdbcRepository implements InstrumentRepository {
     private final JdbcClient jdbcClient;
 
     @Override
-    public Optional<Instrument> findById(String id) {
-        log.debug("Finding instrument by id {}", id);
+    public Optional<Instrument> findById(String ledgerId, String id) {
+        log.debug("Finding instrument by id {} in ledger {}", id, ledgerId);
 
         return jdbcClient.sql("""
                 SELECT id, ledger_id, symbol, name, type, currency, market, isin, status, created_at
                 FROM instruments
-                WHERE id = :id
+                WHERE id = :id AND ledger_id = :ledgerId
                 """)
             .param("id", id)
+            .param("ledgerId", ledgerId)
             .query(this::mapRow)
             .optional();
     }
@@ -92,7 +93,7 @@ public class InstrumentJdbcRepository implements InstrumentRepository {
     public Instrument save(Instrument instrument) {
         log.debug("Saving instrument: {}", instrument.symbol());
 
-        final var id = instrument.id() != null ? instrument.id() : UUID.randomUUID().toString();
+        final var id = instrument.id() != null ? instrument.id() : UuidCreator.getTimeOrderedEpoch().toString();
         final var createdAt = instrument.createdAt() != null ? instrument.createdAt() : Instant.now();
 
         jdbcClient.sql("""
@@ -133,9 +134,10 @@ public class InstrumentJdbcRepository implements InstrumentRepository {
                 UPDATE instruments
                 SET symbol = :symbol, name = :name, type = :type, currency = :currency,
                     market = :market, isin = :isin, status = :status
-                WHERE id = :id
+                WHERE id = :id AND ledger_id = :ledgerId
                 """)
             .param("id", instrument.id())
+            .param("ledgerId", instrument.ledgerId())
             .param("symbol", instrument.symbol())
             .param("name", instrument.name())
             .param("type", instrument.type().name())
@@ -149,10 +151,11 @@ public class InstrumentJdbcRepository implements InstrumentRepository {
     }
 
     @Override
-    public void deleteById(String id) {
-        log.debug("Deleting instrument with id {}", id);
-        jdbcClient.sql("DELETE FROM instruments WHERE id = :id")
+    public void deleteById(String ledgerId, String id) {
+        log.debug("Deleting instrument with id {} in ledger {}", id, ledgerId);
+        jdbcClient.sql("DELETE FROM instruments WHERE id = :id AND ledger_id = :ledgerId")
             .param("id", id)
+            .param("ledgerId", ledgerId)
             .update();
     }
 

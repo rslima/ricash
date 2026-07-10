@@ -1,14 +1,14 @@
 package com.rslima.ricash.ledgers.envelopes;
 
-import com.rslima.ricash.ledgers.Ledger;
-import com.rslima.ricash.ledgers.LedgerNotFoundException;
-import com.rslima.ricash.ledgers.LedgerRepository;
+import com.rslima.ricash.ledgers.LedgerAccess;
+import com.rslima.ricash.ledgers.envelopes.EnvelopeAllocationRepository.MonthlyActivity;
 
 import com.github.f4b6a3.uuid.UuidCreator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -16,6 +16,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @RequiredArgsConstructor
 @Slf4j
@@ -23,23 +24,24 @@ public class EnvelopeServiceBean implements EnvelopeService {
     private final EnvelopeRepository envelopeRepository;
     private final EnvelopeAllocationRepository allocationRepository;
     private final EnvelopeAccountMappingRepository mappingRepository;
-    private final LedgerRepository ledgerRepository;
+    private final LedgerAccess ledgerAccess;
 
     @Override
-    public Page<Envelope> listLedgerEnvelopes(String userId, String ledgerSlug, PageRequest pageRequest) {
-        final var ledger = getLedgerBySlug(userId, ledgerSlug);
+    public Page<Envelope> listLedgerEnvelopes(String userId, String ledgerSlug, Pageable pageRequest) {
+        final var ledger = ledgerAccess.requireLedger(userId, ledgerSlug);
         return envelopeRepository.listLedgerEnvelopes(ledger.id(), pageRequest);
     }
 
     @Override
     public Optional<Envelope> find(String userId, String ledgerSlug, String envelopeId) {
-        final var ledger = getLedgerBySlug(userId, ledgerSlug);
+        final var ledger = ledgerAccess.requireLedger(userId, ledgerSlug);
         return envelopeRepository.findById(ledger.id(), envelopeId);
     }
 
     @Override
+    @Transactional
     public Envelope create(String userId, String ledgerSlug, CreateEnvelopeRequest request) {
-        final var ledger = getLedgerBySlug(userId, ledgerSlug);
+        final var ledger = ledgerAccess.requireLedger(userId, ledgerSlug);
 
         final var envelope = new Envelope(
                 UuidCreator.getTimeOrderedEpoch().toString(),
@@ -57,8 +59,9 @@ public class EnvelopeServiceBean implements EnvelopeService {
     }
 
     @Override
+    @Transactional
     public Envelope update(String userId, String ledgerSlug, String envelopeId, UpdateEnvelopeRequest request) {
-        final var ledger = getLedgerBySlug(userId, ledgerSlug);
+        final var ledger = ledgerAccess.requireLedger(userId, ledgerSlug);
 
         envelopeRepository.findById(ledger.id(), envelopeId)
                 .orElseThrow(() -> new EnvelopeNotFoundException(envelopeId));
@@ -76,8 +79,9 @@ public class EnvelopeServiceBean implements EnvelopeService {
     }
 
     @Override
+    @Transactional
     public void delete(String userId, String ledgerSlug, String envelopeId) {
-        final var ledger = getLedgerBySlug(userId, ledgerSlug);
+        final var ledger = ledgerAccess.requireLedger(userId, ledgerSlug);
 
         envelopeRepository.findById(ledger.id(), envelopeId)
                 .orElseThrow(() -> new EnvelopeNotFoundException(envelopeId));
@@ -106,8 +110,9 @@ public class EnvelopeServiceBean implements EnvelopeService {
     }
 
     @Override
+    @Transactional
     public EnvelopeAllocation allocate(String userId, String ledgerSlug, String envelopeId, AllocateEnvelopeRequest request) {
-        final var ledger = getLedgerBySlug(userId, ledgerSlug);
+        final var ledger = ledgerAccess.requireLedger(userId, ledgerSlug);
 
         envelopeRepository.findById(ledger.id(), envelopeId)
                 .orElseThrow(() -> new EnvelopeNotFoundException(envelopeId));
@@ -123,28 +128,37 @@ public class EnvelopeServiceBean implements EnvelopeService {
 
     @Override
     public EnvelopeBalance getBalance(String userId, String ledgerSlug, String envelopeId, int year, int month) {
-        final var ledger = getLedgerBySlug(userId, ledgerSlug);
+        final var ledger = ledgerAccess.requireLedger(userId, ledgerSlug);
 
         envelopeRepository.findById(ledger.id(), envelopeId)
                 .orElseThrow(() -> new EnvelopeNotFoundException(envelopeId));
 
-        return calculateBalance(envelopeId, year, month);
+        var activity = allocationRepository.findMonthlyActivityByEnvelope(envelopeId, year, month);
+        return balanceFromActivity(envelopeId, activityByMonthIndex(activity), year, month);
     }
 
     @Override
     public List<EnvelopeBalance> getBudgetSummary(String userId, String ledgerSlug, int year, int month) {
-        final var ledger = getLedgerBySlug(userId, ledgerSlug);
+        final var ledger = ledgerAccess.requireLedger(userId, ledgerSlug);
 
-        var envelopes = envelopeRepository.listLedgerEnvelopes(ledger.id(), PageRequest.of(0, 1000));
+        // One query for the envelopes and one for all their monthly activity,
+        // replacing the former two-queries-per-envelope-month recursion.
+        var envelopes = envelopeRepository.findAllByLedger(ledger.id());
+        Map<String, List<MonthlyActivity>> activityByEnvelope = allocationRepository
+                .findMonthlyActivityByLedger(ledger.id(), year, month).stream()
+                .collect(Collectors.groupingBy(MonthlyActivity::envelopeId));
 
-        return envelopes.getContent().stream()
-                .map(envelope -> calculateBalance(envelope.id(), year, month))
+        return envelopes.stream()
+                .map(envelope -> balanceFromActivity(
+                        envelope.id(),
+                        activityByMonthIndex(activityByEnvelope.getOrDefault(envelope.id(), List.of())),
+                        year, month))
                 .toList();
     }
 
     @Override
     public List<String> getEnvelopeAccounts(String userId, String ledgerSlug, String envelopeId) {
-        final var ledger = getLedgerBySlug(userId, ledgerSlug);
+        final var ledger = ledgerAccess.requireLedger(userId, ledgerSlug);
 
         envelopeRepository.findById(ledger.id(), envelopeId)
                 .orElseThrow(() -> new EnvelopeNotFoundException(envelopeId));
@@ -155,8 +169,9 @@ public class EnvelopeServiceBean implements EnvelopeService {
     }
 
     @Override
+    @Transactional
     public void setEnvelopeAccounts(String userId, String ledgerSlug, String envelopeId, List<String> accountIds) {
-        final var ledger = getLedgerBySlug(userId, ledgerSlug);
+        final var ledger = ledgerAccess.requireLedger(userId, ledgerSlug);
 
         envelopeRepository.findById(ledger.id(), envelopeId)
                 .orElseThrow(() -> new EnvelopeNotFoundException(envelopeId));
@@ -166,13 +181,13 @@ public class EnvelopeServiceBean implements EnvelopeService {
 
     @Override
     public Map<String, String> getAllEnvelopeMappings(String userId, String ledgerSlug) {
-        final var ledger = getLedgerBySlug(userId, ledgerSlug);
+        final var ledger = ledgerAccess.requireLedger(userId, ledgerSlug);
         return mappingRepository.findAllMappingsForLedger(ledger.id());
     }
 
     @Override
     public BigDecimal getToBeBudgeted(String userId, String ledgerSlug, int year, int month) {
-        final var ledger = getLedgerBySlug(userId, ledgerSlug);
+        final var ledger = ledgerAccess.requireLedger(userId, ledgerSlug);
 
         // Income for the month
         BigDecimal income = allocationRepository.calculateIncomeForPeriod(ledger.id(), year, month);
@@ -184,17 +199,20 @@ public class EnvelopeServiceBean implements EnvelopeService {
         return income.subtract(allocated);
     }
 
-    private EnvelopeBalance calculateBalance(String envelopeId, int year, int month) {
-        // Get allocation for this period
-        BigDecimal allocated = allocationRepository.findByEnvelopeIdAndPeriod(envelopeId, year, month)
-                .map(EnvelopeAllocation::allocatedAmount)
-                .orElse(BigDecimal.ZERO);
-
-        // Get spent for this period
-        BigDecimal spent = allocationRepository.calculateSpentForEnvelope(envelopeId, year, month);
-
-        // Calculate rollover from previous month
-        BigDecimal rollover = calculateRollover(envelopeId, year, month);
+    /**
+     * Rollover semantics, unchanged from the original month-by-month
+     * recursion (pinned by EnvelopeRolloverGoldenTest):
+     * only months with an allocation or spending count as active; the carry
+     * starts at the beginning of the run of consecutive active months
+     * immediately preceding the target (nothing rolls across a gap month);
+     * each month carries forward max(rollover + allocated - spent, 0);
+     * months before 2020-01 are never considered (repository floor).
+     */
+    private EnvelopeBalance balanceFromActivity(String envelopeId, Map<Integer, MonthlyActivity> byMonth, int year, int month) {
+        var current = byMonth.get(monthIndex(year, month));
+        BigDecimal allocated = current != null ? current.allocated() : BigDecimal.ZERO;
+        BigDecimal spent = current != null ? current.spent() : BigDecimal.ZERO;
+        BigDecimal rollover = rolloverInto(byMonth, monthIndex(year, month));
 
         // Available = Rollover + Allocated - Spent
         BigDecimal available = rollover.add(allocated).subtract(spent);
@@ -202,39 +220,30 @@ public class EnvelopeServiceBean implements EnvelopeService {
         return new EnvelopeBalance(envelopeId, year, month, rollover, allocated, spent, available);
     }
 
-    private BigDecimal calculateRollover(String envelopeId, int year, int month) {
-        // Get previous month
-        int prevMonth = month - 1;
-        int prevYear = year;
-        if (prevMonth < 1) {
-            prevMonth = 12;
-            prevYear = year - 1;
+    private BigDecimal rolloverInto(Map<Integer, MonthlyActivity> byMonth, int targetIndex) {
+        int runStart = targetIndex;
+        while (byMonth.containsKey(runStart - 1)) {
+            runStart--;
         }
 
-        // Base case: don't go back before 2020
-        if (prevYear < 2020) {
-            return BigDecimal.ZERO;
+        BigDecimal carry = BigDecimal.ZERO;
+        for (int monthIdx = runStart; monthIdx < targetIndex; monthIdx++) {
+            var activity = byMonth.get(monthIdx);
+            BigDecimal available = carry.add(activity.allocated()).subtract(activity.spent());
+            carry = available.max(BigDecimal.ZERO);
         }
+        return carry;
+    }
 
-        // Check if there's any allocation for the previous month
-        // If no allocation exists and no spending, assume this is before the envelope was used
-        var prevAllocation = allocationRepository.findByEnvelopeIdAndPeriod(envelopeId, prevYear, prevMonth);
-        BigDecimal prevAllocated = prevAllocation.map(EnvelopeAllocation::allocatedAmount).orElse(BigDecimal.ZERO);
-        BigDecimal prevSpent = allocationRepository.calculateSpentForEnvelope(envelopeId, prevYear, prevMonth);
+    private Map<Integer, MonthlyActivity> activityByMonthIndex(List<MonthlyActivity> rows) {
+        return rows.stream()
+                // A month with neither allocation nor spending behaves as a gap.
+                .filter(row -> row.allocated().signum() != 0 || row.spent().signum() != 0)
+                .collect(Collectors.toMap(row -> monthIndex(row.periodYear(), row.periodMonth()), row -> row));
+    }
 
-        // If no activity in previous month, check one more month back, but limit depth
-        if (prevAllocated.compareTo(BigDecimal.ZERO) == 0 && prevSpent.compareTo(BigDecimal.ZERO) == 0) {
-            // No activity - stop recursion here
-            return BigDecimal.ZERO;
-        }
-
-        // Calculate previous month's rollover recursively
-        BigDecimal prevRollover = calculateRollover(envelopeId, prevYear, prevMonth);
-
-        BigDecimal prevAvailable = prevRollover.add(prevAllocated).subtract(prevSpent);
-
-        // Only carry forward positive balances
-        return prevAvailable.max(BigDecimal.ZERO);
+    private static int monthIndex(int year, int month) {
+        return year * 12 + (month - 1);
     }
 
     private void collectEnvelopeIdsRecursively(String ledgerId, String envelopeId, List<String> envelopeIds) {
@@ -245,8 +254,4 @@ public class EnvelopeServiceBean implements EnvelopeService {
         }
     }
 
-    private Ledger getLedgerBySlug(String userId, String ledgerSlug) {
-        return ledgerRepository.findBySlug(userId, ledgerSlug)
-                .orElseThrow(() -> new LedgerNotFoundException(ledgerSlug));
-    }
 }

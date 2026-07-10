@@ -1,18 +1,12 @@
 package com.rslima.ricash.ledgers;
 
 import com.rslima.ricash.ledgers.accounts.Account;
-import com.rslima.ricash.ledgers.accounts.AccountStatus;
-import com.rslima.ricash.ledgers.accounts.AccountType;
-import com.rslima.ricash.ledgers.transactions.Transaction;
-import com.rslima.ricash.ledgers.transactions.TransactionEntry;
-import com.rslima.ricash.ledgers.transactions.TransactionEntryType;
-import io.vavr.Tuple2;
+import com.rslima.ricash.ledgers.accounts.AccountTreeSql;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.jetbrains.annotations.NotNull;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
 import java.math.BigDecimal;
@@ -22,7 +16,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.function.Function;
 
 import static java.util.stream.Collectors.groupingBy;
 
@@ -32,7 +25,7 @@ public class LedgerJdbcRepository implements LedgerRepository {
     private final JdbcClient jdbcClient;
 
     @Override
-    public Page<Ledger> listUserLedgers(String userId, PageRequest pageRequest) {
+    public Page<Ledger> listUserLedgers(String userId, Pageable pageRequest) {
 
         final var ledgersAndAccounts = jdbcClient.sql("""
                            WITH RECURSIVE account_tree AS (
@@ -72,6 +65,7 @@ public class LedgerJdbcRepository implements LedgerRepository {
                                     ledgers
                                 WHERE
                                     user_id = :userId
+                                ORDER BY created_at, id
                                 OFFSET :offset
                                 LIMIT :limit) l
                            LEFT JOIN
@@ -86,15 +80,9 @@ public class LedgerJdbcRepository implements LedgerRepository {
                                    a.status,
                                    a.type,
                                    a.created_at AS account_created_at,
-                                   COALESCE(
-                                       CASE
-                                           WHEN a.type IN ('ASSET', 'EXPENSE') THEN
-                                               SUM(bs.debit_total) - SUM(bs.credit_total)
-                                           ELSE
-                                               SUM(bs.credit_total) - SUM(bs.debit_total)
-                                       END,
-                                       0
-                                   ) AS account_balance
+                           """
+                        + AccountTreeSql.BALANCE_EXPRESSION + " AS account_balance\n"
+                        + """
                                FROM accounts a
                                LEFT JOIN account_tree at ON at.root_id = a.id AND at.ledger_id = a.ledger_id
                                LEFT JOIN account_balance_summary bs ON bs.account_id = at.id AND bs.currency = a.currency
@@ -108,21 +96,26 @@ public class LedgerJdbcRepository implements LedgerRepository {
                 .query(DBLedgerAndAccount.class)
                 .list();
 
-        final var dbLedgers = ledgersAndAccounts.stream().map(this::toTupleLedgerAndAccount).toList();
+        final var ledgerAccountRows = ledgersAndAccounts.stream().map(this::toLedgerAccountRow).toList();
 
-        List<Ledger> result = dbLedgers.stream()
-                .collect(groupingBy(Tuple2::_1))
+        // LinkedHashMap keeps the ledgers in the ORDER BY sequence of the query.
+        List<Ledger> result = ledgerAccountRows.stream()
+                .collect(groupingBy(LedgerAccountRow::ledger, java.util.LinkedHashMap::new, java.util.stream.Collectors.toList()))
                 .entrySet().stream()
                 .map(e -> Map.entry(e.getKey(), e.getValue().stream()
-                        .map(Tuple2::_2)
+                        .map(LedgerAccountRow::account)
                         .filter(account -> account.id() != null)
                         .toList()))
                 .map(e -> Map.entry(e.getKey(), buildAccountForest(e.getValue())))
                 .map(e -> toLedger(e.getKey(), e.getValue()))
                 .toList();
-        return new PageImpl<>(result,
-                pageRequest,
-                result.size());
+
+        final var total = jdbcClient.sql("SELECT COUNT(*) FROM ledgers WHERE user_id = :userId")
+                .param("userId", userId)
+                .query(Long.class)
+                .single();
+
+        return new PageImpl<>(result, pageRequest, total);
     }
 
     record DBLedgerAndAccount(String lId, String userId, String ledgerSlug, String ledgerName, String ledgerDescription,
@@ -135,12 +128,10 @@ public class LedgerJdbcRepository implements LedgerRepository {
     record DBLedger(String id, String userId, String slug, String name, String description, String currency, Instant createdAt) {
     }
 
-    record DBAccount(String id, String ledgerId, String parentAccountId, String slug, String name, String description,
-                     String currency,
-                     String type, String status, BigDecimal balance, Instant createdAt) {
+    private record LedgerAccountRow(DBLedger ledger, AccountTreeSql.DBAccount account) {
     }
 
-    private Tuple2<DBLedger, DBAccount> toTupleLedgerAndAccount(DBLedgerAndAccount la) {
+    private LedgerAccountRow toLedgerAccountRow(DBLedgerAndAccount la) {
         final var dbLedger = new DBLedger(
                 la.lId(),
                 la.userId(),
@@ -150,7 +141,7 @@ public class LedgerJdbcRepository implements LedgerRepository {
                 la.ledgerCurrency(),
                 la.ledgerCreatedAt());
 
-        final var account = new DBAccount(
+        final var account = new AccountTreeSql.DBAccount(
                 la.accountId(),
                 la.lId(),
                 la.parentAccountId(),
@@ -163,94 +154,19 @@ public class LedgerJdbcRepository implements LedgerRepository {
                 la.accountBalance(),
                 la.accountCreatedAt());
 
-        return new Tuple2<>(dbLedger, account);
-    }
-
-    @Override
-    public Optional<Ledger> findById(String userId, String id) {
-
-        final var dbLedger = jdbcClient.sql("""
-                        SELECT
-                            id,
-                            user_id,
-                            slug,
-                            name,
-                            description,
-                            currency,
-                            created_at
-                        FROM
-                            ledgers
-                        WHERE
-                            user_id = :userId AND
-                            id = :id
-                        """)
-                .param("userId", userId)
-                .param("id", id)
-                .query(DBLedger.class)
-                .optional();
-
-        if (dbLedger.isPresent()) {
-            final var dbLedgerAccounts = jdbcClient.sql("""
-                            WITH RECURSIVE account_tree AS (
-                                -- Base case: each account includes itself
-                                SELECT id, id as root_id
-                                FROM accounts
-                                WHERE ledger_id = :id
-
-                                UNION ALL
-
-                                -- Recursive case: find children and link them to the same root
-                                SELECT a.id, at.root_id
-                                FROM accounts a
-                                INNER JOIN account_tree at ON a.parent_account_id = at.id
-                                WHERE a.ledger_id = :id
-                            )
-                            SELECT
-                                a.id,
-                                a.ledger_id,
-                                a.parent_account_id,
-                                a.slug,
-                                a.name,
-                                a.description,
-                                a.currency,
-                                a.type,
-                                a.status,
-                                COALESCE(
-                                    CASE
-                                        WHEN a.type IN ('ASSET', 'EXPENSE') THEN
-                                            SUM(bs.debit_total) - SUM(bs.credit_total)
-                                        ELSE
-                                            SUM(bs.credit_total) - SUM(bs.debit_total)
-                                    END,
-                                    0
-                                ) AS balance,
-                                a.created_at
-                            FROM
-                                accounts a
-                            LEFT JOIN
-                                account_tree at ON at.root_id = a.id
-                            LEFT JOIN
-                                account_balance_summary bs ON bs.account_id = at.id AND bs.currency = a.currency
-                            WHERE
-                                a.ledger_id = :id
-                            GROUP BY a.id, a.ledger_id, a.parent_account_id, a.slug, a.name, a.description,
-                                     a.currency, a.type, a.status, a.created_at
-                            """)
-                    .param("id", id)
-                    .query(DBAccount.class)
-                    .list();
-
-            final var accountForest = buildAccountForest(dbLedgerAccounts);
-
-            return dbLedger.map(toLedger(accountForest));
-
-        }
-
-        return Optional.empty();
+        return new LedgerAccountRow(dbLedger, account);
     }
 
     @Override
     public Optional<Ledger> findBySlug(String userId, String slug) {
+        return findLedger(userId, "slug = :lookupValue", slug);
+    }
+
+    /**
+     * Loads one ledger of the user matching the given lookup condition (its
+     * value bound to {@code :lookupValue}), together with its account forest.
+     */
+    private Optional<Ledger> findLedger(String userId, String lookupCondition, String lookupValue) {
         final var dbLedger = jdbcClient.sql("""
                         SELECT
                             id,
@@ -264,70 +180,20 @@ public class LedgerJdbcRepository implements LedgerRepository {
                             ledgers
                         WHERE
                             user_id = :userId AND
-                            slug = :slug
-                        """)
+                        """ + lookupCondition)
                 .param("userId", userId)
-                .param("slug", slug)
+                .param("lookupValue", lookupValue)
                 .query(DBLedger.class)
                 .optional();
 
-        if (dbLedger.isPresent()) {
-            final var id = dbLedger.get().id();
-            final var dbLedgerAccounts = jdbcClient.sql("""
-                            WITH RECURSIVE account_tree AS (
-                                -- Base case: each account includes itself
-                                SELECT id, id as root_id
-                                FROM accounts
-                                WHERE ledger_id = :id
-
-                                UNION ALL
-
-                                -- Recursive case: find children and link them to the same root
-                                SELECT a.id, at.root_id
-                                FROM accounts a
-                                INNER JOIN account_tree at ON a.parent_account_id = at.id
-                                WHERE a.ledger_id = :id
-                            )
-                            SELECT
-                                a.id,
-                                a.ledger_id,
-                                a.parent_account_id,
-                                a.slug,
-                                a.name,
-                                a.description,
-                                a.currency,
-                                a.type,
-                                a.status,
-                                COALESCE(
-                                    CASE
-                                        WHEN a.type IN ('ASSET', 'EXPENSE') THEN
-                                            SUM(bs.debit_total) - SUM(bs.credit_total)
-                                        ELSE
-                                            SUM(bs.credit_total) - SUM(bs.debit_total)
-                                    END,
-                                    0
-                                ) AS balance,
-                                a.created_at
-                            FROM
-                                accounts a
-                            LEFT JOIN
-                                account_tree at ON at.root_id = a.id
-                            LEFT JOIN
-                                account_balance_summary bs ON bs.account_id = at.id AND bs.currency = a.currency
-                            WHERE
-                                a.ledger_id = :id
-                            GROUP BY a.id, a.ledger_id, a.parent_account_id, a.slug, a.name, a.description,
-                                     a.currency, a.type, a.status, a.created_at
-                            """)
-                    .param("id", id)
-                    .query(DBAccount.class)
+        return dbLedger.map(ledger -> {
+            final var dbLedgerAccounts = jdbcClient.sql(AccountTreeSql.SELECT_LEDGER_ACCOUNTS_WITH_BALANCE)
+                    .param("ledgerId", ledger.id())
+                    .query(AccountTreeSql.DBAccount.class)
                     .list();
 
-            final var accountForest = buildAccountForest(dbLedgerAccounts);
-            return dbLedger.map(toLedger(accountForest));
-        }
-
-        return Optional.empty();
+            return toLedger(ledger, buildAccountForest(dbLedgerAccounts));
+        });
     }
 
     @Override
@@ -374,11 +240,7 @@ public class LedgerJdbcRepository implements LedgerRepository {
                 .single() > 0;
     }
 
-    private static @NotNull Function<DBLedger, Ledger> toLedger(List<Account> accountForest) {
-        return dbLedger1 -> toLedger(dbLedger1, accountForest);
-    }
-
-    private static @NotNull Ledger toLedger(DBLedger dbLedger, List<Account> accountForest) {
+    private static Ledger toLedger(DBLedger dbLedger, List<Account> accountForest) {
         return new Ledger(
                 dbLedger.id(),
                 dbLedger.userId(),
@@ -387,26 +249,10 @@ public class LedgerJdbcRepository implements LedgerRepository {
                 dbLedger.description(),
                 dbLedger.currency(),
                 dbLedger.createdAt(),
-                accountForest,
-                List.of());
+                accountForest);
     }
 
-    private static @NotNull Account toAccount(DBAccount dbAccount) {
-        return new Account(
-                dbAccount.id(),
-                dbAccount.slug(),
-                dbAccount.name(),
-                dbAccount.description(),
-                dbAccount.currency(),
-                AccountType.valueOf(dbAccount.type()),
-                AccountStatus.valueOf(dbAccount.status()),
-                dbAccount.balance() != null ? dbAccount.balance() : BigDecimal.ZERO,
-                dbAccount.createdAt(),
-                dbAccount.parentAccountId(),
-                new ArrayList<>());
-    }
-
-    private List<Account> buildAccountForest(List<DBAccount> ledgerAccounts) {
+    private List<Account> buildAccountForest(List<AccountTreeSql.DBAccount> ledgerAccounts) {
 
         final var roots = ledgerAccounts.stream()
                 .filter(a -> a.parentAccountId() == null)
@@ -418,7 +264,7 @@ public class LedgerJdbcRepository implements LedgerRepository {
         return buildTree(roots, remainingAccounts);
     }
 
-    private List<Account> buildTree(List<DBAccount> roots, ArrayList<DBAccount> remainingAccounts) {
+    private List<Account> buildTree(List<AccountTreeSql.DBAccount> roots, ArrayList<AccountTreeSql.DBAccount> remainingAccounts) {
 
         final List<Account> accountForest = new ArrayList<>();
 
@@ -427,7 +273,7 @@ public class LedgerJdbcRepository implements LedgerRepository {
                     .filter(a -> a.parentAccountId().equals(root.id()))
                     .toList();
             remainingAccounts.removeAll(children);
-            Account account = toAccount(root);
+            Account account = root.toAccount();
             accountForest.add(account);
             account.subAccounts().addAll(buildTree(children, remainingAccounts));
         }

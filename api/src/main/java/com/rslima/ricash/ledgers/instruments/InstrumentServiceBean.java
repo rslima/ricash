@@ -1,55 +1,59 @@
 package com.rslima.ricash.ledgers.instruments;
 
+import com.rslima.ricash.ledgers.LedgerAccess;
+
+import com.github.f4b6a3.uuid.UuidCreator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 
 @RequiredArgsConstructor
 @Slf4j
 public class InstrumentServiceBean implements InstrumentService {
 
     private final InstrumentRepository instrumentRepository;
+    private final LedgerAccess ledgerAccess;
 
     @Override
-    public Optional<Instrument> findById(String id) {
-        return instrumentRepository.findById(id);
+    public Optional<Instrument> find(String userId, String ledgerSlug, String instrumentId) {
+        final var ledger = ledgerAccess.requireLedger(userId, ledgerSlug);
+        return instrumentRepository.findById(ledger.id(), instrumentId);
     }
 
     @Override
-    public Optional<Instrument> findByLedgerAndSymbol(String ledgerId, String symbol) {
-        return instrumentRepository.findByLedgerIdAndSymbol(ledgerId, symbol);
+    public Page<Instrument> listByLedger(String userId, String ledgerSlug, Pageable pageable) {
+        final var ledger = ledgerAccess.requireLedger(userId, ledgerSlug);
+        return instrumentRepository.findByLedgerId(ledger.id(), pageable);
     }
 
     @Override
-    public Page<Instrument> listByLedger(String ledgerId, Pageable pageable) {
-        return instrumentRepository.findByLedgerId(ledgerId, pageable);
+    public List<Instrument> listAllByLedger(String userId, String ledgerSlug) {
+        final var ledger = ledgerAccess.requireLedger(userId, ledgerSlug);
+        return instrumentRepository.findAllByLedgerId(ledger.id());
     }
 
     @Override
-    public List<Instrument> listAllByLedger(String ledgerId) {
-        return instrumentRepository.findAllByLedgerId(ledgerId);
-    }
-
-    @Override
-    public Instrument create(String ledgerId, String symbol, String name, InstrumentType type,
+    @Transactional
+    public Instrument create(String userId, String ledgerSlug, String symbol, String name, InstrumentType type,
                              String currency, String market, String isin) {
-        log.info("Creating instrument {} for ledger {}", symbol, ledgerId);
+        final var ledger = ledgerAccess.requireLedger(userId, ledgerSlug);
+        log.info("Creating instrument {} for ledger {}", symbol, ledger.id());
 
         // Check for duplicate symbol in same ledger
-        Optional<Instrument> existing = instrumentRepository.findByLedgerIdAndSymbol(ledgerId, symbol);
+        Optional<Instrument> existing = instrumentRepository.findByLedgerIdAndSymbol(ledger.id(), symbol);
         if (existing.isPresent()) {
             throw new IllegalArgumentException("Instrument with symbol " + symbol + " already exists in this ledger");
         }
 
         Instrument instrument = new Instrument(
-            UUID.randomUUID().toString(),
-            ledgerId,
+            UuidCreator.getTimeOrderedEpoch().toString(),
+            ledger.id(),
             symbol.toUpperCase(),
             name,
             type,
@@ -64,16 +68,14 @@ public class InstrumentServiceBean implements InstrumentService {
     }
 
     @Override
-    public Instrument update(String id, String symbol, String name, InstrumentType type,
-                             String currency, String market, String isin, InstrumentStatus status) {
-        log.info("Updating instrument {}", id);
+    @Transactional
+    public Instrument update(String userId, String ledgerSlug, String instrumentId, String symbol, String name,
+                             InstrumentType type, String currency, String market, String isin, InstrumentStatus status) {
+        final var ledger = ledgerAccess.requireLedger(userId, ledgerSlug);
+        log.info("Updating instrument {}", instrumentId);
 
-        Optional<Instrument> existing = instrumentRepository.findById(id);
-        if (existing.isEmpty()) {
-            throw new IllegalArgumentException("Instrument not found: " + id);
-        }
-
-        Instrument current = existing.get();
+        Instrument current = instrumentRepository.findById(ledger.id(), instrumentId)
+                .orElseThrow(() -> new InstrumentNotFoundException(instrumentId));
 
         // Check if symbol is being changed and would conflict
         if (!current.symbol().equalsIgnoreCase(symbol)) {
@@ -84,7 +86,7 @@ public class InstrumentServiceBean implements InstrumentService {
         }
 
         Instrument updated = new Instrument(
-            id,
+            instrumentId,
             current.ledgerId(),
             symbol.toUpperCase(),
             name,
@@ -100,8 +102,14 @@ public class InstrumentServiceBean implements InstrumentService {
     }
 
     @Override
-    public void delete(String id) {
-        log.info("Deleting instrument {}", id);
-        instrumentRepository.deleteById(id);
+    @Transactional
+    public void delete(String userId, String ledgerSlug, String instrumentId) {
+        final var ledger = ledgerAccess.requireLedger(userId, ledgerSlug);
+        log.info("Deleting instrument {}", instrumentId);
+
+        instrumentRepository.findById(ledger.id(), instrumentId)
+                .orElseThrow(() -> new InstrumentNotFoundException(instrumentId));
+
+        instrumentRepository.deleteById(ledger.id(), instrumentId);
     }
 }

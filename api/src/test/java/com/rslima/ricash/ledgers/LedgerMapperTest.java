@@ -2,14 +2,12 @@ package com.rslima.ricash.ledgers;
 
 import com.rslima.ricash.ledgers.accounts.Account;
 import com.rslima.ricash.ledgers.accounts.AccountMapper;
+import com.rslima.ricash.ledgers.accounts.AccountMapperImpl;
 import com.rslima.ricash.ledgers.accounts.AccountResource;
 import com.rslima.ricash.ledgers.accounts.AccountStatus;
 import com.rslima.ricash.ledgers.accounts.AccountType;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mapstruct.factory.Mappers;
 
-import java.lang.reflect.Field;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
@@ -18,16 +16,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class LedgerMapperTest {
 
-    private final AccountMapper accountMapper = Mappers.getMapper(AccountMapper.class);
-    private LedgerMapper mapper;
-
-    @BeforeEach
-    void setUp() throws Exception {
-        mapper = Mappers.getMapper(LedgerMapper.class);
-        Field field = mapper.getClass().getDeclaredField("accountMapper");
-        field.setAccessible(true);
-        field.set(mapper, accountMapper);
-    }
+    private final AccountMapper accountMapper = new AccountMapperImpl();
+    private final LedgerMapper mapper = new LedgerMapperImpl(accountMapper);
 
     @Test
     void toResource_mapsAllFields() {
@@ -40,7 +30,6 @@ class LedgerMapperTest {
                 "Test Description",
                 "USD",
                 now,
-                List.of(),
                 List.of()
         );
 
@@ -63,7 +52,6 @@ class LedgerMapperTest {
                 "Test Description",
                 "USD",
                 Instant.now(),
-                List.of(),
                 List.of()
         );
 
@@ -83,7 +71,6 @@ class LedgerMapperTest {
                 "Test Description",
                 "USD",
                 Instant.now(),
-                List.of(),
                 List.of()
         );
 
@@ -115,8 +102,7 @@ class LedgerMapperTest {
                 "Test Description",
                 "USD",
                 Instant.now(),
-                List.of(account),
-                List.of()
+                List.of(account)
         );
 
         var result = mapper.toResource(ledger);
@@ -162,8 +148,7 @@ class LedgerMapperTest {
                 "Test Description",
                 "USD",
                 Instant.now(),
-                List.of(account),
-                List.of()
+                List.of(account)
         );
 
         var result = mapper.toResource(ledger);

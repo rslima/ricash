@@ -42,37 +42,29 @@ public interface TransactionMapper {
         List<TransactionResource.TransactionEntryResource> entries = new ArrayList<>();
 
         for (var entry : transaction.debitEntries()) {
-            entries.add(new TransactionResource.TransactionEntryResource(
-                    entry.accountId(),
-                    entry.accountName(),
-                    entry.amount().amount(),
-                    entry.amount().currency(),
-                    entry.convertedAmount() != null ? entry.convertedAmount().amount() : null,
-                    entry.convertedAmount() != null ? entry.convertedAmount().currency() : null,
-                    entry.type().name(),
-                    entry.instrumentId(),
-                    entry.quantity(),
-                    entry.instrumentSymbol(),
-                    entry.envelopeId()
-            ));
+            entries.add(toEntryResource(entry));
         }
 
         for (var entry : transaction.creditEntries()) {
-            entries.add(new TransactionResource.TransactionEntryResource(
-                    entry.accountId(),
-                    entry.accountName(),
-                    entry.amount().amount(),
-                    entry.amount().currency(),
-                    entry.convertedAmount() != null ? entry.convertedAmount().amount() : null,
-                    entry.convertedAmount() != null ? entry.convertedAmount().currency() : null,
-                    entry.type().name(),
-                    entry.instrumentId(),
-                    entry.quantity(),
-                    entry.instrumentSymbol(),
-                    entry.envelopeId()
-            ));
+            entries.add(toEntryResource(entry));
         }
 
         return entries;
+    }
+
+    private TransactionResource.TransactionEntryResource toEntryResource(TransactionEntry entry) {
+        return new TransactionResource.TransactionEntryResource(
+                entry.accountId(),
+                entry.accountName(),
+                entry.amount().amount(),
+                entry.amount().currency(),
+                entry.convertedAmount() != null ? entry.convertedAmount().amount() : null,
+                entry.convertedAmount() != null ? entry.convertedAmount().currency() : null,
+                entry.type().name(),
+                entry.instrumentId(),
+                entry.quantity(),
+                entry.instrumentSymbol(),
+                entry.envelopeId()
+        );
     }
 }

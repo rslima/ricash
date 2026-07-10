@@ -3,24 +3,14 @@ package com.rslima.ricash.ledgers.instruments;
 import java.util.List;
 
 /**
- * Service for calculating portfolio positions and values.
+ * Service for calculating portfolio positions and values, scoped to the
+ * caller's ledger.
  */
 public interface PortfolioService {
 
-    /**
-     * Calculates all instrument positions for an account.
-     *
-     * @param ledgerId the ledger ID
-     * @param accountId the account ID
-     * @return list of positions
-     */
-    List<InstrumentPosition> getPositions(String ledgerId, String accountId);
+    /** Calculates all instrument positions for an account in the caller's ledger. */
+    List<InstrumentPosition> getPositions(String userId, String ledgerSlug, String accountId);
 
-    /**
-     * Calculates all instrument positions for an entire ledger.
-     *
-     * @param ledgerId the ledger ID
-     * @return list of positions
-     */
-    List<InstrumentPosition> getAllPositions(String ledgerId);
+    /** Calculates all instrument positions for the caller's ledger. */
+    List<InstrumentPosition> getAllPositions(String userId, String ledgerSlug);
 }

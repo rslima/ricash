@@ -107,7 +107,6 @@ class LedgerServiceBeanTest {
         assertThat(capturedLedger.createdAt()).isAfterOrEqualTo(beforeCreate);
         assertThat(capturedLedger.createdAt()).isBeforeOrEqualTo(afterCreate);
         assertThat(capturedLedger.accounts()).isEmpty();
-        assertThat(capturedLedger.transactions()).isEmpty();
 
         assertThat(result).isEqualTo(capturedLedger);
     }
@@ -168,6 +167,6 @@ class LedgerServiceBeanTest {
     }
 
     private Ledger createTestLedger() {
-        return new Ledger(LEDGER_ID, USER_ID, LEDGER_SLUG, "Test Ledger", "Test Description", "USD", Instant.now(), List.of(), List.of());
+        return new Ledger(LEDGER_ID, USER_ID, LEDGER_SLUG, "Test Ledger", "Test Description", "USD", Instant.now(), List.of());
     }
 }

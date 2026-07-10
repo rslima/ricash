@@ -1,7 +1,7 @@
 package com.rslima.ricash.ledgers.envelopes;
 
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -9,7 +9,7 @@ import java.util.Map;
 import java.util.Optional;
 
 public interface EnvelopeService {
-    Page<Envelope> listLedgerEnvelopes(String userId, String ledgerSlug, PageRequest pageRequest);
+    Page<Envelope> listLedgerEnvelopes(String userId, String ledgerSlug, Pageable pageRequest);
 
     Optional<Envelope> find(String userId, String ledgerSlug, String envelopeId);
 

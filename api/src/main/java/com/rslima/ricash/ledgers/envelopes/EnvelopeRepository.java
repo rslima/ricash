@@ -1,13 +1,16 @@
 package com.rslima.ricash.ledgers.envelopes;
 
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 
 import java.util.List;
 import java.util.Optional;
 
 public interface EnvelopeRepository {
-    Page<Envelope> listLedgerEnvelopes(String ledgerId, PageRequest pageRequest);
+    Page<Envelope> listLedgerEnvelopes(String ledgerId, Pageable pageRequest);
+
+    /** All envelopes of the ledger, in the same (type, name) order as the paged listing. */
+    List<Envelope> findAllByLedger(String ledgerId);
 
     Optional<Envelope> findById(String ledgerId, String envelopeId);
 
@@ -16,8 +19,6 @@ public interface EnvelopeRepository {
     Envelope update(String ledgerId, String envelopeId, String name, String description, EnvelopeType type, String currency, EnvelopeStatus status, String parentEnvelopeId);
 
     List<String> findChildEnvelopeIds(String ledgerId, String envelopeId);
-
-    boolean hasAllocations(String envelopeId);
 
     boolean hasTransactionEntries(String envelopeId);
 

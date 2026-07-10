@@ -1,6 +1,7 @@
 package com.rslima.ricash.ledgers;
 
 import com.rslima.ricash.TestRicashApplication;
+import com.rslima.ricash.testsupport.DbFixtures;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -10,7 +11,6 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
 
@@ -25,20 +25,16 @@ class LedgerJdbcRepositoryTest {
     private JdbcClient jdbcClient;
 
     private LedgerJdbcRepository repository;
+    private DbFixtures fixtures;
 
     @BeforeEach
     void setUp() {
         repository = new LedgerJdbcRepository(jdbcClient);
+        fixtures = new DbFixtures(jdbcClient);
 
-        // Clean up and insert test users
-        jdbcClient.sql("DELETE FROM transaction_entries").update();
-        jdbcClient.sql("DELETE FROM transactions").update();
-        jdbcClient.sql("DELETE FROM accounts").update();
-        jdbcClient.sql("DELETE FROM ledgers").update();
-        jdbcClient.sql("DELETE FROM users").update();
-
-        jdbcClient.sql("INSERT INTO users (id) VALUES ('user-1')").update();
-        jdbcClient.sql("INSERT INTO users (id) VALUES ('user-2')").update();
+        fixtures.cleanAll();
+        fixtures.insertUser("user-1");
+        fixtures.insertUser("user-2");
     }
 
     @Test
@@ -51,7 +47,6 @@ class LedgerJdbcRepositoryTest {
                 "My Description",
                 "USD",
                 Instant.now(),
-                List.of(),
                 List.of()
         );
 
@@ -76,7 +71,6 @@ class LedgerJdbcRepositoryTest {
                 null,
                 "EUR",
                 Instant.now(),
-                List.of(),
                 List.of()
         );
 
@@ -86,10 +80,10 @@ class LedgerJdbcRepositoryTest {
     }
 
     @Test
-    void findById_returnsLedger() {
-        insertLedger("ledger-1", "user-1", "Test Ledger", "Description", "USD");
+    void findBySlug_returnsLedger() {
+        fixtures.insertLedger("ledger-1", "user-1", "Test Ledger", "Description", "USD");
 
-        var result = repository.findById("user-1", "ledger-1");
+        var result = repository.findBySlug("user-1", "test-ledger");
 
         assertThat(result).isPresent();
         assertThat(result.get().id()).isEqualTo("ledger-1");
@@ -100,24 +94,24 @@ class LedgerJdbcRepositoryTest {
     }
 
     @Test
-    void findById_withAccounts_returnsLedgerWithAccounts() {
-        insertLedger("ledger-1", "user-1", "Test Ledger", "Description", "USD");
-        insertAccount("account-1", "ledger-1", null, "Checking", "Main checking", "USD", "ASSET", "ACTIVE");
-        insertAccount("account-2", "ledger-1", null, "Savings", "Main savings", "USD", "ASSET", "ACTIVE");
+    void findBySlug_withAccounts_returnsLedgerWithAccounts() {
+        fixtures.insertLedger("ledger-1", "user-1", "Test Ledger", "Description", "USD");
+        fixtures.insertAccount("account-1", "ledger-1", null, "Checking", "Main checking", "USD", "ASSET", "ACTIVE");
+        fixtures.insertAccount("account-2", "ledger-1", null, "Savings", "Main savings", "USD", "ASSET", "ACTIVE");
 
-        var result = repository.findById("user-1", "ledger-1");
+        var result = repository.findBySlug("user-1", "test-ledger");
 
         assertThat(result).isPresent();
         assertThat(result.get().accounts()).hasSize(2);
     }
 
     @Test
-    void findById_withNestedAccounts_returnsAccountTree() {
-        insertLedger("ledger-1", "user-1", "Test Ledger", "Description", "USD");
-        insertAccount("account-1", "ledger-1", null, "Assets", "All assets", "USD", "ASSET", "ACTIVE");
-        insertAccount("account-2", "ledger-1", "account-1", "Checking", "Main checking", "USD", "ASSET", "ACTIVE");
+    void findBySlug_withNestedAccounts_returnsAccountTree() {
+        fixtures.insertLedger("ledger-1", "user-1", "Test Ledger", "Description", "USD");
+        fixtures.insertAccount("account-1", "ledger-1", null, "Assets", "All assets", "USD", "ASSET", "ACTIVE");
+        fixtures.insertAccount("account-2", "ledger-1", "account-1", "Checking", "Main checking", "USD", "ASSET", "ACTIVE");
 
-        var result = repository.findById("user-1", "ledger-1");
+        var result = repository.findBySlug("user-1", "test-ledger");
 
         assertThat(result).isPresent();
         assertThat(result.get().accounts()).hasSize(1);
@@ -127,26 +121,26 @@ class LedgerJdbcRepositoryTest {
     }
 
     @Test
-    void findById_wrongUser_returnsEmpty() {
-        insertLedger("ledger-1", "user-1", "Test Ledger", "Description", "USD");
+    void findBySlug_wrongUser_returnsEmpty() {
+        fixtures.insertLedger("ledger-1", "user-1", "Test Ledger", "Description", "USD");
 
-        var result = repository.findById("user-2", "ledger-1");
+        var result = repository.findBySlug("user-2", "test-ledger");
 
         assertThat(result).isEmpty();
     }
 
     @Test
-    void findById_notFound_returnsEmpty() {
-        var result = repository.findById("user-1", "nonexistent");
+    void findBySlug_notFound_returnsEmpty() {
+        var result = repository.findBySlug("user-1", "nonexistent");
 
         assertThat(result).isEmpty();
     }
 
     @Test
     void listUserLedgers_returnsUserLedgers() {
-        insertLedger("ledger-1", "user-1", "Ledger 1", "Description 1", "USD");
-        insertLedger("ledger-2", "user-1", "Ledger 2", "Description 2", "EUR");
-        insertLedger("ledger-3", "user-2", "Other Ledger", "Other Description", "GBP");
+        fixtures.insertLedger("ledger-1", "user-1", "Ledger 1", "Description 1", "USD");
+        fixtures.insertLedger("ledger-2", "user-1", "Ledger 2", "Description 2", "EUR");
+        fixtures.insertLedger("ledger-3", "user-2", "Other Ledger", "Other Description", "GBP");
 
         var result = repository.listUserLedgers("user-1", PageRequest.of(0, 20));
 
@@ -158,12 +152,35 @@ class LedgerJdbcRepositoryTest {
     @Test
     void listUserLedgers_withPagination_returnsCorrectPage() {
         for (int i = 1; i <= 5; i++) {
-            insertLedger("ledger-" + i, "user-1", "Ledger " + i, "Description " + i, "USD");
+            fixtures.insertLedger("ledger-" + i, "user-1", "Ledger " + i, "Description " + i, "USD");
         }
 
         var result = repository.listUserLedgers("user-1", PageRequest.of(0, 2));
 
         assertThat(result.getContent()).hasSize(2);
+    }
+
+    @Test
+    void listUserLedgers_paginationReportsRealTotalAndStablePages() {
+        for (int i = 1; i <= 5; i++) {
+            fixtures.insertLedger("ledger-" + i, "user-1", "Ledger " + i, "Description " + i, "USD");
+        }
+
+        var page0 = repository.listUserLedgers("user-1", PageRequest.of(0, 2));
+        var page1 = repository.listUserLedgers("user-1", PageRequest.of(1, 2));
+        var page2 = repository.listUserLedgers("user-1", PageRequest.of(2, 2));
+
+        assertThat(page0.getTotalElements()).isEqualTo(5);
+        assertThat(page0.getTotalPages()).isEqualTo(3);
+        assertThat(page2.getContent()).hasSize(1);
+
+        // With a deterministic ORDER BY, the three pages partition the five
+        // ledgers without overlaps or gaps.
+        var seen = new java.util.ArrayList<String>();
+        page0.forEach(l -> seen.add(l.id()));
+        page1.forEach(l -> seen.add(l.id()));
+        page2.forEach(l -> seen.add(l.id()));
+        assertThat(seen).containsExactlyInAnyOrder("ledger-1", "ledger-2", "ledger-3", "ledger-4", "ledger-5");
     }
 
     @Test
@@ -175,8 +192,8 @@ class LedgerJdbcRepositoryTest {
 
     @Test
     void listUserLedgers_withAccounts_returnsLedgersWithAccounts() {
-        insertLedger("ledger-1", "user-1", "Ledger 1", "Description 1", "USD");
-        insertAccount("account-1", "ledger-1", null, "Checking", "Main checking", "USD", "ASSET", "ACTIVE");
+        fixtures.insertLedger("ledger-1", "user-1", "Ledger 1", "Description 1", "USD");
+        fixtures.insertAccount("account-1", "ledger-1", null, "Checking", "Main checking", "USD", "ASSET", "ACTIVE");
 
         var result = repository.listUserLedgers("user-1", PageRequest.of(0, 20));
 
@@ -184,38 +201,4 @@ class LedgerJdbcRepositoryTest {
         assertThat(result.getContent().getFirst().accounts()).hasSize(1);
     }
 
-    private void insertLedger(String id, String userId, String name, String description, String currency) {
-        var slug = name.toLowerCase().replaceAll("\\s+", "-");
-        jdbcClient.sql("""
-                        INSERT INTO ledgers (id, user_id, slug, name, description, currency, created_at)
-                        VALUES (:id, :userId, :slug, :name, :description, :currency, :createdAt)
-                        """)
-                .param("id", id)
-                .param("userId", userId)
-                .param("slug", slug)
-                .param("name", name)
-                .param("description", description)
-                .param("currency", currency)
-                .param("createdAt", Timestamp.from(Instant.now()))
-                .update();
-    }
-
-    private void insertAccount(String id, String ledgerId, String parentAccountId, String name, String description, String currency, String type, String status) {
-        var slug = name.toLowerCase().replaceAll("\\s+", "-");
-        jdbcClient.sql("""
-                        INSERT INTO accounts (id, ledger_id, parent_account_id, slug, name, description, currency, type, status, created_at)
-                        VALUES (:id, :ledgerId, :parentAccountId, :slug, :name, :description, :currency, :type, :status, :createdAt)
-                        """)
-                .param("id", id)
-                .param("ledgerId", ledgerId)
-                .param("parentAccountId", parentAccountId)
-                .param("slug", slug)
-                .param("name", name)
-                .param("description", description)
-                .param("currency", currency)
-                .param("type", type)
-                .param("status", status)
-                .param("createdAt", Timestamp.from(Instant.now()))
-                .update();
-    }
 }

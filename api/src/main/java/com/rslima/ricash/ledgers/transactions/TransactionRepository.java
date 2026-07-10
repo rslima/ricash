@@ -1,21 +1,21 @@
 package com.rslima.ricash.ledgers.transactions;
 
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 
 import java.util.List;
 import java.util.Optional;
 
 public interface TransactionRepository {
-    Page<Transaction> listLedgerTransactions(String ledgerId, PageRequest pageRequest);
+    Page<Transaction> listLedgerTransactions(String ledgerId, Pageable pageRequest);
 
-    Page<Transaction> searchByDescription(String ledgerId, String description, PageRequest pageRequest);
+    Page<Transaction> searchByDescription(String ledgerId, String description, Pageable pageRequest);
 
-    Page<Transaction> listAccountTransactions(String ledgerId, String accountId, PageRequest pageRequest);
+    Page<Transaction> listAccountTransactions(String ledgerId, String accountId, Pageable pageRequest);
 
-    Page<Transaction> listCategoryTransactions(String ledgerId, String accountId, int year, int month, PageRequest pageRequest);
+    Page<Transaction> listCategoryTransactions(String ledgerId, String accountId, int year, int month, Pageable pageRequest);
 
-    Page<CategoryTransaction> listCategoryTransactionAmounts(String ledgerId, String accountId, int year, int month, PageRequest pageRequest);
+    Page<CategoryTransaction> listCategoryTransactionAmounts(String ledgerId, String accountId, int year, int month, Pageable pageRequest);
 
     Optional<Transaction> findById(String ledgerId, String transactionId);
 

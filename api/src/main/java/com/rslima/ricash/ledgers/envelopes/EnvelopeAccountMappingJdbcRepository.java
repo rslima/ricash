@@ -8,7 +8,6 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 @RequiredArgsConstructor
 @Slf4j
@@ -31,19 +30,6 @@ public class EnvelopeAccountMappingJdbcRepository implements EnvelopeAccountMapp
                 .stream()
                 .map(db -> new EnvelopeAccountMapping(db.id(), db.envelopeId(), db.accountId()))
                 .toList();
-    }
-
-    @Override
-    public Optional<EnvelopeAccountMapping> findByAccountId(String accountId) {
-        return jdbcClient.sql("""
-                        SELECT id, envelope_id, account_id
-                        FROM envelope_account_mappings
-                        WHERE account_id = :accountId
-                        """)
-                .param("accountId", accountId)
-                .query(DBMapping.class)
-                .optional()
-                .map(db -> new EnvelopeAccountMapping(db.id(), db.envelopeId(), db.accountId()));
     }
 
     @Override

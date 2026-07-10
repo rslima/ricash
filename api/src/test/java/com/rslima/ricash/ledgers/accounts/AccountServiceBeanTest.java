@@ -1,6 +1,7 @@
 package com.rslima.ricash.ledgers.accounts;
 
 import com.rslima.ricash.ledgers.Ledger;
+import com.rslima.ricash.ledgers.LedgerAccess;
 import com.rslima.ricash.ledgers.LedgerRepository;
 import com.rslima.ricash.ledgers.SlugService;
 
@@ -46,7 +47,7 @@ class AccountServiceBeanTest {
 
     @BeforeEach
     void setUp() {
-        accountService = new AccountServiceBean(accountRepository, ledgerRepository, slugService);
+        accountService = new AccountServiceBean(accountRepository, new LedgerAccess(ledgerRepository), slugService);
     }
 
     @Test
@@ -196,7 +197,7 @@ class AccountServiceBeanTest {
     }
 
     private Ledger createTestLedger() {
-        return new Ledger(LEDGER_ID, USER_ID, LEDGER_SLUG, "Test Ledger", "Description", "USD", Instant.now(), List.of(), List.of());
+        return new Ledger(LEDGER_ID, USER_ID, LEDGER_SLUG, "Test Ledger", "Description", "USD", Instant.now(), List.of());
     }
 
     private Account createTestAccount() {

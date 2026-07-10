@@ -1,10 +1,12 @@
 package com.rslima.ricash.ledgers.transactions;
 
 import com.rslima.ricash.ledgers.Ledger;
+import com.rslima.ricash.ledgers.LedgerAccess;
 import com.rslima.ricash.ledgers.LedgerNotFoundException;
 import com.rslima.ricash.ledgers.LedgerRepository;
 import com.rslima.ricash.ledgers.MonetaryAmount;
 import com.rslima.ricash.ledgers.accounts.Account;
+import com.rslima.ricash.ledgers.accounts.AccountRef;
 import com.rslima.ricash.ledgers.accounts.AccountStatus;
 import com.rslima.ricash.ledgers.accounts.AccountType;
 import com.rslima.ricash.ledgers.accounts.AccountRepository;
@@ -28,6 +30,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -56,7 +59,7 @@ class TransactionServiceBeanTest {
 
     @BeforeEach
     void setUp() {
-        transactionService = new TransactionServiceBean(transactionRepository, ledgerRepository, accountRepository, exchangeRateService);
+        transactionService = new TransactionServiceBean(transactionRepository, new LedgerAccess(ledgerRepository), accountRepository, exchangeRateService);
     }
 
     @Test
@@ -137,18 +140,36 @@ class TransactionServiceBeanTest {
     void create_singleCurrencyBalancedTransaction() {
         var account = createTestAccount("acc-1", "Checking", "USD");
         var request = new CreateTransactionRequest(DATE, "Groceries", List.of(
-                new CreateTransactionRequest.EntryRequest("acc-1", BigDecimal.TEN, "USD", null, null, TransactionEntryType.DEBIT, null, null, null),
-                new CreateTransactionRequest.EntryRequest("acc-1", BigDecimal.TEN, "USD", null, null, TransactionEntryType.CREDIT, null, null, null)
+                new TransactionEntryRequest("acc-1", BigDecimal.TEN, "USD", null, null, TransactionEntryType.DEBIT, null, null, null),
+                new TransactionEntryRequest("acc-1", BigDecimal.TEN, "USD", null, null, TransactionEntryType.CREDIT, null, null, null)
         ));
 
         when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
-        when(accountRepository.findById(eq(LEDGER_ID), eq("acc-1"))).thenReturn(Optional.of(account));
+        when(accountRepository.findRefsByIds(eq(LEDGER_ID), any())).thenReturn(List.of(ref(account)));
         when(transactionRepository.findById(eq(LEDGER_ID), any())).thenReturn(Optional.of(createTestTransaction()));
 
         var result = transactionService.create(USER_ID, LEDGER_SLUG, request);
 
         assertThat(result).isNotNull();
         verify(transactionRepository).create(eq(LEDGER_ID), any(Transaction.class));
+        // Entries must not trigger one balance-computing findById per entry.
+        verify(accountRepository).findRefsByIds(eq(LEDGER_ID), any());
+        verify(accountRepository, never()).findById(any(), any());
+    }
+
+    @Test
+    void create_unknownAccount_throws() {
+        var request = new CreateTransactionRequest(DATE, "Groceries", List.of(
+                new TransactionEntryRequest("ghost", BigDecimal.TEN, "USD", null, null, TransactionEntryType.DEBIT, null, null, null),
+                new TransactionEntryRequest("ghost", BigDecimal.TEN, "USD", null, null, TransactionEntryType.CREDIT, null, null, null)
+        ));
+
+        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
+        when(accountRepository.findRefsByIds(eq(LEDGER_ID), any())).thenReturn(List.of());
+
+        assertThatThrownBy(() -> transactionService.create(USER_ID, LEDGER_SLUG, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Account not found");
     }
 
     @Test
@@ -157,13 +178,12 @@ class TransactionServiceBeanTest {
         var brlAccount = createTestAccount("acc-brl", "BRL Account", "BRL");
 
         var request = new CreateTransactionRequest(DATE, "Transfer", List.of(
-                new CreateTransactionRequest.EntryRequest("acc-usd", new BigDecimal("1000"), "BRL", new BigDecimal("180"), "USD", TransactionEntryType.DEBIT, null, null, null),
-                new CreateTransactionRequest.EntryRequest("acc-brl", new BigDecimal("1000"), "BRL", null, null, TransactionEntryType.CREDIT, null, null, null)
+                new TransactionEntryRequest("acc-usd", new BigDecimal("1000"), "BRL", new BigDecimal("180"), "USD", TransactionEntryType.DEBIT, null, null, null),
+                new TransactionEntryRequest("acc-brl", new BigDecimal("1000"), "BRL", null, null, TransactionEntryType.CREDIT, null, null, null)
         ));
 
         when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
-        when(accountRepository.findById(LEDGER_ID, "acc-usd")).thenReturn(Optional.of(usdAccount));
-        when(accountRepository.findById(LEDGER_ID, "acc-brl")).thenReturn(Optional.of(brlAccount));
+        when(accountRepository.findRefsByIds(eq(LEDGER_ID), any())).thenReturn(List.of(ref(usdAccount), ref(brlAccount)));
         when(transactionRepository.findById(eq(LEDGER_ID), any())).thenReturn(Optional.of(createTestTransaction()));
 
         var result = transactionService.create(USER_ID, LEDGER_SLUG, request);
@@ -178,13 +198,12 @@ class TransactionServiceBeanTest {
         var brlAccount = createTestAccount("acc-brl", "BRL Account", "BRL");
 
         var request = new CreateTransactionRequest(DATE, "Transfer", List.of(
-                new CreateTransactionRequest.EntryRequest("acc-usd", new BigDecimal("1000"), "BRL", null, null, TransactionEntryType.DEBIT, null, null, null),
-                new CreateTransactionRequest.EntryRequest("acc-brl", new BigDecimal("1000"), "BRL", null, null, TransactionEntryType.CREDIT, null, null, null)
+                new TransactionEntryRequest("acc-usd", new BigDecimal("1000"), "BRL", null, null, TransactionEntryType.DEBIT, null, null, null),
+                new TransactionEntryRequest("acc-brl", new BigDecimal("1000"), "BRL", null, null, TransactionEntryType.CREDIT, null, null, null)
         ));
 
         when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
-        when(accountRepository.findById(LEDGER_ID, "acc-usd")).thenReturn(Optional.of(usdAccount));
-        when(accountRepository.findById(LEDGER_ID, "acc-brl")).thenReturn(Optional.of(brlAccount));
+        when(accountRepository.findRefsByIds(eq(LEDGER_ID), any())).thenReturn(List.of(ref(usdAccount), ref(brlAccount)));
         when(exchangeRateService.convert(any(MonetaryAmount.class), eq("USD"), eq(DATE)))
                 .thenReturn(Optional.of(new MonetaryAmount(new BigDecimal("180.00"), "USD")));
         when(transactionRepository.findById(eq(LEDGER_ID), any())).thenReturn(Optional.of(createTestTransaction()));
@@ -201,12 +220,12 @@ class TransactionServiceBeanTest {
         var brlAccount = createTestAccount("acc-brl", "BRL Account", "BRL");
 
         var request = new CreateTransactionRequest(DATE, "Transfer", List.of(
-                new CreateTransactionRequest.EntryRequest("acc-usd", new BigDecimal("1000"), "BRL", null, null, TransactionEntryType.DEBIT, null, null, null),
-                new CreateTransactionRequest.EntryRequest("acc-brl", new BigDecimal("1000"), "BRL", null, null, TransactionEntryType.CREDIT, null, null, null)
+                new TransactionEntryRequest("acc-usd", new BigDecimal("1000"), "BRL", null, null, TransactionEntryType.DEBIT, null, null, null),
+                new TransactionEntryRequest("acc-brl", new BigDecimal("1000"), "BRL", null, null, TransactionEntryType.CREDIT, null, null, null)
         ));
 
         when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
-        when(accountRepository.findById(LEDGER_ID, "acc-usd")).thenReturn(Optional.of(usdAccount));
+        when(accountRepository.findRefsByIds(eq(LEDGER_ID), any())).thenReturn(List.of(ref(usdAccount), ref(brlAccount)));
         when(exchangeRateService.convert(any(MonetaryAmount.class), eq("USD"), eq(DATE)))
                 .thenReturn(Optional.empty());
 
@@ -220,12 +239,12 @@ class TransactionServiceBeanTest {
         var usdAccount = createTestAccount("acc-usd", "USD Account", "USD");
 
         var request = new CreateTransactionRequest(DATE, "Transfer", List.of(
-                new CreateTransactionRequest.EntryRequest("acc-usd", new BigDecimal("1000"), "BRL", new BigDecimal("180"), "EUR", TransactionEntryType.DEBIT, null, null, null),
-                new CreateTransactionRequest.EntryRequest("acc-usd", new BigDecimal("1000"), "BRL", null, null, TransactionEntryType.CREDIT, null, null, null)
+                new TransactionEntryRequest("acc-usd", new BigDecimal("1000"), "BRL", new BigDecimal("180"), "EUR", TransactionEntryType.DEBIT, null, null, null),
+                new TransactionEntryRequest("acc-usd", new BigDecimal("1000"), "BRL", null, null, TransactionEntryType.CREDIT, null, null, null)
         ));
 
         when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
-        when(accountRepository.findById(LEDGER_ID, "acc-usd")).thenReturn(Optional.of(usdAccount));
+        when(accountRepository.findRefsByIds(eq(LEDGER_ID), any())).thenReturn(List.of(ref(usdAccount)));
 
         assertThatThrownBy(() -> transactionService.create(USER_ID, LEDGER_SLUG, request))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -237,12 +256,12 @@ class TransactionServiceBeanTest {
         var account = createTestAccount("acc-1", "Checking", "USD");
 
         var request = new CreateTransactionRequest(DATE, "Bad", List.of(
-                new CreateTransactionRequest.EntryRequest("acc-1", BigDecimal.TEN, "USD", null, null, TransactionEntryType.DEBIT, null, null, null),
-                new CreateTransactionRequest.EntryRequest("acc-1", BigDecimal.ONE, "USD", null, null, TransactionEntryType.CREDIT, null, null, null)
+                new TransactionEntryRequest("acc-1", BigDecimal.TEN, "USD", null, null, TransactionEntryType.DEBIT, null, null, null),
+                new TransactionEntryRequest("acc-1", BigDecimal.ONE, "USD", null, null, TransactionEntryType.CREDIT, null, null, null)
         ));
 
         when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
-        when(accountRepository.findById(eq(LEDGER_ID), eq("acc-1"))).thenReturn(Optional.of(account));
+        when(accountRepository.findRefsByIds(eq(LEDGER_ID), any())).thenReturn(List.of(ref(account)));
 
         assertThatThrownBy(() -> transactionService.create(USER_ID, LEDGER_SLUG, request))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -254,13 +273,13 @@ class TransactionServiceBeanTest {
         var account = createTestAccount("acc-1", "Checking", "USD");
         var existing = createTestTransaction();
         var request = new UpdateTransactionRequest(DATE, "Updated", List.of(
-                new UpdateTransactionRequest.EntryRequest("acc-1", BigDecimal.TEN, "USD", null, null, TransactionEntryType.DEBIT, null, null, null),
-                new UpdateTransactionRequest.EntryRequest("acc-1", BigDecimal.TEN, "USD", null, null, TransactionEntryType.CREDIT, null, null, null)
+                new TransactionEntryRequest("acc-1", BigDecimal.TEN, "USD", null, null, TransactionEntryType.DEBIT, null, null, null),
+                new TransactionEntryRequest("acc-1", BigDecimal.TEN, "USD", null, null, TransactionEntryType.CREDIT, null, null, null)
         ));
 
         when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
         when(transactionRepository.findById(LEDGER_ID, TRANSACTION_ID)).thenReturn(Optional.of(existing));
-        when(accountRepository.findById(eq(LEDGER_ID), eq("acc-1"))).thenReturn(Optional.of(account));
+        when(accountRepository.findRefsByIds(eq(LEDGER_ID), any())).thenReturn(List.of(ref(account)));
 
         var result = transactionService.update(USER_ID, LEDGER_SLUG, TRANSACTION_ID, request);
 
@@ -271,7 +290,7 @@ class TransactionServiceBeanTest {
     @Test
     void update_notFound_throws() {
         var request = new UpdateTransactionRequest(DATE, "Updated", List.of(
-                new UpdateTransactionRequest.EntryRequest("acc-1", BigDecimal.TEN, "USD", null, null, TransactionEntryType.DEBIT, null, null, null)
+                new TransactionEntryRequest("acc-1", BigDecimal.TEN, "USD", null, null, TransactionEntryType.DEBIT, null, null, null)
         ));
 
         when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
@@ -291,7 +310,7 @@ class TransactionServiceBeanTest {
     }
 
     private Ledger createTestLedger() {
-        return new Ledger(LEDGER_ID, USER_ID, LEDGER_SLUG, "Test Ledger", "Description", "USD", Instant.now(), List.of(), List.of());
+        return new Ledger(LEDGER_ID, USER_ID, LEDGER_SLUG, "Test Ledger", "Description", "USD", Instant.now(), List.of());
     }
 
     private Transaction createTestTransaction() {
@@ -302,5 +321,9 @@ class TransactionServiceBeanTest {
 
     private Account createTestAccount(String id, String name, String currency) {
         return new Account(id, name.toLowerCase().replace(" ", "-"), name, null, currency, AccountType.ASSET, AccountStatus.ACTIVE, BigDecimal.ZERO, Instant.now(), null, List.of());
+    }
+
+    private AccountRef ref(Account account) {
+        return new AccountRef(account.id(), account.name(), account.currency());
     }
 }

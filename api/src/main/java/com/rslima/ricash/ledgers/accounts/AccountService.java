@@ -1,12 +1,12 @@
 package com.rslima.ricash.ledgers.accounts;
 
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 
 import java.util.Optional;
 
 public interface AccountService {
-    Page<Account> listLedgerAccounts(String userId, String ledgerSlug, PageRequest pageRequest);
+    Page<Account> listLedgerAccounts(String userId, String ledgerSlug, Pageable pageRequest);
 
     Optional<Account> find(String userId, String ledgerSlug, String accountId);
 

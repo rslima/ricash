@@ -4,7 +4,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
 import java.sql.Timestamp;
@@ -23,7 +23,7 @@ public class EnvelopeJdbcRepository implements EnvelopeRepository {
     }
 
     @Override
-    public Page<Envelope> listLedgerEnvelopes(String ledgerId, PageRequest pageRequest) {
+    public Page<Envelope> listLedgerEnvelopes(String ledgerId, Pageable pageRequest) {
         final var dbEnvelopes = jdbcClient.sql("""
                         SELECT
                             e.id,
@@ -61,6 +61,33 @@ public class EnvelopeJdbcRepository implements EnvelopeRepository {
                 .toList();
 
         return new PageImpl<>(envelopes, pageRequest, total);
+    }
+
+    @Override
+    public List<Envelope> findAllByLedger(String ledgerId) {
+        return jdbcClient.sql("""
+                        SELECT
+                            e.id,
+                            e.ledger_id,
+                            e.parent_envelope_id,
+                            e.name,
+                            e.description,
+                            e.currency,
+                            e.type,
+                            e.status,
+                            e.created_at
+                        FROM
+                            envelopes e
+                        WHERE
+                            e.ledger_id = :ledgerId
+                        ORDER BY e.type, e.name
+                        """)
+                .param("ledgerId", ledgerId)
+                .query(DBEnvelope.class)
+                .list()
+                .stream()
+                .map(this::toEnvelope)
+                .toList();
     }
 
     @Override
@@ -137,16 +164,6 @@ public class EnvelopeJdbcRepository implements EnvelopeRepository {
                 .param("envelopeId", envelopeId)
                 .query(String.class)
                 .list();
-    }
-
-    @Override
-    public boolean hasAllocations(String envelopeId) {
-        return jdbcClient.sql("""
-                        SELECT COUNT(*) FROM envelope_allocations WHERE envelope_id = :envelopeId
-                        """)
-                .param("envelopeId", envelopeId)
-                .query(Long.class)
-                .single() > 0;
     }
 
     @Override

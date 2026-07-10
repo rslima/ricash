@@ -1,21 +1,21 @@
 package com.rslima.ricash.ledgers.transactions;
 
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 
 import java.util.List;
 import java.util.Optional;
 
 public interface TransactionService {
-    Page<Transaction> listLedgerTransactions(String userId, String ledgerSlug, PageRequest pageRequest);
+    Page<Transaction> listLedgerTransactions(String userId, String ledgerSlug, Pageable pageRequest);
 
-    Page<Transaction> searchByDescription(String userId, String ledgerSlug, String description, PageRequest pageRequest);
+    Page<Transaction> searchByDescription(String userId, String ledgerSlug, String description, Pageable pageRequest);
 
-    Page<Transaction> listAccountTransactions(String userId, String ledgerSlug, String accountId, PageRequest pageRequest);
+    Page<Transaction> listAccountTransactions(String userId, String ledgerSlug, String accountId, Pageable pageRequest);
 
-    Page<Transaction> listCategoryTransactions(String userId, String ledgerSlug, String accountId, int year, int month, PageRequest pageRequest);
+    Page<Transaction> listCategoryTransactions(String userId, String ledgerSlug, String accountId, int year, int month, Pageable pageRequest);
 
-    Page<CategoryTransaction> listCategoryTransactionAmounts(String userId, String ledgerSlug, String accountId, int year, int month, PageRequest pageRequest);
+    Page<CategoryTransaction> listCategoryTransactionAmounts(String userId, String ledgerSlug, String accountId, int year, int month, Pageable pageRequest);
 
     Optional<Transaction> find(String userId, String ledgerSlug, String transactionId);
 

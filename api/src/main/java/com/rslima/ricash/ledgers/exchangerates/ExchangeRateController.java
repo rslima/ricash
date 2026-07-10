@@ -1,29 +1,17 @@
 package com.rslima.ricash.ledgers.exchangerates;
 
-import com.github.f4b6a3.uuid.UuidCreator;
-import com.toedter.spring.hateoas.jsonapi.JsonApiError;
-import com.toedter.spring.hateoas.jsonapi.JsonApiErrors;
+import com.rslima.ricash.web.PagedModels;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.hateoas.EntityModel;
 import org.springframework.hateoas.PagedModel;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.web.bind.annotation.*;
 
-import java.math.BigDecimal;
-import java.time.Instant;
-import java.time.LocalDate;
-
 import static com.toedter.spring.hateoas.jsonapi.MediaTypes.JSON_API_VALUE;
-import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.linkTo;
 import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.methodOn;
 
 @RestController
@@ -32,22 +20,8 @@ import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.methodOn;
 @Slf4j
 public class ExchangeRateController {
 
-    private final ExchangeRateRepository exchangeRateRepository;
     private final ExchangeRateMapper exchangeRateMapper;
     private final ExchangeRateService exchangeRateService;
-
-    public record CreateExchangeRateRequest(
-            @NotBlank String fromCurrency,
-            @NotBlank String toCurrency,
-            @NotNull @Positive BigDecimal rate,
-            @NotNull LocalDate effectiveDate
-    ) {}
-
-    public record FetchExchangeRateRequest(
-            @NotBlank String fromCurrency,
-            @NotBlank String toCurrency,
-            @NotNull LocalDate date
-    ) {}
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
@@ -55,20 +29,8 @@ public class ExchangeRateController {
             JwtAuthenticationToken principal,
             @Valid @RequestBody CreateExchangeRateRequest request) {
 
-        log.info("Creating exchange rate: {} -> {} = {} on {}",
+        var saved = exchangeRateService.saveManualRate(
                 request.fromCurrency(), request.toCurrency(), request.rate(), request.effectiveDate());
-
-        var exchangeRate = new ExchangeRate(
-                UuidCreator.getTimeOrderedEpoch().toString(),
-                request.fromCurrency().toUpperCase(),
-                request.toCurrency().toUpperCase(),
-                request.rate(),
-                request.effectiveDate(),
-                "MANUAL",
-                Instant.now()
-        );
-
-        var saved = exchangeRateRepository.save(exchangeRate);
         return toEntityModel(exchangeRateMapper.toResource(saved));
     }
 
@@ -94,8 +56,7 @@ public class ExchangeRateController {
     public void deleteExchangeRate(
             JwtAuthenticationToken principal,
             @PathVariable String id) {
-        log.info("Deleting exchange rate: {}", id);
-        exchangeRateRepository.deleteById(id);
+        exchangeRateService.deleteRate(id);
     }
 
     @GetMapping
@@ -105,73 +66,15 @@ public class ExchangeRateController {
             @RequestParam(name = "page[size]", required = false, defaultValue = "20") int size) {
 
         final var pageable = PageRequest.of(page, size);
-        var exchangeRates = exchangeRateRepository.findAll(pageable)
+        var exchangeRates = exchangeRateService.listRates(pageable)
                 .map(exchangeRateMapper::toResource)
                 .map(this::toEntityModel);
 
-        return buildPagedResponse(page, size, exchangeRates, principal);
+        return PagedModels.toPagedModel(exchangeRates,
+                p -> methodOn(ExchangeRateController.class).listExchangeRates(principal, p, size));
     }
 
     private EntityModel<ExchangeRateResource> toEntityModel(ExchangeRateResource resource) {
         return EntityModel.of(resource);
-    }
-
-    private PagedModel<EntityModel<ExchangeRateResource>> buildPagedResponse(
-            int page,
-            int size,
-            Page<EntityModel<ExchangeRateResource>> exchangeRates,
-            JwtAuthenticationToken principal) {
-
-        var pagedModel = PagedModel.of(
-                exchangeRates.getContent(),
-                new PagedModel.PageMetadata(
-                        exchangeRates.getSize(),
-                        exchangeRates.getNumber(),
-                        exchangeRates.getTotalElements(),
-                        exchangeRates.getTotalPages()));
-
-        pagedModel.add(linkTo(methodOn(ExchangeRateController.class).listExchangeRates(principal, page, size)).withSelfRel());
-        pagedModel.add(linkTo(methodOn(ExchangeRateController.class).listExchangeRates(principal, 0, size)).withRel("first"));
-
-        if (exchangeRates.getTotalPages() > 0) {
-            pagedModel.add(linkTo(methodOn(ExchangeRateController.class).listExchangeRates(
-                    principal,
-                    exchangeRates.getTotalPages() - 1,
-                    size)).withRel("last"));
-        }
-        if (exchangeRates.hasNext()) {
-            pagedModel.add(linkTo(methodOn(ExchangeRateController.class).listExchangeRates(
-                    principal,
-                    exchangeRates.getNumber() + 1,
-                    size)).withRel("next"));
-        }
-        if (exchangeRates.hasPrevious()) {
-            pagedModel.add(linkTo(methodOn(ExchangeRateController.class).listExchangeRates(
-                    principal,
-                    exchangeRates.getNumber() - 1,
-                    size)).withRel("prev"));
-        }
-
-        return pagedModel;
-    }
-
-    @ExceptionHandler(ExchangeRateNotAvailableException.class)
-    public ResponseEntity<JsonApiErrors> handleRateNotAvailable(ExchangeRateNotAvailableException ex) {
-        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(
-                JsonApiErrors.create().withError(
-                        JsonApiError.create()
-                                .withStatus(Integer.toString(HttpStatus.NOT_FOUND.value()))
-                                .withTitle(HttpStatus.NOT_FOUND.getReasonPhrase())
-                                .withDetail(ex.getMessage())));
-    }
-
-    @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<JsonApiErrors> handleIllegalArgument(IllegalArgumentException ex) {
-        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(
-                JsonApiErrors.create().withError(
-                        JsonApiError.create()
-                                .withStatus(Integer.toString(HttpStatus.UNPROCESSABLE_ENTITY.value()))
-                                .withTitle(HttpStatus.UNPROCESSABLE_ENTITY.getReasonPhrase())
-                                .withDetail(ex.getMessage())));
     }
 }

@@ -6,72 +6,27 @@ import org.springframework.data.domain.Pageable;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
-import java.util.Optional;
 
 /**
- * Service for managing instrument prices.
+ * Service for managing instrument prices. Caller-facing operations take
+ * userId + ledgerSlug and enforce that the target instrument/price belongs to
+ * the caller's ledger.
  */
 public interface InstrumentPriceService {
 
-    /**
-     * Gets the price for an instrument on a specific date.
-     * If no exact match, returns the most recent price before that date.
-     *
-     * @param instrumentId the instrument ID
-     * @param date the effective date
-     * @return the price if found
-     */
-    Optional<BigDecimal> getPrice(String instrumentId, LocalDate date);
+    /** Lists price history for an instrument in the caller's ledger. */
+    Page<InstrumentPrice> listByInstrument(String userId, String ledgerSlug, String instrumentId, Pageable pageable);
 
-    /**
-     * Gets the latest price for an instrument.
-     *
-     * @param instrumentId the instrument ID
-     * @return the latest price if found
-     */
-    Optional<BigDecimal> getLatestPrice(String instrumentId);
+    /** Lists all prices for the caller's ledger. */
+    Page<InstrumentPrice> listByLedger(String userId, String ledgerSlug, Pageable pageable);
 
-    /**
-     * Lists price history for an instrument with pagination.
-     *
-     * @param instrumentId the instrument ID
-     * @param pageable pagination information
-     * @return page of prices
-     */
-    Page<InstrumentPrice> listByInstrument(String instrumentId, Pageable pageable);
-
-    /**
-     * Lists all prices for a ledger's instruments with pagination.
-     *
-     * @param ledgerId the ledger ID
-     * @param pageable pagination information
-     * @return page of prices
-     */
-    Page<InstrumentPrice> listByLedger(String ledgerId, Pageable pageable);
-
-    /**
-     * Gets the latest prices for all instruments in a ledger.
-     *
-     * @param ledgerId the ledger ID
-     * @return list of latest prices
-     */
+    /** Gets the latest prices for all instruments in a ledger. */
     List<InstrumentPrice> getLatestPricesByLedger(String ledgerId);
 
-    /**
-     * Saves a price for an instrument.
-     *
-     * @param instrumentId the instrument ID
-     * @param price the price value
-     * @param effectiveDate the effective date
-     * @param source the source of the price
-     * @return the saved price
-     */
-    InstrumentPrice savePrice(String instrumentId, BigDecimal price, LocalDate effectiveDate, String source);
+    /** Saves a price for an instrument in the caller's ledger. */
+    InstrumentPrice savePrice(String userId, String ledgerSlug, String instrumentId,
+                              BigDecimal price, LocalDate effectiveDate, String source);
 
-    /**
-     * Deletes a price.
-     *
-     * @param id the price ID
-     */
-    void delete(String id);
+    /** Deletes a price belonging to the caller's ledger. */
+    void delete(String userId, String ledgerSlug, String priceId);
 }

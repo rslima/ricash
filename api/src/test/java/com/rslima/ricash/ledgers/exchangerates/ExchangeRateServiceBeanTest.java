@@ -216,38 +216,4 @@ class ExchangeRateServiceBeanTest {
                 .hasMessageContaining("same currency");
         verifyNoInteractions(externalExchangeRateService);
     }
-
-    // --- getLatestRate tests ---
-
-    @Test
-    void getLatestRate_directRate_returnsRate() {
-        var rate = new ExchangeRate("id", "USD", "BRL", new BigDecimal("5.50"), DATE, "MANUAL", Instant.now());
-        when(exchangeRateRepository.findLatestRate("USD", "BRL")).thenReturn(Optional.of(rate));
-
-        var result = exchangeRateService.getLatestRate("USD", "BRL");
-
-        assertThat(result).contains(new BigDecimal("5.50"));
-    }
-
-    @Test
-    void getLatestRate_inverseRate_returnsCalculatedInverse() {
-        var rate = new ExchangeRate("id", "BRL", "USD", new BigDecimal("5.00"), DATE, "MANUAL", Instant.now());
-        when(exchangeRateRepository.findLatestRate("USD", "BRL")).thenReturn(Optional.empty());
-        when(exchangeRateRepository.findLatestRate("BRL", "USD")).thenReturn(Optional.of(rate));
-
-        var result = exchangeRateService.getLatestRate("USD", "BRL");
-
-        assertThat(result).isPresent();
-        assertThat(result.get()).isEqualByComparingTo(new BigDecimal("0.200000"));
-    }
-
-    @Test
-    void getLatestRate_notFound_returnsEmpty() {
-        when(exchangeRateRepository.findLatestRate("USD", "BRL")).thenReturn(Optional.empty());
-        when(exchangeRateRepository.findLatestRate("BRL", "USD")).thenReturn(Optional.empty());
-
-        var result = exchangeRateService.getLatestRate("USD", "BRL");
-
-        assertThat(result).isEmpty();
-    }
 }

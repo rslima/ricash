@@ -1,8 +1,10 @@
 package com.rslima.ricash.ledgers.instruments;
 
+import com.rslima.ricash.ledgers.LedgerAccess;
+import com.rslima.ricash.ledgers.instruments.PortfolioRepository.PositionData;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.jdbc.core.simple.JdbcClient;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -15,76 +17,28 @@ import java.util.Map;
 @Slf4j
 public class PortfolioServiceBean implements PortfolioService {
 
-    private final JdbcClient jdbcClient;
+    private final PortfolioRepository portfolioRepository;
     private final InstrumentRepository instrumentRepository;
     private final InstrumentPriceRepository instrumentPriceRepository;
+    private final LedgerAccess ledgerAccess;
 
     private static final int AMOUNT_SCALE = 2;
     private static final int QUANTITY_SCALE = 8;
 
     @Override
-    public List<InstrumentPosition> getPositions(String ledgerId, String accountId) {
+    public List<InstrumentPosition> getPositions(String userId, String ledgerSlug, String accountId) {
+        final var ledgerId = ledgerAccess.requireLedger(userId, ledgerSlug).id();
         log.debug("Calculating positions for account {} in ledger {}", accountId, ledgerId);
 
-        // Query to get aggregated position data per instrument for a specific account
-        // DEBIT entries increase quantity (buys), CREDIT entries decrease quantity (sells)
-        List<PositionData> positionData = jdbcClient.sql("""
-                SELECT
-                    te.instrument_id,
-                    SUM(CASE WHEN te.type = 'DEBIT' THEN te.quantity ELSE 0 END) AS debit_quantity,
-                    SUM(CASE WHEN te.type = 'CREDIT' THEN te.quantity ELSE 0 END) AS credit_quantity,
-                    SUM(CASE WHEN te.type = 'DEBIT' THEN COALESCE(te.to_amount, te.amount) ELSE 0 END) AS debit_amount,
-                    SUM(CASE WHEN te.type = 'CREDIT' THEN COALESCE(te.to_amount, te.amount) ELSE 0 END) AS credit_amount
-                FROM transaction_entries te
-                JOIN transactions t ON te.transaction_id = t.id
-                WHERE t.ledger_id = :ledgerId
-                  AND te.account_id = :accountId
-                  AND te.instrument_id IS NOT NULL
-                GROUP BY te.instrument_id
-                """)
-            .param("ledgerId", ledgerId)
-            .param("accountId", accountId)
-            .query((rs, rowNum) -> new PositionData(
-                rs.getString("instrument_id"),
-                rs.getBigDecimal("debit_quantity"),
-                rs.getBigDecimal("credit_quantity"),
-                rs.getBigDecimal("debit_amount"),
-                rs.getBigDecimal("credit_amount")
-            ))
-            .list();
-
-        return buildPositions(ledgerId, positionData);
+        return buildPositions(ledgerId, portfolioRepository.aggregatePositions(ledgerId, accountId));
     }
 
     @Override
-    public List<InstrumentPosition> getAllPositions(String ledgerId) {
+    public List<InstrumentPosition> getAllPositions(String userId, String ledgerSlug) {
+        final var ledgerId = ledgerAccess.requireLedger(userId, ledgerSlug).id();
         log.debug("Calculating all positions for ledger {}", ledgerId);
 
-        // Query to get aggregated position data per instrument across all accounts
-        List<PositionData> positionData = jdbcClient.sql("""
-                SELECT
-                    te.instrument_id,
-                    SUM(CASE WHEN te.type = 'DEBIT' THEN te.quantity ELSE 0 END) AS debit_quantity,
-                    SUM(CASE WHEN te.type = 'CREDIT' THEN te.quantity ELSE 0 END) AS credit_quantity,
-                    SUM(CASE WHEN te.type = 'DEBIT' THEN COALESCE(te.to_amount, te.amount) ELSE 0 END) AS debit_amount,
-                    SUM(CASE WHEN te.type = 'CREDIT' THEN COALESCE(te.to_amount, te.amount) ELSE 0 END) AS credit_amount
-                FROM transaction_entries te
-                JOIN transactions t ON te.transaction_id = t.id
-                WHERE t.ledger_id = :ledgerId
-                  AND te.instrument_id IS NOT NULL
-                GROUP BY te.instrument_id
-                """)
-            .param("ledgerId", ledgerId)
-            .query((rs, rowNum) -> new PositionData(
-                rs.getString("instrument_id"),
-                rs.getBigDecimal("debit_quantity"),
-                rs.getBigDecimal("credit_quantity"),
-                rs.getBigDecimal("debit_amount"),
-                rs.getBigDecimal("credit_amount")
-            ))
-            .list();
-
-        return buildPositions(ledgerId, positionData);
+        return buildPositions(ledgerId, portfolioRepository.aggregatePositions(ledgerId));
     }
 
     private List<InstrumentPosition> buildPositions(String ledgerId, List<PositionData> positionData) {
@@ -168,12 +122,4 @@ public class PortfolioServiceBean implements PortfolioService {
 
         return positions;
     }
-
-    private record PositionData(
-        String instrumentId,
-        BigDecimal debitQuantity,
-        BigDecimal creditQuantity,
-        BigDecimal debitAmount,
-        BigDecimal creditAmount
-    ) {}
 }

@@ -5,7 +5,6 @@ import org.springframework.data.domain.Pageable;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.util.List;
 import java.util.Optional;
 
 /**
@@ -31,23 +30,6 @@ public interface ExchangeRateRepository {
      * @return the saved rate
      */
     ExchangeRate save(ExchangeRate exchangeRate);
-
-    /**
-     * Finds all exchange rates for a specific date.
-     *
-     * @param date the effective date
-     * @return list of rates
-     */
-    List<ExchangeRate> findAllByDate(LocalDate date);
-
-    /**
-     * Finds the most recent exchange rate for a currency pair.
-     *
-     * @param fromCurrency source currency code
-     * @param toCurrency target currency code
-     * @return the most recent rate if found
-     */
-    Optional<ExchangeRate> findLatestRate(String fromCurrency, String toCurrency);
 
     /**
      * Finds all exchange rates with pagination.

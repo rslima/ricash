@@ -1,16 +1,23 @@
 package com.rslima.ricash.ledgers.accounts;
 
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 
+import java.util.Collection;
 import java.util.Optional;
 
 import java.util.List;
 
 public interface AccountRepository {
-    Page<Account> listLedgerAccounts(String ledgerId, PageRequest pageRequest);
+    Page<Account> listLedgerAccounts(String ledgerId, Pageable pageRequest);
 
     Optional<Account> findById(String ledgerId, String accountId);
+
+    /**
+     * Batch-loads lightweight account projections by id, without the expensive
+     * balance rollup. Unknown ids are simply absent from the result.
+     */
+    List<AccountRef> findRefsByIds(String ledgerId, Collection<String> accountIds);
 
     Account create(String ledgerId, Account account);
 

@@ -1,15 +1,14 @@
 package com.rslima.ricash.ledgers.accounts;
 
-import com.rslima.ricash.ledgers.Ledger;
-import com.rslima.ricash.ledgers.LedgerNotFoundException;
-import com.rslima.ricash.ledgers.LedgerRepository;
+import com.rslima.ricash.ledgers.LedgerAccess;
 import com.rslima.ricash.ledgers.SlugService;
 
 import com.github.f4b6a3.uuid.UuidCreator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -20,26 +19,27 @@ import java.util.Optional;
 @Slf4j
 public class AccountServiceBean implements AccountService {
     private final AccountRepository accountRepository;
-    private final LedgerRepository ledgerRepository;
+    private final LedgerAccess ledgerAccess;
     private final SlugService slugService;
 
     @Override
-    public Page<Account> listLedgerAccounts(String userId, String ledgerSlug, PageRequest pageRequest) {
-        final var ledger = getLedgerBySlug(userId, ledgerSlug);
+    public Page<Account> listLedgerAccounts(String userId, String ledgerSlug, Pageable pageRequest) {
+        final var ledger = ledgerAccess.requireLedger(userId, ledgerSlug);
         return accountRepository.listLedgerAccounts(ledger.id(), pageRequest);
     }
 
     @Override
     public Optional<Account> find(String userId, String ledgerSlug, String accountId) {
-        final var ledger = getLedgerBySlug(userId, ledgerSlug);
+        final var ledger = ledgerAccess.requireLedger(userId, ledgerSlug);
         return accountRepository.findById(ledger.id(), accountId);
     }
 
     @Override
+    @Transactional
     public Account create(String userId, String ledgerSlug, CreateAccountRequest request) {
-        final var ledger = getLedgerBySlug(userId, ledgerSlug);
+        final var ledger = ledgerAccess.requireLedger(userId, ledgerSlug);
         final var baseSlug = slugService.slugify(request.name());
-        final var slug = generateUniqueSlug(ledger.id(), baseSlug);
+        final var slug = SlugService.uniqueSlug(baseSlug, s -> accountRepository.existsBySlug(ledger.id(), s));
 
         final var account = new Account(
                 UuidCreator.getTimeOrderedEpoch().toString(),
@@ -59,8 +59,9 @@ public class AccountServiceBean implements AccountService {
     }
 
     @Override
+    @Transactional
     public Account update(String userId, String ledgerSlug, String accountId, UpdateAccountRequest request) {
-        final var ledger = getLedgerBySlug(userId, ledgerSlug);
+        final var ledger = ledgerAccess.requireLedger(userId, ledgerSlug);
 
         // Verify account exists
         accountRepository.findById(ledger.id(), accountId)
@@ -78,8 +79,9 @@ public class AccountServiceBean implements AccountService {
     }
 
     @Override
+    @Transactional
     public void delete(String userId, String ledgerSlug, String accountId) {
-        final var ledger = getLedgerBySlug(userId, ledgerSlug);
+        final var ledger = ledgerAccess.requireLedger(userId, ledgerSlug);
 
         // Verify account exists
         accountRepository.findById(ledger.id(), accountId)
@@ -111,26 +113,10 @@ public class AccountServiceBean implements AccountService {
         }
     }
 
-    private String generateUniqueSlug(String ledgerId, String baseSlug) {
-        String slug = baseSlug;
-        int counter = 1;
-
-        while (accountRepository.existsBySlug(ledgerId, slug)) {
-            slug = baseSlug + "-" + counter;
-            counter++;
-        }
-
-        return slug;
-    }
-
     @Override
     public BalanceSummary getBalanceSummary(String userId, String ledgerSlug) {
-        final var ledger = getLedgerBySlug(userId, ledgerSlug);
+        final var ledger = ledgerAccess.requireLedger(userId, ledgerSlug);
         return accountRepository.getBalanceSummary(ledger.id());
     }
 
-    private Ledger getLedgerBySlug(String userId, String ledgerSlug) {
-        return ledgerRepository.findBySlug(userId, ledgerSlug)
-                .orElseThrow(() -> new LedgerNotFoundException(ledgerSlug));
-    }
 }

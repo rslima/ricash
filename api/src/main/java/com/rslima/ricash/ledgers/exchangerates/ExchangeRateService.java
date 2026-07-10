@@ -2,6 +2,9 @@ package com.rslima.ricash.ledgers.exchangerates;
 
 import com.rslima.ricash.ledgers.MonetaryAmount;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.Optional;
@@ -46,6 +49,18 @@ public interface ExchangeRateService {
     ExchangeRate saveRate(String fromCurrency, String toCurrency, BigDecimal rate, LocalDate effectiveDate, String source);
 
     /**
+     * Saves a user-entered rate (source "MANUAL"), normalizing currency codes
+     * and validating the pair and value.
+     */
+    ExchangeRate saveManualRate(String fromCurrency, String toCurrency, BigDecimal rate, LocalDate effectiveDate);
+
+    /** Lists all stored rates, newest first. */
+    Page<ExchangeRate> listRates(Pageable pageable);
+
+    /** Deletes a stored rate. */
+    void deleteRate(String id);
+
+    /**
      * Force-fetches the exchange rate from the external provider, ignoring any
      * value already cached in the database, and persists (upserts) the result.
      * Used by the "fetch from external API" action in the UI.
@@ -56,13 +71,4 @@ public interface ExchangeRateService {
      * @return the saved rate, or empty if the external provider had no rate
      */
     Optional<ExchangeRate> refreshRate(String fromCurrency, String toCurrency, LocalDate date);
-
-    /**
-     * Gets the most recent exchange rate for a currency pair.
-     *
-     * @param fromCurrency source currency code
-     * @param toCurrency target currency code
-     * @return the most recent rate if available
-     */
-    Optional<BigDecimal> getLatestRate(String fromCurrency, String toCurrency);
 }

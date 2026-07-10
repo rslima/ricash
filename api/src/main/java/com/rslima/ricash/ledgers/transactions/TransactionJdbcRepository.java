@@ -7,7 +7,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
 import java.math.BigDecimal;
@@ -41,33 +41,42 @@ public class TransactionJdbcRepository implements TransactionRepository {
                                    String instrumentId, BigDecimal quantity, String instrumentSymbol,
                                    String envelopeId) {}
 
+    /** Projection matching {@link DBTransactionWithEntry}; expects transactions {@code t}, entries {@code te}, accounts {@code a} and instruments {@code i}. */
+    private static final String SELECT_TRANSACTION_WITH_ENTRIES = """
+            SELECT
+                t.id AS transaction_id,
+                t.date,
+                t.description,
+                t.created_at,
+                te.id AS entry_id,
+                te.account_id,
+                a.name AS account_name,
+                te.amount,
+                te.type,
+                te.currency,
+                te.to_amount,
+                te.to_currency,
+                te.instrument_id,
+                te.quantity,
+                i.symbol AS instrument_symbol,
+                te.envelope_id
+            """;
+
+    /** Joins providing the {@code te}, {@code a} and {@code i} aliases used by {@link #SELECT_TRANSACTION_WITH_ENTRIES}. */
+    private static final String JOIN_TRANSACTION_ENTRY_DETAILS = """
+            LEFT JOIN transaction_entries te ON t.id = te.transaction_id
+            LEFT JOIN accounts a ON te.account_id = a.id
+            LEFT JOIN instruments i ON te.instrument_id = i.id
+            """;
+
     @Override
-    public Page<Transaction> listLedgerTransactions(String ledgerId, PageRequest pageRequest) {
-        final var results = jdbcClient.sql("""
-                        SELECT
-                            t.id AS transaction_id,
-                            t.date,
-                            t.description,
-                            t.created_at,
-                            te.id AS entry_id,
-                            te.account_id,
-                            a.name AS account_name,
-                            te.amount,
-                            te.type,
-                            te.currency,
-                            te.to_amount,
-                            te.to_currency,
-                            te.instrument_id,
-                            te.quantity,
-                            i.symbol AS instrument_symbol,
-                            te.envelope_id
+    public Page<Transaction> listLedgerTransactions(String ledgerId, Pageable pageRequest) {
+        final var results = jdbcClient.sql(SELECT_TRANSACTION_WITH_ENTRIES + """
                         FROM
                             (SELECT * FROM transactions WHERE ledger_id = :ledgerId
                              ORDER BY date DESC, created_at DESC
                              OFFSET :offset LIMIT :limit) t
-                        LEFT JOIN transaction_entries te ON t.id = te.transaction_id
-                        LEFT JOIN accounts a ON te.account_id = a.id
-                        LEFT JOIN instruments i ON te.instrument_id = i.id
+                        """ + JOIN_TRANSACTION_ENTRY_DETAILS + """
                         ORDER BY t.date DESC, t.created_at DESC
                         """)
                 .param("ledgerId", ledgerId)
@@ -86,33 +95,14 @@ public class TransactionJdbcRepository implements TransactionRepository {
     }
 
     @Override
-    public Page<Transaction> searchByDescription(String ledgerId, String description, PageRequest pageRequest) {
-        final var results = jdbcClient.sql("""
-                        SELECT
-                            t.id AS transaction_id,
-                            t.date,
-                            t.description,
-                            t.created_at,
-                            te.id AS entry_id,
-                            te.account_id,
-                            a.name AS account_name,
-                            te.amount,
-                            te.type,
-                            te.currency,
-                            te.to_amount,
-                            te.to_currency,
-                            te.instrument_id,
-                            te.quantity,
-                            i.symbol AS instrument_symbol,
-                            te.envelope_id
+    public Page<Transaction> searchByDescription(String ledgerId, String description, Pageable pageRequest) {
+        final var results = jdbcClient.sql(SELECT_TRANSACTION_WITH_ENTRIES + """
                         FROM
                             (SELECT * FROM transactions WHERE ledger_id = :ledgerId
                              AND description ILIKE :description
                              ORDER BY date DESC, created_at DESC
                              OFFSET :offset LIMIT :limit) t
-                        LEFT JOIN transaction_entries te ON t.id = te.transaction_id
-                        LEFT JOIN accounts a ON te.account_id = a.id
-                        LEFT JOIN instruments i ON te.instrument_id = i.id
+                        """ + JOIN_TRANSACTION_ENTRY_DETAILS + """
                         ORDER BY t.date DESC, t.created_at DESC
                         """)
                 .param("ledgerId", ledgerId)
@@ -136,34 +126,15 @@ public class TransactionJdbcRepository implements TransactionRepository {
     }
 
     @Override
-    public Page<Transaction> listAccountTransactions(String ledgerId, String accountId, PageRequest pageRequest) {
-        final var results = jdbcClient.sql("""
-                        SELECT
-                            t.id AS transaction_id,
-                            t.date,
-                            t.description,
-                            t.created_at,
-                            te.id AS entry_id,
-                            te.account_id,
-                            a.name AS account_name,
-                            te.amount,
-                            te.type,
-                            te.currency,
-                            te.to_amount,
-                            te.to_currency,
-                            te.instrument_id,
-                            te.quantity,
-                            i.symbol AS instrument_symbol,
-                            te.envelope_id
+    public Page<Transaction> listAccountTransactions(String ledgerId, String accountId, Pageable pageRequest) {
+        final var results = jdbcClient.sql(SELECT_TRANSACTION_WITH_ENTRIES + """
                         FROM
                             (SELECT DISTINCT t.* FROM transactions t
                              INNER JOIN transaction_entries te ON t.id = te.transaction_id
                              WHERE t.ledger_id = :ledgerId AND te.account_id = :accountId
                              ORDER BY t.date DESC, t.created_at DESC
                              OFFSET :offset LIMIT :limit) t
-                        LEFT JOIN transaction_entries te ON t.id = te.transaction_id
-                        LEFT JOIN accounts a ON te.account_id = a.id
-                        LEFT JOIN instruments i ON te.instrument_id = i.id
+                        """ + JOIN_TRANSACTION_ENTRY_DETAILS + """
                         ORDER BY t.date DESC, t.created_at DESC
                         """)
                 .param("ledgerId", ledgerId)
@@ -188,7 +159,7 @@ public class TransactionJdbcRepository implements TransactionRepository {
     }
 
     @Override
-    public Page<Transaction> listCategoryTransactions(String ledgerId, String accountId, int year, int month, PageRequest pageRequest) {
+    public Page<Transaction> listCategoryTransactions(String ledgerId, String accountId, int year, int month, Pageable pageRequest) {
         // Collect the target account plus all of its descendants via the
         // parent_account_id tree, then return every transaction in the given
         // month that touches any account in that subtree.
@@ -203,23 +174,7 @@ public class TransactionJdbcRepository implements TransactionRepository {
                             INNER JOIN account_tree at ON a.parent_account_id = at.id
                             WHERE a.ledger_id = :ledgerId
                         )
-                        SELECT
-                            t.id AS transaction_id,
-                            t.date,
-                            t.description,
-                            t.created_at,
-                            te.id AS entry_id,
-                            te.account_id,
-                            a.name AS account_name,
-                            te.amount,
-                            te.type,
-                            te.currency,
-                            te.to_amount,
-                            te.to_currency,
-                            te.instrument_id,
-                            te.quantity,
-                            i.symbol AS instrument_symbol,
-                            te.envelope_id
+                        """ + SELECT_TRANSACTION_WITH_ENTRIES + """
                         FROM
                             (SELECT DISTINCT t.* FROM transactions t
                              INNER JOIN transaction_entries te ON t.id = te.transaction_id
@@ -229,9 +184,7 @@ public class TransactionJdbcRepository implements TransactionRepository {
                                AND t.date < :periodEnd
                              ORDER BY t.date DESC, t.created_at DESC
                              OFFSET :offset LIMIT :limit) t
-                        LEFT JOIN transaction_entries te ON t.id = te.transaction_id
-                        LEFT JOIN accounts a ON te.account_id = a.id
-                        LEFT JOIN instruments i ON te.instrument_id = i.id
+                        """ + JOIN_TRANSACTION_ENTRY_DETAILS + """
                         ORDER BY t.date DESC, t.created_at DESC
                         """)
                 .param("ledgerId", ledgerId)
@@ -275,7 +228,7 @@ public class TransactionJdbcRepository implements TransactionRepository {
     record DBCategoryTransactionRow(String id, LocalDate date, String description, BigDecimal amount, Instant createdAt) {}
 
     @Override
-    public Page<CategoryTransaction> listCategoryTransactionAmounts(String ledgerId, String accountId, int year, int month, PageRequest pageRequest) {
+    public Page<CategoryTransaction> listCategoryTransactionAmounts(String ledgerId, String accountId, int year, int month, Pageable pageRequest) {
         // For each transaction touching the category subtree (the account plus
         // all descendants) in the given month, sum ONLY the entries whose
         // account is in the subtree. Sign is keyed off the ROOT account's type
@@ -383,28 +336,9 @@ public class TransactionJdbcRepository implements TransactionRepository {
 
     @Override
     public Optional<Transaction> findById(String ledgerId, String transactionId) {
-        final var results = jdbcClient.sql("""
-                        SELECT
-                            t.id AS transaction_id,
-                            t.date,
-                            t.description,
-                            t.created_at,
-                            te.id AS entry_id,
-                            te.account_id,
-                            a.name AS account_name,
-                            te.amount,
-                            te.type,
-                            te.currency,
-                            te.to_amount,
-                            te.to_currency,
-                            te.instrument_id,
-                            te.quantity,
-                            i.symbol AS instrument_symbol,
-                            te.envelope_id
+        final var results = jdbcClient.sql(SELECT_TRANSACTION_WITH_ENTRIES + """
                         FROM transactions t
-                        LEFT JOIN transaction_entries te ON t.id = te.transaction_id
-                        LEFT JOIN accounts a ON te.account_id = a.id
-                        LEFT JOIN instruments i ON te.instrument_id = i.id
+                        """ + JOIN_TRANSACTION_ENTRY_DETAILS + """
                         WHERE t.ledger_id = :ledgerId AND t.id = :transactionId
                         """)
                 .param("ledgerId", ledgerId)
@@ -433,28 +367,7 @@ public class TransactionJdbcRepository implements TransactionRepository {
                 .update();
 
         // Insert all entries
-        List<TransactionEntry> allEntries = new ArrayList<>();
-        allEntries.addAll(transaction.debitEntries());
-        allEntries.addAll(transaction.creditEntries());
-
-        for (var entry : allEntries) {
-            jdbcClient.sql("""
-                            INSERT INTO transaction_entries (id, transaction_id, account_id, amount, type, currency, to_amount, to_currency, instrument_id, quantity, envelope_id)
-                            VALUES (:id, :transactionId, :accountId, :amount, :type, :currency, :toAmount, :toCurrency, :instrumentId, :quantity, :envelopeId)
-                            """)
-                    .param("id", UuidCreator.getTimeOrderedEpoch().toString())
-                    .param("transactionId", transaction.id())
-                    .param("accountId", entry.accountId())
-                    .param("amount", entry.amount().amount())
-                    .param("type", entry.type().name())
-                    .param("currency", entry.amount().currency())
-                    .param("toAmount", entry.convertedAmount() != null ? entry.convertedAmount().amount() : null)
-                    .param("toCurrency", entry.convertedAmount() != null ? entry.convertedAmount().currency() : null)
-                    .param("instrumentId", entry.instrumentId())
-                    .param("quantity", entry.quantity())
-                    .param("envelopeId", entry.envelopeId())
-                    .update();
-        }
+        insertEntries(transaction);
 
         return transaction;
     }
@@ -478,6 +391,13 @@ public class TransactionJdbcRepository implements TransactionRepository {
                 .update();
 
         // Insert new entries
+        insertEntries(transaction);
+
+        return transaction;
+    }
+
+    /** Inserts the transaction's entries: debits first, then credits. */
+    private void insertEntries(Transaction transaction) {
         List<TransactionEntry> allEntries = new ArrayList<>();
         allEntries.addAll(transaction.debitEntries());
         allEntries.addAll(transaction.creditEntries());
@@ -500,8 +420,6 @@ public class TransactionJdbcRepository implements TransactionRepository {
                     .param("envelopeId", entry.envelopeId())
                     .update();
         }
-
-        return transaction;
     }
 
     @Override
@@ -596,27 +514,9 @@ public class TransactionJdbcRepository implements TransactionRepository {
                             WHERE ledger_id = :ledgerId
                             ORDER BY description, date DESC, created_at DESC
                         )
-                        SELECT
-                            t.id AS transaction_id,
-                            t.date,
-                            t.description,
-                            t.created_at,
-                            te.id AS entry_id,
-                            te.account_id,
-                            a.name AS account_name,
-                            te.amount,
-                            te.type,
-                            te.currency,
-                            te.to_amount,
-                            te.to_currency,
-                            te.instrument_id,
-                            te.quantity,
-                            i.symbol AS instrument_symbol,
-                            te.envelope_id
+                        """ + SELECT_TRANSACTION_WITH_ENTRIES + """
                         FROM latest_transactions t
-                        LEFT JOIN transaction_entries te ON t.id = te.transaction_id
-                        LEFT JOIN accounts a ON te.account_id = a.id
-                        LEFT JOIN instruments i ON te.instrument_id = i.id
+                        """ + JOIN_TRANSACTION_ENTRY_DETAILS + """
                         ORDER BY t.description
                         """)
                 .param("ledgerId", ledgerId)

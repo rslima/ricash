@@ -1,6 +1,8 @@
 package com.rslima.ricash.ledgers.envelopes;
 
-public class EnvelopeHasTransactionsException extends RuntimeException {
+import com.rslima.ricash.exceptions.ConflictException;
+
+public class EnvelopeHasTransactionsException extends ConflictException {
     public EnvelopeHasTransactionsException(String envelopeId) {
         super("Cannot delete envelope with associated transactions: " + envelopeId);
     }

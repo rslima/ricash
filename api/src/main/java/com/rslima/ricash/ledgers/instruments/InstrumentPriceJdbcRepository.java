@@ -1,5 +1,6 @@
 package com.rslima.ricash.ledgers.instruments;
 
+import com.github.f4b6a3.uuid.UuidCreator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -10,64 +11,13 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import java.sql.Date;
 import java.sql.Timestamp;
 import java.time.Instant;
-import java.time.LocalDate;
 import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
 
 @RequiredArgsConstructor
 @Slf4j
 public class InstrumentPriceJdbcRepository implements InstrumentPriceRepository {
 
     private final JdbcClient jdbcClient;
-
-    @Override
-    public Optional<InstrumentPrice> findById(String id) {
-        log.debug("Finding price by id {}", id);
-
-        return jdbcClient.sql("""
-                SELECT id, instrument_id, price, effective_date, source, created_at
-                FROM instrument_prices
-                WHERE id = :id
-                """)
-            .param("id", id)
-            .query(this::mapRow)
-            .optional();
-    }
-
-    @Override
-    public Optional<InstrumentPrice> findPrice(String instrumentId, LocalDate date) {
-        log.debug("Finding price for instrument {} on date {}", instrumentId, date);
-
-        return jdbcClient.sql("""
-                SELECT id, instrument_id, price, effective_date, source, created_at
-                FROM instrument_prices
-                WHERE instrument_id = :instrumentId
-                  AND effective_date <= :date
-                ORDER BY effective_date DESC
-                LIMIT 1
-                """)
-            .param("instrumentId", instrumentId)
-            .param("date", Date.valueOf(date))
-            .query(this::mapRow)
-            .optional();
-    }
-
-    @Override
-    public Optional<InstrumentPrice> findLatestPrice(String instrumentId) {
-        log.debug("Finding latest price for instrument {}", instrumentId);
-
-        return jdbcClient.sql("""
-                SELECT id, instrument_id, price, effective_date, source, created_at
-                FROM instrument_prices
-                WHERE instrument_id = :instrumentId
-                ORDER BY effective_date DESC
-                LIMIT 1
-                """)
-            .param("instrumentId", instrumentId)
-            .query(this::mapRow)
-            .optional();
-    }
 
     @Override
     public Page<InstrumentPrice> findByInstrumentId(String instrumentId, Pageable pageable) {
@@ -145,7 +95,7 @@ public class InstrumentPriceJdbcRepository implements InstrumentPriceRepository 
     public InstrumentPrice save(InstrumentPrice price) {
         log.debug("Saving price for instrument {} on date {}", price.instrumentId(), price.effectiveDate());
 
-        final var id = price.id() != null ? price.id() : UUID.randomUUID().toString();
+        final var id = price.id() != null ? price.id() : UuidCreator.getTimeOrderedEpoch().toString();
         final var createdAt = price.createdAt() != null ? price.createdAt() : Instant.now();
 
         jdbcClient.sql("""
@@ -173,10 +123,15 @@ public class InstrumentPriceJdbcRepository implements InstrumentPriceRepository 
     }
 
     @Override
-    public void deleteById(String id) {
-        log.debug("Deleting price with id {}", id);
-        jdbcClient.sql("DELETE FROM instrument_prices WHERE id = :id")
+    public int deleteById(String ledgerId, String id) {
+        log.debug("Deleting price with id {} in ledger {}", id, ledgerId);
+        return jdbcClient.sql("""
+                DELETE FROM instrument_prices p
+                USING instruments i
+                WHERE p.id = :id AND i.id = p.instrument_id AND i.ledger_id = :ledgerId
+                """)
             .param("id", id)
+            .param("ledgerId", ledgerId)
             .update();
     }
 

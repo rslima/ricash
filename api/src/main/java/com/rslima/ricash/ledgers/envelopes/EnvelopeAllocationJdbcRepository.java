@@ -118,20 +118,61 @@ public class EnvelopeAllocationJdbcRepository implements EnvelopeAllocationRepos
     }
 
     @Override
-    public BigDecimal calculateSpentForEnvelope(String envelopeId, int year, int month) {
-        var result = jdbcClient.sql("""
-                        SELECT COALESCE(SUM(spent_total), 0)
-                        FROM envelope_monthly_summary
-                        WHERE envelope_id = :envelopeId
-                          AND period_year = :year
-                          AND period_month = :month
+    public List<MonthlyActivity> findMonthlyActivityByLedger(String ledgerId, int uptoYear, int uptoMonth) {
+        return jdbcClient.sql("""
+                        SELECT envelope_id, period_year, period_month,
+                               SUM(allocated) AS allocated, SUM(spent) AS spent
+                        FROM (
+                            SELECT ea.envelope_id, ea.period_year, ea.period_month,
+                                   ea.allocated_amount AS allocated, 0::numeric AS spent
+                            FROM envelope_allocations ea
+                            JOIN envelopes e ON e.id = ea.envelope_id
+                            WHERE e.ledger_id = :ledgerId
+                            UNION ALL
+                            SELECT ems.envelope_id, ems.period_year, ems.period_month,
+                                   0::numeric, ems.spent_total
+                            FROM envelope_monthly_summary ems
+                            JOIN envelopes e ON e.id = ems.envelope_id
+                            WHERE e.ledger_id = :ledgerId
+                        ) activity
+                        WHERE period_year >= 2020
+                          AND (period_year, period_month) <= (:year, :month)
+                        GROUP BY envelope_id, period_year, period_month
+                        ORDER BY envelope_id, period_year, period_month
+                        """)
+                .param("ledgerId", ledgerId)
+                .param("year", uptoYear)
+                .param("month", uptoMonth)
+                .query(MonthlyActivity.class)
+                .list();
+    }
+
+    @Override
+    public List<MonthlyActivity> findMonthlyActivityByEnvelope(String envelopeId, int uptoYear, int uptoMonth) {
+        return jdbcClient.sql("""
+                        SELECT envelope_id, period_year, period_month,
+                               SUM(allocated) AS allocated, SUM(spent) AS spent
+                        FROM (
+                            SELECT envelope_id, period_year, period_month,
+                                   allocated_amount AS allocated, 0::numeric AS spent
+                            FROM envelope_allocations
+                            WHERE envelope_id = :envelopeId
+                            UNION ALL
+                            SELECT envelope_id, period_year, period_month,
+                                   0::numeric, spent_total
+                            FROM envelope_monthly_summary
+                            WHERE envelope_id = :envelopeId
+                        ) activity
+                        WHERE period_year >= 2020
+                          AND (period_year, period_month) <= (:year, :month)
+                        GROUP BY envelope_id, period_year, period_month
+                        ORDER BY period_year, period_month
                         """)
                 .param("envelopeId", envelopeId)
-                .param("year", year)
-                .param("month", month)
-                .query(BigDecimal.class)
-                .single();
-        return result != null ? result : BigDecimal.ZERO;
+                .param("year", uptoYear)
+                .param("month", uptoMonth)
+                .query(MonthlyActivity.class)
+                .list();
     }
 
     @Override

@@ -2,15 +2,18 @@ package com.rslima.ricash.ledgers.exchangerates;
 
 import com.rslima.ricash.ledgers.MonetaryAmount;
 
+import com.github.f4b6a3.uuid.UuidCreator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Optional;
-import java.util.UUID;
 
 @RequiredArgsConstructor
 @Slf4j
@@ -52,7 +55,7 @@ public class ExchangeRateServiceBean implements ExchangeRateService {
             // Save the fetched rate to database for future use
             try {
                 saveRate(fromCurrency, toCurrency, externalRate.get(), date, "EXTERNAL_API");
-                log.info("Saved external rate to database: {} {} -> {} = {}",
+                log.info("Saved external rate to database: {} -> {} = {}",
                     fromCurrency, toCurrency, externalRate.get());
             } catch (Exception e) {
                 log.warn("Failed to save external rate to database: {}", e.getMessage());
@@ -89,6 +92,7 @@ public class ExchangeRateServiceBean implements ExchangeRateService {
     }
 
     @Override
+    @Transactional
     public ExchangeRate saveRate(String fromCurrency, String toCurrency, BigDecimal rate, LocalDate effectiveDate, String source) {
         if (fromCurrency.equals(toCurrency)) {
             throw new IllegalArgumentException("Cannot create exchange rate for same currency: " + fromCurrency);
@@ -99,7 +103,7 @@ public class ExchangeRateServiceBean implements ExchangeRateService {
         }
 
         ExchangeRate exchangeRate = new ExchangeRate(
-            UUID.randomUUID().toString(),
+            UuidCreator.getTimeOrderedEpoch().toString(),
             fromCurrency.toUpperCase(),
             toCurrency.toUpperCase(),
             rate.setScale(RATE_SCALE, RoundingMode.HALF_UP),
@@ -112,6 +116,7 @@ public class ExchangeRateServiceBean implements ExchangeRateService {
     }
 
     @Override
+    @Transactional
     public Optional<ExchangeRate> refreshRate(String fromCurrency, String toCurrency, LocalDate date) {
         String from = fromCurrency.toUpperCase();
         String to = toCurrency.toUpperCase();
@@ -137,23 +142,21 @@ public class ExchangeRateServiceBean implements ExchangeRateService {
     }
 
     @Override
-    public Optional<BigDecimal> getLatestRate(String fromCurrency, String toCurrency) {
-        if (fromCurrency.equals(toCurrency)) {
-            return Optional.of(BigDecimal.ONE);
-        }
+    @Transactional
+    public ExchangeRate saveManualRate(String fromCurrency, String toCurrency, BigDecimal rate, LocalDate effectiveDate) {
+        log.info("Saving manual exchange rate: {} -> {} = {} on {}", fromCurrency, toCurrency, rate, effectiveDate);
+        return saveRate(fromCurrency, toCurrency, rate, effectiveDate, "MANUAL");
+    }
 
-        // Try direct rate first
-        Optional<ExchangeRate> directRate = exchangeRateRepository.findLatestRate(fromCurrency, toCurrency);
-        if (directRate.isPresent()) {
-            return Optional.of(directRate.get().rate());
-        }
+    @Override
+    public Page<ExchangeRate> listRates(Pageable pageable) {
+        return exchangeRateRepository.findAll(pageable);
+    }
 
-        // Try inverse rate
-        Optional<ExchangeRate> inverseRate = exchangeRateRepository.findLatestRate(toCurrency, fromCurrency);
-        if (inverseRate.isPresent()) {
-            return Optional.of(BigDecimal.ONE.divide(inverseRate.get().rate(), RATE_SCALE, RoundingMode.HALF_UP));
-        }
-
-        return Optional.empty();
+    @Override
+    @Transactional
+    public void deleteRate(String id) {
+        log.info("Deleting exchange rate: {}", id);
+        exchangeRateRepository.deleteById(id);
     }
 }

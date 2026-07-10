@@ -1,26 +1,34 @@
 package com.rslima.ricash.ledgers.exchangerates;
 
+import com.github.f4b6a3.uuid.UuidCreator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.simple.JdbcClient;
-import org.springframework.stereotype.Repository;
 
-import java.math.BigDecimal;
 import java.sql.Date;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 
-@Repository
 @RequiredArgsConstructor
 @Slf4j
 public class ExchangeRateJdbcRepository implements ExchangeRateRepository {
+
+    private static final RowMapper<ExchangeRate> ROW_MAPPER = (rs, rowNum) -> new ExchangeRate(
+        rs.getString("id"),
+        rs.getString("from_currency"),
+        rs.getString("to_currency"),
+        rs.getBigDecimal("rate"),
+        rs.getDate("effective_date").toLocalDate(),
+        rs.getString("source"),
+        rs.getTimestamp("created_at").toInstant()
+    );
 
     private final JdbcClient jdbcClient;
 
@@ -40,15 +48,7 @@ public class ExchangeRateJdbcRepository implements ExchangeRateRepository {
             .param("fromCurrency", fromCurrency)
             .param("toCurrency", toCurrency)
             .param("date", Date.valueOf(date))
-            .query((rs, rowNum) -> new ExchangeRate(
-                rs.getString("id"),
-                rs.getString("from_currency"),
-                rs.getString("to_currency"),
-                rs.getBigDecimal("rate"),
-                rs.getDate("effective_date").toLocalDate(),
-                rs.getString("source"),
-                rs.getTimestamp("created_at").toInstant()
-            ))
+            .query(ROW_MAPPER)
             .optional();
     }
 
@@ -57,7 +57,7 @@ public class ExchangeRateJdbcRepository implements ExchangeRateRepository {
         log.debug("Saving exchange rate: {} {} -> {} on {}",
             exchangeRate.rate(), exchangeRate.fromCurrency(), exchangeRate.toCurrency(), exchangeRate.effectiveDate());
 
-        final var id = exchangeRate.id() != null ? exchangeRate.id() : UUID.randomUUID().toString();
+        final var id = exchangeRate.id() != null ? exchangeRate.id() : UuidCreator.getTimeOrderedEpoch().toString();
         final var createdAt = exchangeRate.createdAt() != null ? exchangeRate.createdAt() : Instant.now();
 
         jdbcClient.sql("""
@@ -87,55 +87,6 @@ public class ExchangeRateJdbcRepository implements ExchangeRateRepository {
     }
 
     @Override
-    public List<ExchangeRate> findAllByDate(LocalDate date) {
-        log.debug("Finding all exchange rates for date {}", date);
-
-        return jdbcClient.sql("""
-                SELECT id, from_currency, to_currency, rate, effective_date, source, created_at
-                FROM exchange_rates
-                WHERE effective_date = :date
-                ORDER BY from_currency, to_currency
-                """)
-            .param("date", Date.valueOf(date))
-            .query((rs, rowNum) -> new ExchangeRate(
-                rs.getString("id"),
-                rs.getString("from_currency"),
-                rs.getString("to_currency"),
-                rs.getBigDecimal("rate"),
-                rs.getDate("effective_date").toLocalDate(),
-                rs.getString("source"),
-                rs.getTimestamp("created_at").toInstant()
-            ))
-            .list();
-    }
-
-    @Override
-    public Optional<ExchangeRate> findLatestRate(String fromCurrency, String toCurrency) {
-        log.debug("Finding latest exchange rate from {} to {}", fromCurrency, toCurrency);
-
-        return jdbcClient.sql("""
-                SELECT id, from_currency, to_currency, rate, effective_date, source, created_at
-                FROM exchange_rates
-                WHERE from_currency = :fromCurrency
-                  AND to_currency = :toCurrency
-                ORDER BY effective_date DESC
-                LIMIT 1
-                """)
-            .param("fromCurrency", fromCurrency)
-            .param("toCurrency", toCurrency)
-            .query((rs, rowNum) -> new ExchangeRate(
-                rs.getString("id"),
-                rs.getString("from_currency"),
-                rs.getString("to_currency"),
-                rs.getBigDecimal("rate"),
-                rs.getDate("effective_date").toLocalDate(),
-                rs.getString("source"),
-                rs.getTimestamp("created_at").toInstant()
-            ))
-            .optional();
-    }
-
-    @Override
     public Page<ExchangeRate> findAll(Pageable pageable) {
         log.debug("Finding all exchange rates with pagination: page={}, size={}", pageable.getPageNumber(), pageable.getPageSize());
 
@@ -153,15 +104,7 @@ public class ExchangeRateJdbcRepository implements ExchangeRateRepository {
                 """)
             .param("limit", pageable.getPageSize())
             .param("offset", pageable.getOffset())
-            .query((rs, rowNum) -> new ExchangeRate(
-                rs.getString("id"),
-                rs.getString("from_currency"),
-                rs.getString("to_currency"),
-                rs.getBigDecimal("rate"),
-                rs.getDate("effective_date").toLocalDate(),
-                rs.getString("source"),
-                rs.getTimestamp("created_at").toInstant()
-            ))
+            .query(ROW_MAPPER)
             .list();
 
         return new PageImpl<>(rates, pageable, total);

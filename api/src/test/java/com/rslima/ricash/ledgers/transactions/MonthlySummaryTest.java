@@ -2,6 +2,7 @@ package com.rslima.ricash.ledgers.transactions;
 
 import com.rslima.ricash.TestRicashApplication;
 import com.rslima.ricash.ledgers.envelopes.EnvelopeAllocationJdbcRepository;
+import com.rslima.ricash.testsupport.DbFixtures;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -12,8 +13,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.sql.Date;
-import java.sql.Timestamp;
-import java.time.Instant;
 import java.time.LocalDate;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -34,42 +33,38 @@ class MonthlySummaryTest {
 
     private TransactionJdbcRepository transactionRepository;
     private EnvelopeAllocationJdbcRepository envelopeAllocationRepository;
+    private DbFixtures fixtures;
 
     @BeforeEach
     void setUp() {
         transactionRepository = new TransactionJdbcRepository(jdbcClient);
         envelopeAllocationRepository = new EnvelopeAllocationJdbcRepository(jdbcClient);
+        fixtures = new DbFixtures(jdbcClient);
 
-        jdbcClient.sql("DELETE FROM transaction_entries").update();
-        jdbcClient.sql("DELETE FROM transactions").update();
-        jdbcClient.sql("DELETE FROM envelopes").update();
-        jdbcClient.sql("DELETE FROM accounts").update();
-        jdbcClient.sql("DELETE FROM ledgers").update();
-        jdbcClient.sql("DELETE FROM users").update();
+        fixtures.cleanAll();
+        fixtures.insertUser("user-1");
+        fixtures.insertLedger("ledger-1", "user-1", "Main", "USD");
 
-        jdbcClient.sql("INSERT INTO users (id) VALUES ('user-1')").update();
-        insertLedger("ledger-1", "user-1", "Main", "USD");
-
-        insertAccount("checking", "ledger-1", null, "Checking", "USD", "ASSET");
-        insertAccount("income", "ledger-1", null, "Income", "USD", "INCOME");
-        insertAccount("expenses", "ledger-1", null, "Expenses", "USD", "EXPENSE");
-        insertAccount("groceries", "ledger-1", "expenses", "Groceries", "USD", "EXPENSE");
-        insertEnvelope("food", "ledger-1", "Food", "USD");
+        fixtures.insertAccount("checking", "ledger-1", null, "Checking", "USD", "ASSET");
+        fixtures.insertAccount("income", "ledger-1", null, "Income", "USD", "INCOME");
+        fixtures.insertAccount("expenses", "ledger-1", null, "Expenses", "USD", "EXPENSE");
+        fixtures.insertAccount("groceries", "ledger-1", "expenses", "Groceries", "USD", "EXPENSE");
+        fixtures.insertEnvelope("food", "ledger-1", "Food", "USD");
 
         // T1 (Jan 5): salary -> income +1000
-        insertTransaction("t1", "ledger-1", "Salary", LocalDate.of(2026, 1, 5));
-        insertEntry("t1", "checking", "1000.00", "DEBIT", "USD", null, null, null);
-        insertEntry("t1", "income", "1000.00", "CREDIT", "USD", null, null, null);
+        fixtures.insertTransaction("t1", "ledger-1", "Salary", LocalDate.of(2026, 1, 5));
+        fixtures.insertEntry("t1", "checking", "1000.00", "DEBIT", "USD", null, null, null);
+        fixtures.insertEntry("t1", "income", "1000.00", "CREDIT", "USD", null, null, null);
 
         // T2 (Jan 10): groceries 200 USD, tagged to Food envelope
-        insertTransaction("t2", "ledger-1", "Groceries", LocalDate.of(2026, 1, 10));
-        insertEntry("t2", "groceries", "200.00", "DEBIT", "USD", null, null, "food");
-        insertEntry("t2", "checking", "200.00", "CREDIT", "USD", null, null, null);
+        fixtures.insertTransaction("t2", "ledger-1", "Groceries", LocalDate.of(2026, 1, 10));
+        fixtures.insertEntry("t2", "groceries", "200.00", "DEBIT", "USD", null, null, "food");
+        fixtures.insertEntry("t2", "checking", "200.00", "CREDIT", "USD", null, null, null);
 
         // T3 (Jan 20): groceries paid in EUR, converted to 55 USD (account currency)
-        insertTransaction("t3", "ledger-1", "EUR snack", LocalDate.of(2026, 1, 20));
-        insertEntry("t3", "groceries", "50.00", "DEBIT", "EUR", "55.00", "USD", "food");
-        insertEntry("t3", "checking", "55.00", "CREDIT", "USD", null, null, null);
+        fixtures.insertTransaction("t3", "ledger-1", "EUR snack", LocalDate.of(2026, 1, 20));
+        fixtures.insertEntry("t3", "groceries", "50.00", "DEBIT", "EUR", "55.00", "USD", "food");
+        fixtures.insertEntry("t3", "checking", "55.00", "CREDIT", "USD", null, null, null);
     }
 
     @Test
@@ -91,7 +86,7 @@ class MonthlySummaryTest {
     @Test
     void envelopeSpent_usesEffectiveAmountAcrossEntries() {
         // 200 (T2) + 55 (T3 effective to_amount) = 255
-        assertThat(envelopeAllocationRepository.calculateSpentForEnvelope("food", 2026, 1))
+        assertThat(spentFor("food", 2026, 1))
                 .isEqualByComparingTo("255.00");
     }
 
@@ -99,7 +94,7 @@ class MonthlySummaryTest {
     void breakdownExcludesOtherMonths() {
         assertThat(transactionRepository.getMonthlyExpenseBreakdown("ledger-1", 2026, 2)
                 .expensesByAccountId()).isEmpty();
-        assertThat(envelopeAllocationRepository.calculateSpentForEnvelope("food", 2026, 2))
+        assertThat(spentFor("food", 2026, 2))
                 .isEqualByComparingTo("0.00");
     }
 
@@ -116,9 +111,9 @@ class MonthlySummaryTest {
         assertThat(transactionRepository.getMonthlyExpenseBreakdown("ledger-1", 2026, 2)
                 .expensesByAccountId().get("groceries")).isEqualByComparingTo("200.00");
 
-        assertThat(envelopeAllocationRepository.calculateSpentForEnvelope("food", 2026, 1))
+        assertThat(spentFor("food", 2026, 1))
                 .isEqualByComparingTo("55.00");
-        assertThat(envelopeAllocationRepository.calculateSpentForEnvelope("food", 2026, 2))
+        assertThat(spentFor("food", 2026, 2))
                 .isEqualByComparingTo("200.00");
     }
 
@@ -129,7 +124,7 @@ class MonthlySummaryTest {
 
         assertThat(transactionRepository.getMonthlyExpenseBreakdown("ledger-1", 2026, 1)
                 .expensesByAccountId().get("groceries")).isEqualByComparingTo("200.00");
-        assertThat(envelopeAllocationRepository.calculateSpentForEnvelope("food", 2026, 1))
+        assertThat(spentFor("food", 2026, 1))
                 .isEqualByComparingTo("200.00");
     }
 
@@ -190,59 +185,12 @@ class MonthlySummaryTest {
         assertThat(envelopeMismatches).isZero();
     }
 
-    private void insertLedger(String id, String userId, String name, String currency) {
-        jdbcClient.sql("""
-                        INSERT INTO ledgers (id, user_id, slug, name, description, currency, created_at)
-                        VALUES (:id, :userId, :slug, :name, null, :currency, :createdAt)
-                        """)
-                .param("id", id).param("userId", userId).param("slug", name.toLowerCase())
-                .param("name", name).param("currency", currency)
-                .param("createdAt", Timestamp.from(Instant.now()))
-                .update();
-    }
-
-    private void insertAccount(String id, String ledgerId, String parentId, String name, String currency, String type) {
-        jdbcClient.sql("""
-                        INSERT INTO accounts (id, ledger_id, parent_account_id, slug, name, description, currency, type, status, created_at)
-                        VALUES (:id, :ledgerId, :parentId, :slug, :name, null, :currency, :type, 'ACTIVE', :createdAt)
-                        """)
-                .param("id", id).param("ledgerId", ledgerId).param("parentId", parentId)
-                .param("slug", id).param("name", name).param("currency", currency).param("type", type)
-                .param("createdAt", Timestamp.from(Instant.now()))
-                .update();
-    }
-
-    private void insertEnvelope(String id, String ledgerId, String name, String currency) {
-        jdbcClient.sql("""
-                        INSERT INTO envelopes (id, ledger_id, parent_envelope_id, name, description, currency, type, status, created_at)
-                        VALUES (:id, :ledgerId, null, :name, null, :currency, 'EXPENSE', 'ACTIVE', :createdAt)
-                        """)
-                .param("id", id).param("ledgerId", ledgerId).param("name", name).param("currency", currency)
-                .param("createdAt", Timestamp.from(Instant.now()))
-                .update();
-    }
-
-    private void insertTransaction(String id, String ledgerId, String description, LocalDate date) {
-        jdbcClient.sql("""
-                        INSERT INTO transactions (id, ledger_id, description, date, created_at)
-                        VALUES (:id, :ledgerId, :description, :date, :createdAt)
-                        """)
-                .param("id", id).param("ledgerId", ledgerId).param("description", description)
-                .param("date", Date.valueOf(date)).param("createdAt", Timestamp.from(Instant.now()))
-                .update();
-    }
-
-    private void insertEntry(String transactionId, String accountId, String amount, String type,
-                             String currency, String toAmount, String toCurrency, String envelopeId) {
-        jdbcClient.sql("""
-                        INSERT INTO transaction_entries (id, transaction_id, account_id, amount, type, currency, to_amount, to_currency, envelope_id)
-                        VALUES (:id, :transactionId, :accountId, :amount, :type, :currency, :toAmount, :toCurrency, :envelopeId)
-                        """)
-                .param("id", java.util.UUID.randomUUID().toString())
-                .param("transactionId", transactionId).param("accountId", accountId)
-                .param("amount", new BigDecimal(amount)).param("type", type).param("currency", currency)
-                .param("toAmount", toAmount != null ? new BigDecimal(toAmount) : null)
-                .param("toCurrency", toCurrency).param("envelopeId", envelopeId)
-                .update();
+    /** Spent total for one envelope-month, read through the activity query. */
+    private BigDecimal spentFor(String envelopeId, int year, int month) {
+        return envelopeAllocationRepository.findMonthlyActivityByEnvelope(envelopeId, year, month).stream()
+                .filter(activity -> activity.periodYear() == year && activity.periodMonth() == month)
+                .map(com.rslima.ricash.ledgers.envelopes.EnvelopeAllocationRepository.MonthlyActivity::spent)
+                .findFirst()
+                .orElse(BigDecimal.ZERO);
     }
 }

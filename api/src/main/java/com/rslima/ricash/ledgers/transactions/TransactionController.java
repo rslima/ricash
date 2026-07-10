@@ -1,11 +1,10 @@
 package com.rslima.ricash.ledgers.transactions;
 
-import com.toedter.spring.hateoas.jsonapi.JsonApiError;
-import com.toedter.spring.hateoas.jsonapi.JsonApiErrors;
+import com.rslima.ricash.ledgers.DateRanges;
+import com.rslima.ricash.web.PagedModels;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.jetbrains.annotations.Nullable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.hateoas.EntityModel;
@@ -14,7 +13,6 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.web.bind.annotation.DeleteMapping;
-import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -24,11 +22,10 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import static com.rslima.ricash.web.AuthenticatedUser.userId;
 import static com.toedter.spring.hateoas.jsonapi.MediaTypes.JSON_API_VALUE;
 import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.linkTo;
 import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.methodOn;
-import static org.springframework.http.HttpStatus.BAD_REQUEST;
-import static org.springframework.http.HttpStatus.NOT_FOUND;
 
 @RestController
 @RequestMapping(value = "/v1/ledgers/{ledgerSlug}/transactions", produces = JSON_API_VALUE)
@@ -56,27 +53,28 @@ public class TransactionController {
         if (accountId != null && !accountId.isBlank() && year != null && month != null) {
             // Drill-down from the monthly report: all transactions in the
             // category and its subcategories for the given month.
-            transactionResources = transactionService.listCategoryTransactions(getUserId(principal), ledgerSlug, accountId, year, month, pageable)
+            transactionResources = transactionService.listCategoryTransactions(userId(principal), ledgerSlug, accountId, year, month, pageable)
                     .map(transaction -> toEntityModel(transaction, ledgerSlug, principal));
         } else if (accountId != null && !accountId.isBlank()) {
-            transactionResources = transactionService.listAccountTransactions(getUserId(principal), ledgerSlug, accountId, pageable)
+            transactionResources = transactionService.listAccountTransactions(userId(principal), ledgerSlug, accountId, pageable)
                     .map(transaction -> toEntityModel(transaction, ledgerSlug, principal));
         } else if (description != null && !description.isBlank()) {
-            transactionResources = transactionService.searchByDescription(getUserId(principal), ledgerSlug, description, pageable)
+            transactionResources = transactionService.searchByDescription(userId(principal), ledgerSlug, description, pageable)
                     .map(transaction -> toEntityModel(transaction, ledgerSlug, principal));
         } else {
-            transactionResources = transactionService.listLedgerTransactions(getUserId(principal), ledgerSlug, pageable)
+            transactionResources = transactionService.listLedgerTransactions(userId(principal), ledgerSlug, pageable)
                     .map(transaction -> toEntityModel(transaction, ledgerSlug, principal));
         }
 
-        return buildPagedResponse(ledgerSlug, page, size, transactionResources, principal);
+        return PagedModels.toPagedModel(transactionResources,
+                p -> methodOn(TransactionController.class).listTransactions(ledgerSlug, principal, p, size, null, null, null, null));
     }
 
     @GetMapping("/descriptions")
     public java.util.List<String> getDistinctDescriptions(
             @PathVariable String ledgerSlug,
             JwtAuthenticationToken principal) {
-        return transactionService.getDistinctDescriptions(getUserId(principal), ledgerSlug);
+        return transactionService.getDistinctDescriptions(userId(principal), ledgerSlug);
     }
 
     @GetMapping("/templates")
@@ -84,7 +82,7 @@ public class TransactionController {
             @PathVariable String ledgerSlug,
             JwtAuthenticationToken principal) {
         java.util.List<EntityModel<TransactionResource>> resources = transactionService
-                .getTransactionTemplates(getUserId(principal), ledgerSlug)
+                .getTransactionTemplates(userId(principal), ledgerSlug)
                 .stream()
                 .map(transaction -> toEntityModel(transaction, ledgerSlug, principal))
                 .toList();
@@ -98,9 +96,9 @@ public class TransactionController {
             @RequestParam int month,
             JwtAuthenticationToken principal) {
 
-        var report = transactionService.getMonthlyReport(getUserId(principal), ledgerSlug, year, month);
+        var report = transactionService.getMonthlyReport(userId(principal), ledgerSlug, year, month);
         var resource = new MonthlyReportResource(
-                String.format("%d-%02d", year, month),
+                DateRanges.periodId(year, month),
                 report.year(),
                 report.month(),
                 report.incomeByCurrency(),
@@ -116,9 +114,9 @@ public class TransactionController {
             @RequestParam int month,
             JwtAuthenticationToken principal) {
 
-        var breakdown = transactionService.getMonthlyExpenseBreakdown(getUserId(principal), ledgerSlug, year, month);
+        var breakdown = transactionService.getMonthlyExpenseBreakdown(userId(principal), ledgerSlug, year, month);
         var resource = new MonthlyExpenseBreakdownResource(
-                String.format("%d-%02d", year, month),
+                DateRanges.periodId(year, month),
                 breakdown.year(),
                 breakdown.month(),
                 breakdown.expensesByAccountId()
@@ -133,9 +131,9 @@ public class TransactionController {
             @RequestParam int month,
             JwtAuthenticationToken principal) {
 
-        var breakdown = transactionService.getMonthlyIncomeBreakdown(getUserId(principal), ledgerSlug, year, month);
+        var breakdown = transactionService.getMonthlyIncomeBreakdown(userId(principal), ledgerSlug, year, month);
         var resource = new MonthlyIncomeBreakdownResource(
-                String.format("%d-%02d", year, month),
+                DateRanges.periodId(year, month),
                 breakdown.year(),
                 breakdown.month(),
                 breakdown.incomeByAccountId()
@@ -155,21 +153,11 @@ public class TransactionController {
 
         final var pageable = PageRequest.of(page, size);
         Page<EntityModel<CategoryTransactionResource>> resources = transactionService
-                .listCategoryTransactionAmounts(getUserId(principal), ledgerSlug, accountId, year, month, pageable)
+                .listCategoryTransactionAmounts(userId(principal), ledgerSlug, accountId, year, month, pageable)
                 .map(transaction -> EntityModel.of(toCategoryResource(transaction)));
 
-        var pagedModel = PagedModel.of(
-                resources.getContent(),
-                new PagedModel.PageMetadata(
-                        resources.getSize(),
-                        resources.getNumber(),
-                        resources.getTotalElements(),
-                        resources.getTotalPages()));
-
-        pagedModel.add(linkTo(methodOn(TransactionController.class)
-                .listCategoryTransactionAmounts(ledgerSlug, principal, accountId, year, month, page, size)).withSelfRel());
-
-        return pagedModel;
+        return PagedModels.toPagedModel(resources,
+                p -> methodOn(TransactionController.class).listCategoryTransactionAmounts(ledgerSlug, principal, accountId, year, month, p, size));
     }
 
     @GetMapping("/{transactionId}")
@@ -178,7 +166,7 @@ public class TransactionController {
             @PathVariable String transactionId,
             JwtAuthenticationToken principal) {
 
-        final var transaction = transactionService.find(getUserId(principal), ledgerSlug, transactionId)
+        final var transaction = transactionService.find(userId(principal), ledgerSlug, transactionId)
                 .orElseThrow(() -> new TransactionNotFoundException(transactionId));
 
         return toEntityModel(transaction, ledgerSlug, principal);
@@ -190,7 +178,7 @@ public class TransactionController {
             JwtAuthenticationToken principal,
             @Valid @RequestBody CreateTransactionRequest request) {
 
-        Transaction created = transactionService.create(getUserId(principal), ledgerSlug, request);
+        Transaction created = transactionService.create(userId(principal), ledgerSlug, request);
         EntityModel<TransactionResource> entityModel = toEntityModel(created, ledgerSlug, principal);
 
         return ResponseEntity
@@ -206,7 +194,7 @@ public class TransactionController {
             JwtAuthenticationToken principal,
             @Valid @RequestBody UpdateTransactionRequest request) {
 
-        Transaction updated = transactionService.update(getUserId(principal), ledgerSlug, transactionId, request);
+        Transaction updated = transactionService.update(userId(principal), ledgerSlug, transactionId, request);
         return toEntityModel(updated, ledgerSlug, principal);
     }
 
@@ -216,12 +204,8 @@ public class TransactionController {
             @PathVariable String transactionId,
             JwtAuthenticationToken principal) {
 
-        transactionService.delete(getUserId(principal), ledgerSlug, transactionId);
+        transactionService.delete(userId(principal), ledgerSlug, transactionId);
         return ResponseEntity.noContent().build();
-    }
-
-    private static @Nullable String getUserId(JwtAuthenticationToken principal) {
-        return principal.getName();
     }
 
     private CategoryTransactionResource toCategoryResource(CategoryTransaction transaction) {
@@ -239,73 +223,5 @@ public class TransactionController {
         entityModel.add(linkTo(methodOn(TransactionController.class)
                 .getTransaction(ledgerSlug, transaction.id(), principal)).withSelfRel());
         return entityModel;
-    }
-
-    private PagedModel<EntityModel<TransactionResource>> buildPagedResponse(
-            String ledgerSlug,
-            int page,
-            int size,
-            Page<EntityModel<TransactionResource>> transactionResources,
-            JwtAuthenticationToken principal) {
-
-        var pagedModel = PagedModel.of(
-                transactionResources.getContent(),
-                new PagedModel.PageMetadata(
-                        transactionResources.getSize(),
-                        transactionResources.getNumber(),
-                        transactionResources.getTotalElements(),
-                        transactionResources.getTotalPages()));
-
-        pagedModel.add(linkTo(methodOn(TransactionController.class)
-                .listTransactions(ledgerSlug, principal, page, size, null, null, null, null)).withSelfRel());
-        pagedModel.add(linkTo(methodOn(TransactionController.class)
-                .listTransactions(ledgerSlug, principal, 0, size, null, null, null, null)).withRel("first"));
-
-        if (transactionResources.getTotalPages() > 0) {
-            pagedModel.add(linkTo(methodOn(TransactionController.class).listTransactions(
-                    ledgerSlug,
-                    principal,
-                    transactionResources.getTotalPages() - 1,
-                    size,
-                    null, null, null, null)).withRel("last"));
-        }
-        if (transactionResources.hasNext()) {
-            pagedModel.add(linkTo(methodOn(TransactionController.class).listTransactions(
-                    ledgerSlug,
-                    principal,
-                    transactionResources.getNumber() + 1,
-                    size,
-                    null, null, null, null)).withRel("next"));
-        }
-        if (transactionResources.hasPrevious()) {
-            pagedModel.add(linkTo(methodOn(TransactionController.class).listTransactions(
-                    ledgerSlug,
-                    principal,
-                    transactionResources.getNumber() - 1,
-                    size,
-                    null, null, null, null)).withRel("prev"));
-        }
-
-        return pagedModel;
-    }
-
-    @ExceptionHandler(TransactionNotFoundException.class)
-    public ResponseEntity<JsonApiErrors> handleTransactionNotFoundException(TransactionNotFoundException ex) {
-        return ResponseEntity.status(NOT_FOUND).body(
-                JsonApiErrors.create().withError(
-                        JsonApiError.create()
-                                .withStatus(Integer.toString(NOT_FOUND.value()))
-                                .withTitle(NOT_FOUND.getReasonPhrase())
-                                .withDetail(ex.getMessage())));
-    }
-
-    @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<JsonApiErrors> handleIllegalArgumentException(IllegalArgumentException ex) {
-        return ResponseEntity.status(BAD_REQUEST).body(
-                JsonApiErrors.create().withError(
-                        JsonApiError.create()
-                                .withStatus(Integer.toString(BAD_REQUEST.value()))
-                                .withTitle(BAD_REQUEST.getReasonPhrase())
-                                .withDetail(ex.getMessage())));
     }
 }

@@ -7,79 +7,23 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * Service for managing financial instruments.
+ * Service for managing financial instruments. Every operation takes the
+ * caller's userId plus the ledger slug and resolves ownership internally, so
+ * an instrument outside the caller's ledger behaves as if it did not exist.
  */
 public interface InstrumentService {
 
-    /**
-     * Finds an instrument by ID.
-     *
-     * @param id the instrument ID
-     * @return the instrument if found
-     */
-    Optional<Instrument> findById(String id);
+    Optional<Instrument> find(String userId, String ledgerSlug, String instrumentId);
 
-    /**
-     * Finds an instrument by ledger and symbol.
-     *
-     * @param ledgerId the ledger ID
-     * @param symbol the instrument symbol
-     * @return the instrument if found
-     */
-    Optional<Instrument> findByLedgerAndSymbol(String ledgerId, String symbol);
+    Page<Instrument> listByLedger(String userId, String ledgerSlug, Pageable pageable);
 
-    /**
-     * Lists all instruments for a ledger with pagination.
-     *
-     * @param ledgerId the ledger ID
-     * @param pageable pagination information
-     * @return page of instruments
-     */
-    Page<Instrument> listByLedger(String ledgerId, Pageable pageable);
+    List<Instrument> listAllByLedger(String userId, String ledgerSlug);
 
-    /**
-     * Lists all instruments for a ledger.
-     *
-     * @param ledgerId the ledger ID
-     * @return list of instruments
-     */
-    List<Instrument> listAllByLedger(String ledgerId);
-
-    /**
-     * Creates a new instrument.
-     *
-     * @param ledgerId the ledger ID
-     * @param symbol the ticker symbol
-     * @param name the full name
-     * @param type the instrument type
-     * @param currency the currency
-     * @param market the market (optional)
-     * @param isin the ISIN code (optional)
-     * @return the created instrument
-     */
-    Instrument create(String ledgerId, String symbol, String name, InstrumentType type,
+    Instrument create(String userId, String ledgerSlug, String symbol, String name, InstrumentType type,
                       String currency, String market, String isin);
 
-    /**
-     * Updates an existing instrument.
-     *
-     * @param id the instrument ID
-     * @param symbol the new symbol
-     * @param name the new name
-     * @param type the new type
-     * @param currency the new currency
-     * @param market the new market
-     * @param isin the new ISIN
-     * @param status the new status
-     * @return the updated instrument
-     */
-    Instrument update(String id, String symbol, String name, InstrumentType type,
-                      String currency, String market, String isin, InstrumentStatus status);
+    Instrument update(String userId, String ledgerSlug, String instrumentId, String symbol, String name,
+                      InstrumentType type, String currency, String market, String isin, InstrumentStatus status);
 
-    /**
-     * Deletes an instrument.
-     *
-     * @param id the instrument ID
-     */
-    void delete(String id);
+    void delete(String userId, String ledgerSlug, String instrumentId);
 }

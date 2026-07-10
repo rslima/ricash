@@ -1,16 +1,9 @@
 package com.rslima.ricash.ledgers.instruments;
 
-import com.rslima.ricash.ledgers.LedgerService;
-
-import com.toedter.spring.hateoas.jsonapi.JsonApiError;
-import com.toedter.spring.hateoas.jsonapi.JsonApiErrors;
+import com.rslima.ricash.web.PagedModels;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.jetbrains.annotations.Nullable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.hateoas.EntityModel;
@@ -26,11 +19,9 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static com.rslima.ricash.web.AuthenticatedUser.userId;
 import static com.toedter.spring.hateoas.jsonapi.MediaTypes.JSON_API_VALUE;
-import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.linkTo;
 import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.methodOn;
-import static org.springframework.http.HttpStatus.BAD_REQUEST;
-import static org.springframework.http.HttpStatus.NOT_FOUND;
 
 @RestController
 @RequestMapping(value = "/v1/ledgers/{ledgerSlug}/instrument-prices", produces = JSON_API_VALUE)
@@ -41,13 +32,6 @@ public class InstrumentPriceController {
     private final InstrumentPriceService instrumentPriceService;
     private final InstrumentService instrumentService;
     private final InstrumentPriceMapper instrumentPriceMapper;
-    private final LedgerService ledgerService;
-
-    public record CreateInstrumentPriceRequest(
-            @NotBlank String instrumentId,
-            @NotNull @Positive BigDecimal price,
-            @NotNull LocalDate effectiveDate
-    ) {}
 
     @GetMapping
     public PagedModel<EntityModel<InstrumentPriceResource>> listPrices(
@@ -57,24 +41,25 @@ public class InstrumentPriceController {
             @RequestParam(name = "page[size]", required = false, defaultValue = "50") int size,
             @RequestParam(name = "instrumentId", required = false) String instrumentId) {
 
-        String ledgerId = getLedgerId(principal, ledgerSlug);
+        final var userId = userId(principal);
         final var pageable = PageRequest.of(page, size);
 
         // Load instruments for symbol lookup
-        Map<String, Instrument> instrumentMap = instrumentService.listAllByLedger(ledgerId).stream()
+        Map<String, Instrument> instrumentMap = instrumentService.listAllByLedger(userId, ledgerSlug).stream()
                 .collect(Collectors.toMap(Instrument::id, Function.identity()));
 
         Page<EntityModel<InstrumentPriceResource>> priceResources;
 
         if (instrumentId != null && !instrumentId.isBlank()) {
-            priceResources = instrumentPriceService.listByInstrument(instrumentId, pageable)
+            priceResources = instrumentPriceService.listByInstrument(userId, ledgerSlug, instrumentId, pageable)
                     .map(price -> toEntityModel(price, instrumentMap.get(price.instrumentId()), ledgerSlug, principal));
         } else {
-            priceResources = instrumentPriceService.listByLedger(ledgerId, pageable)
+            priceResources = instrumentPriceService.listByLedger(userId, ledgerSlug, pageable)
                     .map(price -> toEntityModel(price, instrumentMap.get(price.instrumentId()), ledgerSlug, principal));
         }
 
-        return buildPagedResponse(ledgerSlug, page, size, priceResources, principal);
+        return PagedModels.toPagedModel(priceResources,
+                p -> methodOn(InstrumentPriceController.class).listPrices(ledgerSlug, principal, p, size, instrumentId));
     }
 
     @PostMapping
@@ -84,17 +69,14 @@ public class InstrumentPriceController {
             JwtAuthenticationToken principal,
             @Valid @RequestBody CreateInstrumentPriceRequest request) {
 
-        String ledgerId = getLedgerId(principal, ledgerSlug);
+        final var userId = userId(principal);
 
-        // Verify instrument belongs to ledger
-        Instrument instrument = instrumentService.findById(request.instrumentId())
-                .orElseThrow(() -> new IllegalArgumentException("Instrument not found: " + request.instrumentId()));
-
-        if (!instrument.ledgerId().equals(ledgerId)) {
-            throw new IllegalArgumentException("Instrument does not belong to this ledger");
-        }
+        Instrument instrument = instrumentService.find(userId, ledgerSlug, request.instrumentId())
+                .orElseThrow(() -> new InstrumentNotFoundException(request.instrumentId()));
 
         InstrumentPrice created = instrumentPriceService.savePrice(
+                userId,
+                ledgerSlug,
                 request.instrumentId(),
                 request.price(),
                 request.effectiveDate(),
@@ -110,53 +92,12 @@ public class InstrumentPriceController {
             @PathVariable String priceId,
             JwtAuthenticationToken principal) {
 
-        instrumentPriceService.delete(priceId);
+        instrumentPriceService.delete(userId(principal), ledgerSlug, priceId);
         return ResponseEntity.noContent().build();
-    }
-
-    private String getLedgerId(JwtAuthenticationToken principal, String ledgerSlug) {
-        return ledgerService.findBySlug(getUserId(principal), ledgerSlug)
-                .orElseThrow(() -> new IllegalArgumentException("Ledger not found: " + ledgerSlug))
-                .id();
-    }
-
-    private static @Nullable String getUserId(JwtAuthenticationToken principal) {
-        return principal.getName();
     }
 
     private EntityModel<InstrumentPriceResource> toEntityModel(InstrumentPrice price, Instrument instrument, String ledgerSlug, JwtAuthenticationToken principal) {
         InstrumentPriceResource resource = instrumentPriceMapper.toResource(price, instrument);
         return EntityModel.of(resource);
-    }
-
-    private PagedModel<EntityModel<InstrumentPriceResource>> buildPagedResponse(
-            String ledgerSlug,
-            int page,
-            int size,
-            Page<EntityModel<InstrumentPriceResource>> priceResources,
-            JwtAuthenticationToken principal) {
-
-        var pagedModel = PagedModel.of(
-                priceResources.getContent(),
-                new PagedModel.PageMetadata(
-                        priceResources.getSize(),
-                        priceResources.getNumber(),
-                        priceResources.getTotalElements(),
-                        priceResources.getTotalPages()));
-
-        pagedModel.add(linkTo(methodOn(InstrumentPriceController.class)
-                .listPrices(ledgerSlug, principal, page, size, null)).withSelfRel());
-
-        return pagedModel;
-    }
-
-    @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<JsonApiErrors> handleIllegalArgumentException(IllegalArgumentException ex) {
-        return ResponseEntity.status(BAD_REQUEST).body(
-                JsonApiErrors.create().withError(
-                        JsonApiError.create()
-                                .withStatus(Integer.toString(BAD_REQUEST.value()))
-                                .withTitle(BAD_REQUEST.getReasonPhrase())
-                                .withDetail(ex.getMessage())));
     }
 }
