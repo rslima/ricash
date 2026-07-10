@@ -1,22 +1,9 @@
 import { useState } from "react"
 import { NavLink, useLocation } from "react-router-dom"
 import { useTranslation } from "react-i18next"
-import {
-  LayoutDashboard,
-  Wallet,
-  ArrowLeftRight,
-  PiggyBank,
-  PieChart,
-  MoreHorizontal,
-  BookOpen,
-  FolderOpen,
-  Briefcase,
-  DollarSign,
-  TrendingUp,
-  FileBarChart,
-  Settings,
-} from "lucide-react"
+import { MoreHorizontal } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { navItems } from "@/components/layout/nav-items"
 import {
   Sheet,
   SheetContent,
@@ -25,23 +12,8 @@ import {
   SheetDescription,
 } from "@/components/ui/sheet"
 
-const primaryTabs = [
-  { key: "dashboard", href: "/", icon: LayoutDashboard },
-  { key: "accounts", href: "/accounts", icon: Wallet },
-  { key: "transactions", href: "/transactions", icon: ArrowLeftRight },
-  { key: "budget", href: "/budget", icon: PiggyBank },
-  { key: "portfolio", href: "/portfolio", icon: PieChart },
-]
-
-const moreItems = [
-  { key: "ledgers", href: "/ledgers", icon: BookOpen },
-  { key: "envelopes", href: "/envelopes", icon: FolderOpen },
-  { key: "instruments", href: "/instruments", icon: Briefcase },
-  { key: "instrumentPrices", href: "/instrument-prices", icon: DollarSign },
-  { key: "reports", href: "/reports", icon: FileBarChart },
-  { key: "exchangeRates", href: "/exchange-rates", icon: TrendingUp },
-  { key: "settings", href: "/settings", icon: Settings },
-]
+const primaryTabs = navItems.filter((item) => item.group === "primary")
+const moreItems = navItems.filter((item) => item.group === "more")
 
 export function BottomNav() {
   const { t } = useTranslation()
