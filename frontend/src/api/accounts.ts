@@ -5,7 +5,7 @@ export async function getAccounts(
   ledgerSlug: string,
   params?: PaginationParams
 ): Promise<JsonApiListResponse<AccountResource>> {
-  return apiClient.get(`/ledgers/${ledgerSlug}/accounts`, params as Record<string, string | number | undefined>)
+  return apiClient.get(`/ledgers/${ledgerSlug}/accounts`, params)
 }
 
 export async function getAccount(ledgerSlug: string, accountId: string): Promise<JsonApiResponse<AccountResource>> {

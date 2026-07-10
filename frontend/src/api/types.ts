@@ -216,8 +216,9 @@ export interface BalanceSummary {
   balanceByCurrency: Record<string, number>
 }
 
-// Pagination params
-export interface PaginationParams {
+// Pagination params (type alias, not interface: aliases are assignable to
+// the client's QueryParams index signature without casts)
+export type PaginationParams = {
   "page[number]"?: number
   "page[size]"?: number
 }

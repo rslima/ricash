@@ -2,7 +2,7 @@ import { apiClient } from "./client"
 import type { JsonApiListResponse, JsonApiResponse, LedgerResource, PaginationParams } from "./types"
 
 export async function getLedgers(params?: PaginationParams): Promise<JsonApiListResponse<LedgerResource>> {
-  return apiClient.get("/ledgers", params as Record<string, string | number | undefined>)
+  return apiClient.get("/ledgers", params)
 }
 
 export async function getLedger(slug: string): Promise<JsonApiResponse<LedgerResource>> {

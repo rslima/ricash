@@ -35,7 +35,7 @@ export async function getInstruments(
   ledgerSlug: string,
   params?: PaginationParams
 ): Promise<JsonApiListResponse<InstrumentResource>> {
-  return apiClient.get(`/ledgers/${ledgerSlug}/instruments`, params as Record<string, string | number | undefined>)
+  return apiClient.get(`/ledgers/${ledgerSlug}/instruments`, params)
 }
 
 export async function getAllInstruments(ledgerSlug: string): Promise<InstrumentResource[]> {
@@ -75,7 +75,7 @@ export async function getInstrumentPrices(
   ledgerSlug: string,
   params?: PaginationParams & { instrumentId?: string }
 ): Promise<JsonApiListResponse<InstrumentPriceResource>> {
-  return apiClient.get(`/ledgers/${ledgerSlug}/instrument-prices`, params as Record<string, string | number | undefined>)
+  return apiClient.get(`/ledgers/${ledgerSlug}/instrument-prices`, params)
 }
 
 export async function createInstrumentPrice(
