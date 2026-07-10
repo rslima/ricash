@@ -75,7 +75,6 @@ interface EnvelopeBudgetRowProps {
   envelope: EnvelopeResource
   balance: EnvelopeBalance | undefined
   onAllocate: (envelopeId: string, amount: number) => void
-  t: (key: string) => string
 }
 
 function EnvelopeBudgetRow({ envelope, balance, onAllocate }: EnvelopeBudgetRowProps) {
@@ -471,7 +470,6 @@ export function Budget() {
                         envelope={envelope}
                         balance={balanceMap.get(envelope.id)}
                         onAllocate={handleAllocate}
-                        t={t}
                       />
                     ))}
                   </TableBody>
@@ -509,7 +507,6 @@ export function Budget() {
                         envelope={envelope}
                         balance={balanceMap.get(envelope.id)}
                         onAllocate={handleAllocate}
-                        t={t}
                       />
                     ))}
                   </TableBody>

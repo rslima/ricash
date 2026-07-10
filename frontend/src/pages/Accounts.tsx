@@ -106,10 +106,10 @@ interface AccountRowProps {
   onDelete: (accountId: string) => void
   onCreateChild: (account: AccountResource) => void
   ledgerSlug: string
-  t: (key: string) => string
 }
 
-function AccountRow({ node, depth, expandedIds, onToggleExpand, onEdit, onDelete, onCreateChild, ledgerSlug, t }: AccountRowProps) {
+function AccountRow({ node, depth, expandedIds, onToggleExpand, onEdit, onDelete, onCreateChild, ledgerSlug }: AccountRowProps) {
+  const { t } = useTranslation()
   const { account, children } = node
   const hasChildren = children.length > 0
   const isExpanded = expandedIds.has(account.id)
@@ -187,7 +187,6 @@ function AccountRow({ node, depth, expandedIds, onToggleExpand, onEdit, onDelete
             onDelete={onDelete}
             onCreateChild={onCreateChild}
             ledgerSlug={ledgerSlug}
-            t={t}
           />
         ))}
     </>
@@ -865,7 +864,6 @@ export function Accounts() {
                             onDelete={handleDelete}
                             onCreateChild={handleCreateChild}
                             ledgerSlug={selectedLedgerSlug!}
-                            t={t}
                           />
                         ))}
                       </TableBody>

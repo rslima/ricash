@@ -104,7 +104,6 @@ interface EnvelopeRowProps {
   onDelete: (envelopeId: string) => void
   onCreateChild: (envelope: EnvelopeResource) => void
   onManageAccounts: (envelope: EnvelopeResource) => void
-  t: (key: string) => string
 }
 
 function EnvelopeRow({
@@ -116,8 +115,8 @@ function EnvelopeRow({
   onDelete,
   onCreateChild,
   onManageAccounts,
-  t,
 }: EnvelopeRowProps) {
+  const { t } = useTranslation()
   const { envelope, children } = node
   const hasChildren = children.length > 0
   const isExpanded = expandedIds.has(envelope.id)
@@ -202,7 +201,6 @@ function EnvelopeRow({
             onDelete={onDelete}
             onCreateChild={onCreateChild}
             onManageAccounts={onManageAccounts}
-            t={t}
           />
         ))}
     </>
@@ -867,7 +865,6 @@ export function Envelopes() {
                             onDelete={handleDelete}
                             onCreateChild={handleCreateChild}
                             onManageAccounts={handleManageAccounts}
-                            t={t}
                           />
                         ))}
                       </TableBody>
