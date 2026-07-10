@@ -38,7 +38,8 @@ export function formatDate(date: string | Date): string {
   if (typeof date === "string") {
     // Parse date string as local time to avoid timezone issues
     // "2025-01-30" should be Jan 30 in local time, not UTC
-    const [year, month, day] = date.split("T")[0].split("-").map(Number)
+    const [datePart = date] = date.split("T")
+    const [year = 0, month = 1, day = 1] = datePart.split("-").map(Number)
     dateObj = new Date(year, month - 1, day)
   } else {
     dateObj = date

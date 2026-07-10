@@ -295,6 +295,7 @@ export function ExpenseBreakdownChart({ ledgers }: Props) {
                         style={{ cursor: "pointer" }}
                         onClick={(_, index) => {
                           const slice = slices[index]
+                          if (!slice) return
                           handleSliceClick(slice.accountId, slice.name, currency)
                         }}
                       >

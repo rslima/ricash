@@ -49,39 +49,41 @@ export function useTransactionForm({
   }
 
   const updateEntry = (index: number, field: keyof TransactionEntry, value: string) => {
-    const newEntries = [...entries]
-    newEntries[index] = { ...newEntries[index], [field]: value }
+    const current = entries[index]
+    if (!current) return
+
+    const updated: TransactionEntry = { ...current, [field]: value }
 
     // Auto-fill toCurrency when account is selected and needs conversion
     if (field === "accountId" && value) {
       const account = accounts.find((a) => a.id === value)
-      const entryCurrency = newEntries[index].currency
-      if (account && account.attributes.currency !== entryCurrency) {
-        newEntries[index].toCurrency = account.attributes.currency
+      if (account && account.attributes.currency !== updated.currency) {
+        updated.toCurrency = account.attributes.currency
       } else {
         // Clear conversion fields if same currency
-        newEntries[index].toAmount = undefined
-        newEntries[index].toCurrency = undefined
+        updated.toAmount = undefined
+        updated.toCurrency = undefined
       }
       // Auto-fill envelope from account mapping
-      if (!newEntries[index].envelopeId && envelopeMappings[value]) {
-        newEntries[index].envelopeId = envelopeMappings[value]
+      const mappedEnvelope = envelopeMappings[value]
+      if (!updated.envelopeId && mappedEnvelope) {
+        updated.envelopeId = mappedEnvelope
       }
     }
 
     // Auto-update toCurrency when currency changes
-    if (field === "currency" && newEntries[index].accountId) {
-      const account = accounts.find((a) => a.id === newEntries[index].accountId)
+    if (field === "currency" && updated.accountId) {
+      const account = accounts.find((a) => a.id === updated.accountId)
       if (account && account.attributes.currency !== value) {
-        newEntries[index].toCurrency = account.attributes.currency
+        updated.toCurrency = account.attributes.currency
       } else {
         // Clear conversion fields if same currency
-        newEntries[index].toAmount = undefined
-        newEntries[index].toCurrency = undefined
+        updated.toAmount = undefined
+        updated.toCurrency = undefined
       }
     }
 
-    setEntries(newEntries)
+    setEntries(entries.map((entry, i) => (i === index ? updated : entry)))
   }
 
   // Trigger auto-balance when the user finishes editing an amount field.

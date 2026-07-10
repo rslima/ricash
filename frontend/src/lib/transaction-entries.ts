@@ -71,15 +71,17 @@ export function autoBalanceEntries(entries: readonly TransactionEntry[]): readon
 
   for (const currency of Object.keys(byCurrency)) {
     const group = byCurrency[currency]
-    const emptyEntries = group.entries.filter(({ entry }) => isAmountEmpty(entry.amount))
-    if (emptyEntries.length !== 1) continue
+    if (!group) continue
 
-    const { index: emptyIndex, entry: emptyEntry } = emptyEntries[0]
+    const emptyEntries = group.entries.filter(({ entry }) => isAmountEmpty(entry.amount))
+    const empty = emptyEntries.length === 1 ? emptyEntries[0] : undefined
+    if (!empty) continue
+
     const { debits, credits } = group
-    const neededAmount = emptyEntry.type === "DEBIT" ? credits - debits : debits - credits
+    const neededAmount = empty.entry.type === "DEBIT" ? credits - debits : debits - credits
 
     if (neededAmount > 0) {
-      newEntries[emptyIndex] = { ...newEntries[emptyIndex], amount: neededAmount.toFixed(2) }
+      newEntries[empty.index] = { ...empty.entry, amount: neededAmount.toFixed(2) }
       modified = true
     }
   }
@@ -113,8 +115,9 @@ export function isBalanced(entries: readonly TransactionEntry[]): boolean {
   if (currencies.length === 0) return false
 
   return currencies.every((currency) => {
-    const { debits, credits } = byCurrency[currency]
-    return Math.abs(debits - credits) < 0.01
+    const group = byCurrency[currency]
+    if (!group) return true
+    return Math.abs(group.debits - group.credits) < 0.01
   })
 }
 

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react"
+import { todayISO } from "@/lib/dates"
 import { useTranslation } from "react-i18next"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -39,12 +40,12 @@ export function ExchangeRates() {
   const [fromCurrency, setFromCurrency] = useState("")
   const [toCurrency, setToCurrency] = useState("")
   const [rate, setRate] = useState("")
-  const [effectiveDate, setEffectiveDate] = useState(new Date().toISOString().split("T")[0])
+  const [effectiveDate, setEffectiveDate] = useState(todayISO())
 
   // Fetch-from-external form state
   const [fetchFrom, setFetchFrom] = useState("")
   const [fetchTo, setFetchTo] = useState("")
-  const [fetchDate, setFetchDate] = useState(new Date().toISOString().split("T")[0])
+  const [fetchDate, setFetchDate] = useState(todayISO())
 
   // Server state: TanStack Query owns fetching, caching, and loading flags.
   const { data: resp, isLoading, isError, error } = useExchangeRates({ "page[size]": 50 }, isAuthenticated)
@@ -62,7 +63,7 @@ export function ExchangeRates() {
     setFromCurrency("")
     setToCurrency("")
     setRate("")
-    setEffectiveDate(new Date().toISOString().split("T")[0])
+    setEffectiveDate(todayISO())
   }
 
   const isFormValid = () => {
@@ -105,7 +106,7 @@ export function ExchangeRates() {
   const resetFetchForm = () => {
     setFetchFrom("")
     setFetchTo("")
-    setFetchDate(new Date().toISOString().split("T")[0])
+    setFetchDate(todayISO())
   }
 
   const isFetchFormValid = () => {

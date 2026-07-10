@@ -57,9 +57,9 @@ function buildCategoryRows(
     .map((a) => ({
       accountId: a.id,
       name: a.attributes.name,
-      value: valueByAccountId[a.id],
+      value: valueByAccountId[a.id] ?? 0,
       currency: a.attributes.currency,
-      ledgerSlug: ledgerSlugByAccountId[a.id],
+      ledgerSlug: ledgerSlugByAccountId[a.id] ?? "",
     }))
     .sort((a, b) => b.value - a.value)
 }

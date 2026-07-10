@@ -65,9 +65,10 @@ export function BudgetUtilizationChart({ ledgers, defaultCurrency }: Props) {
       for (const b of budget.envelopeBalances) {
         const info = nameMap.get(b.envelopeId)
         if (!info || info.type !== "EXPENSE" || info.currency !== defaultCurrency) continue
-        if (merged[info.name]) {
-          merged[info.name].allocated += b.allocated
-          merged[info.name].spent += b.spent
+        const existing = merged[info.name]
+        if (existing) {
+          existing.allocated += b.allocated
+          existing.spent += b.spent
         } else {
           merged[info.name] = { name: info.name, allocated: b.allocated, spent: b.spent }
         }

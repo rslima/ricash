@@ -98,11 +98,15 @@ export function Portfolio() {
             </CardHeader>
             <CardContent>
               <div className="space-y-1">
-                {currencies.map((currency) => (
-                  <div key={currency} className="text-2xl font-bold">
-                    {formatCurrency(totalsByCurrency[currency].cost, currency)}
-                  </div>
-                ))}
+                {currencies.map((currency) => {
+                  const totals = totalsByCurrency[currency]
+                  if (!totals) return null
+                  return (
+                    <div key={currency} className="text-2xl font-bold">
+                      {formatCurrency(totals.cost, currency)}
+                    </div>
+                  )
+                })}
               </div>
               <p className="text-xs text-muted-foreground">
                 {t("portfolio.investedAmount")}
@@ -118,13 +122,15 @@ export function Portfolio() {
             </CardHeader>
             <CardContent>
               <div className="space-y-1">
-                {currencies.map((currency) => (
-                  <div key={currency} className="text-2xl font-bold">
-                    {totalsByCurrency[currency].hasPrice
-                      ? formatCurrency(totalsByCurrency[currency].value, currency)
-                      : "-"}
-                  </div>
-                ))}
+                {currencies.map((currency) => {
+                  const totals = totalsByCurrency[currency]
+                  if (!totals) return null
+                  return (
+                    <div key={currency} className="text-2xl font-bold">
+                      {totals.hasPrice ? formatCurrency(totals.value, currency) : "-"}
+                    </div>
+                  )
+                })}
               </div>
               <p className="text-xs text-muted-foreground">
                 {hasCurrentPrices ? t("portfolio.marketValue") : t("portfolio.noPrices")}
@@ -142,6 +148,7 @@ export function Portfolio() {
               <div className="space-y-1">
                 {currencies.map((currency) => {
                   const totals = totalsByCurrency[currency]
+                  if (!totals) return null
                   const gainPercent = totals.cost > 0 ? ((totals.gain / totals.cost) * 100) : 0
                   return (
                     <div key={currency}>
