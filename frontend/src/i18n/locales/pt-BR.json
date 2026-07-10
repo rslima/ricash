@@ -212,6 +212,10 @@
     "page": "Página {{current}} de {{total}}",
     "totalTransactions": "{{count}} transação(ões)",
     "perPage": "por página",
+    "firstPage": "Primeira página",
+    "prevPage": "Página anterior",
+    "nextPage": "Próxima página",
+    "lastPage": "Última página",
     "searchByDescription": "Buscar por descrição..."
   },
   "accountTransactions": {
