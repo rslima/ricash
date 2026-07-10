@@ -1,9 +1,8 @@
-import { useEffect, useState, useMemo } from "react"
-import { useParams, Link } from "react-router-dom"
+import { useState, useMemo } from "react"
+import { Link } from "react-router-dom"
 import { useTranslation } from "react-i18next"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Skeleton } from "@/components/ui/skeleton"
 import { Input } from "@/components/ui/input"
 import {
   Table,
@@ -22,12 +21,18 @@ import {
 } from "@/components/ui/select"
 import { useAuth } from "@/contexts/AuthContext"
 import { useEnvelopes, useBudgetSummary, useAllocateEnvelope } from "@/api/envelopes.hooks"
-import { useLedgers } from "@/api/ledgers.hooks"
 import type { EnvelopeResource, EnvelopeBalance, EnvelopeType } from "@/api/types"
 import { formatCurrency } from "@/lib/utils"
 import { ChevronLeft, ChevronRight, FolderOpen, TrendingUp, TrendingDown, PiggyBank } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useErrorHandler } from "@/hooks/use-error-handler"
+import { SignInRequired } from "@/components/SignInRequired"
+import { EmptyState } from "@/components/EmptyState"
+import { TableSkeleton } from "@/components/ui/table-skeleton"
+import { LedgerSelector } from "@/components/LedgerSelector"
+import { useLedgerSelection } from "@/hooks/use-ledger-selection"
+import { combineQueries, useQueryErrorToast } from "@/hooks/use-query-error-toast"
+import { MONTH_KEYS } from "@/lib/dates"
 
 interface BudgetProgressBarProps {
   spent: number
@@ -158,57 +163,36 @@ function EnvelopeBudgetRow({ envelope, balance, onAllocate }: EnvelopeBudgetRowP
   )
 }
 
-const MONTHS = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December"
-]
-
 export function Budget() {
   const { t } = useTranslation()
-  const { ledgerSlug } = useParams<{ ledgerSlug?: string }>()
   const { isAuthenticated } = useAuth()
   const handleError = useErrorHandler()
-  const [selectedLedgerSlug, setSelectedLedgerSlug] = useState<string | null>(ledgerSlug || null)
 
   const now = new Date()
   const [selectedYear, setSelectedYear] = useState(now.getFullYear())
   const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1)
 
   // Server state: TanStack Query owns fetching, caching, and loading flags.
-  const {
-    data: ledgersResponse,
-    isError: isLedgersError,
-    error: ledgersError,
-  } = useLedgers(isAuthenticated)
-  const ledgers = useMemo(() => ledgersResponse?.data ?? [], [ledgersResponse])
+  const ledgerSelection = useLedgerSelection()
+  const { ledgers, selectedLedgerSlug, setSelectedLedgerSlug, ledgerCurrency } = ledgerSelection
 
-  const {
-    data: envelopesResponse,
-    isLoading: isEnvelopesLoading,
-    isError: isEnvelopesError,
-    error: envelopesError,
-  } = useEnvelopes(
+  const envelopesQuery = useEnvelopes(
     selectedLedgerSlug ?? "",
     { "page[size]": 200 },
     isAuthenticated && !!selectedLedgerSlug
   )
-  const envelopes = useMemo(() => envelopesResponse?.data ?? [], [envelopesResponse])
+  const envelopes = useMemo(() => envelopesQuery.data?.data ?? [], [envelopesQuery.data])
 
-  const {
-    data: budgetSummary,
-    isLoading: isBudgetLoading,
-    isError: isBudgetError,
-    error: budgetError,
-  } = useBudgetSummary(
+  const budgetQuery = useBudgetSummary(
     selectedLedgerSlug ?? "",
     selectedYear,
     selectedMonth,
     isAuthenticated && !!selectedLedgerSlug
   )
-  const balances = useMemo(() => budgetSummary?.envelopeBalances ?? [], [budgetSummary])
-  const toBeBudgeted = budgetSummary?.toBeBudgeted ?? 0
+  const balances = useMemo(() => budgetQuery.data?.envelopeBalances ?? [], [budgetQuery.data])
+  const toBeBudgeted = budgetQuery.data?.toBeBudgeted ?? 0
 
-  const isLoading = isEnvelopesLoading || isBudgetLoading
+  const { isLoading } = combineQueries(envelopesQuery, budgetQuery)
 
   const allocateEnvelopeMutation = useAllocateEnvelope(selectedLedgerSlug ?? "")
 
@@ -236,25 +220,8 @@ export function Budget() {
     return map
   }, [balances])
 
-  // Default the selected ledger to the first one once ledgers load.
-  useEffect(() => {
-    if (ledgers.length > 0) {
-      setSelectedLedgerSlug(prev => prev ?? ledgers[0].attributes.slug)
-    }
-  }, [ledgers])
-
   // Surface fetch failures as a toast (mutations report their own errors inline).
-  useEffect(() => {
-    if (isLedgersError) handleError(ledgersError, "fetchFailed")
-  }, [isLedgersError, ledgersError, handleError])
-
-  useEffect(() => {
-    if (isEnvelopesError) handleError(envelopesError, "fetchFailed")
-  }, [isEnvelopesError, envelopesError, handleError])
-
-  useEffect(() => {
-    if (isBudgetError) handleError(budgetError, "fetchFailed")
-  }, [isBudgetError, budgetError, handleError])
+  useQueryErrorToast([ledgerSelection, envelopesQuery, budgetQuery])
 
   const handlePreviousMonth = () => {
     if (selectedMonth === 1) {
@@ -293,22 +260,8 @@ export function Budget() {
     )
   }
 
-  const selectedLedger = ledgers.find((l) => l.attributes.slug === selectedLedgerSlug)
-  const ledgerCurrency = selectedLedger?.attributes.currency ?? "BRL"
-
   if (!isAuthenticated) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full">
-        <Card className="w-full max-w-md">
-          <CardHeader className="text-center">
-            <CardTitle>{t("auth.signInRequired")}</CardTitle>
-            <CardDescription>
-              {t("auth.pleaseSignIn", { resource: t("nav.budget").toLowerCase() })}
-            </CardDescription>
-          </CardHeader>
-        </Card>
-      </div>
-    )
+    return <SignInRequired resourceKey="nav.budget" />
   }
 
   return (
@@ -322,20 +275,11 @@ export function Budget() {
         </div>
       </div>
 
-      {ledgers.length > 0 && (
-        <div className="flex gap-2 flex-wrap">
-          {ledgers.map((ledger) => (
-            <Button
-              key={ledger.id}
-              variant={selectedLedgerSlug === ledger.attributes.slug ? "default" : "outline"}
-              size="sm"
-              onClick={() => setSelectedLedgerSlug(ledger.attributes.slug)}
-            >
-              {ledger.attributes.name}
-            </Button>
-          ))}
-        </div>
-      )}
+      <LedgerSelector
+        ledgers={ledgers}
+        selectedSlug={selectedLedgerSlug}
+        onSelect={setSelectedLedgerSlug}
+      />
 
       {/* Month Selector */}
       <div className="flex items-center justify-center gap-4">
@@ -351,7 +295,7 @@ export function Budget() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {MONTHS.map((month, index) => (
+              {MONTH_KEYS.map((month, index) => (
                 <SelectItem key={month} value={(index + 1).toString()}>
                   {t(`budget.months.${month}`)}
                 </SelectItem>
@@ -411,32 +355,30 @@ export function Budget() {
 
       {/* Envelopes by Type */}
       {isLoading ? (
-        <div className="space-y-3">
-          <Skeleton className="h-12 w-full" />
-          <Skeleton className="h-12 w-full" />
-          <Skeleton className="h-12 w-full" />
-        </div>
+        <TableSkeleton />
       ) : !selectedLedgerSlug ? (
         <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <FolderOpen className="h-12 w-12 text-muted-foreground mb-4" />
-            <h3 className="text-lg font-semibold">{t("budget.noLedgerSelected")}</h3>
-            <p className="text-sm text-muted-foreground mb-4">
-              {t("budget.selectLedgerDescription")}
-            </p>
+          <CardContent>
+            <EmptyState
+              icon={FolderOpen}
+              title={t("budget.noLedgerSelected")}
+              description={t("budget.selectLedgerDescription")}
+            />
           </CardContent>
         </Card>
       ) : envelopes.length === 0 ? (
         <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <FolderOpen className="h-12 w-12 text-muted-foreground mb-4" />
-            <h3 className="text-lg font-semibold">{t("budget.noEnvelopes")}</h3>
-            <p className="text-sm text-muted-foreground mb-4">
-              {t("budget.noEnvelopesDescription")}
-            </p>
-            <Link to={`/ledgers/${selectedLedgerSlug}/envelopes`}>
-              <Button variant="outline">{t("budget.goToEnvelopes")}</Button>
-            </Link>
+          <CardContent>
+            <EmptyState
+              icon={FolderOpen}
+              title={t("budget.noEnvelopes")}
+              description={t("budget.noEnvelopesDescription")}
+              action={
+                <Link to={`/ledgers/${selectedLedgerSlug}/envelopes`}>
+                  <Button variant="outline">{t("budget.goToEnvelopes")}</Button>
+                </Link>
+              }
+            />
           </CardContent>
         </Card>
       ) : (

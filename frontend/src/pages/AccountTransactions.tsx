@@ -1,10 +1,9 @@
-import { useEffect, useState, useMemo } from "react"
+import { useEffect, useMemo } from "react"
 import { useParams, Link, useNavigate } from "react-router-dom"
 import { useTranslation } from "react-i18next"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Skeleton } from "@/components/ui/skeleton"
 import {
   Table,
   TableBody,
@@ -19,21 +18,19 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { useAuth } from "@/contexts/AuthContext"
 import { useLedgers } from "@/api/ledgers.hooks"
 import { useAccounts } from "@/api/accounts.hooks"
 import { useTransactions } from "@/api/transactions.hooks"
 import type { AccountResource } from "@/api/types"
 import { formatCurrency, formatDate } from "@/lib/utils"
-import { ArrowLeft, ArrowLeftRight, ChevronRight, Plus, ChevronDown, ChevronLeft, ChevronsLeft, ChevronsRight } from "lucide-react"
-import { useErrorHandler } from "@/hooks/use-error-handler"
+import { ArrowLeft, ArrowLeftRight, ChevronRight, Plus, ChevronDown } from "lucide-react"
+import { SignInRequired } from "@/components/SignInRequired"
+import { EmptyState } from "@/components/EmptyState"
+import { TableSkeleton } from "@/components/ui/table-skeleton"
+import { TablePagination } from "@/components/TablePagination"
+import { usePagination } from "@/hooks/use-pagination"
+import { combineQueries, useQueryErrorToast } from "@/hooks/use-query-error-toast"
 
 // Build breadcrumb path for an account
 function buildAccountBreadcrumb(
@@ -61,45 +58,29 @@ export function AccountTransactions() {
   const { t } = useTranslation()
   const { ledgerSlug, accountId } = useParams<{ ledgerSlug: string; accountId: string }>()
   const { isAuthenticated } = useAuth()
-  const handleError = useErrorHandler()
   const navigate = useNavigate()
-  const [currentPage, setCurrentPage] = useState(0)
-  const [pageSize, setPageSize] = useState(20)
+  const { currentPage, setCurrentPage, pageSize, setPageSize, resetPage } = usePagination(20)
 
   // Server state: TanStack Query owns fetching, caching, and loading flags.
   // Gate every query on auth + route params so nothing fires until they exist.
   const enabled = isAuthenticated && !!ledgerSlug && !!accountId
-  const {
-    data: accountsResp,
-    isLoading: accountsLoading,
-    isError: accountsError,
-    error: accountsErr,
-  } = useAccounts(ledgerSlug ?? "", undefined, enabled)
-  const {
-    data: ledgersResp,
-    isLoading: ledgersLoading,
-    isError: ledgersError,
-    error: ledgersErr,
-  } = useLedgers(enabled)
-  const {
-    data: txResp,
-    isLoading: txLoading,
-    isError: txError,
-    error: txErr,
-  } = useTransactions(
+  const accountsQuery = useAccounts(ledgerSlug ?? "", undefined, enabled)
+  const ledgersQuery = useLedgers(enabled)
+  const txQuery = useTransactions(
     ledgerSlug ?? "",
     { accountId, "page[number]": currentPage, "page[size]": pageSize },
     enabled
   )
+  const { data: accountsResp } = accountsQuery
+  const { data: ledgersResp } = ledgersQuery
+  const { data: txResp } = txQuery
 
   const accounts = useMemo(() => accountsResp?.data ?? [], [accountsResp])
   const transactions = txResp?.data ?? []
   const ledger = ledgersResp?.data.find((l) => l.attributes.slug === ledgerSlug) ?? null
   const totalPages = txResp?.meta?.page?.totalPages ?? 0
   const totalElements = txResp?.meta?.page?.totalElements ?? 0
-  const isLoading = accountsLoading || ledgersLoading || txLoading
-  const isError = accountsError || ledgersError || txError
-  const error = accountsErr ?? ledgersErr ?? txErr
+  const { isLoading } = combineQueries(accountsQuery, ledgersQuery, txQuery)
 
   const account = useMemo(
     () => accounts.find((a) => a.id === accountId),
@@ -127,27 +108,14 @@ export function AccountTransactions() {
 
   // Reset to first page when switching accounts
   useEffect(() => {
-    setCurrentPage(0)
-  }, [accountId])
+    resetPage()
+  }, [accountId, resetPage])
 
   // Surface fetch failures as a toast.
-  useEffect(() => {
-    if (isError) handleError(error, "fetchFailed")
-  }, [isError, error, handleError])
+  useQueryErrorToast([accountsQuery, ledgersQuery, txQuery])
 
   if (!isAuthenticated) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full">
-        <Card className="w-full max-w-md">
-          <CardHeader className="text-center">
-            <CardTitle>{t("auth.signInRequired")}</CardTitle>
-            <CardDescription>
-              {t("auth.pleaseSignIn", { resource: t("nav.transactions").toLowerCase() })}
-            </CardDescription>
-          </CardHeader>
-        </Card>
-      </div>
-    )
+    return <SignInRequired resourceKey="nav.transactions" />
   }
 
   return (
@@ -209,11 +177,7 @@ export function AccountTransactions() {
         </CardHeader>
         <CardContent>
           {isLoading ? (
-            <div className="space-y-3">
-              <Skeleton className="h-12 w-full" />
-              <Skeleton className="h-12 w-full" />
-              <Skeleton className="h-12 w-full" />
-            </div>
+            <TableSkeleton />
           ) : transactions.length > 0 ? (
             <>
             <Table>
@@ -260,54 +224,26 @@ export function AccountTransactions() {
                 ))}
               </TableBody>
             </Table>
-            {totalPages > 1 && (
-              <div className="flex items-center justify-between pt-4">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <span>{t("transactions.totalTransactions", { count: totalElements })}</span>
-                  <span className="text-muted-foreground/50">·</span>
-                  <Select value={String(pageSize)} onValueChange={(value) => { setPageSize(Number(value)); setCurrentPage(0) }}>
-                    <SelectTrigger className="h-8 w-[70px]">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="10">10</SelectItem>
-                      <SelectItem value="20">20</SelectItem>
-                      <SelectItem value="50">50</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <span>{t("transactions.perPage")}</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <span className="text-sm text-muted-foreground mr-2">
-                    {t("transactions.page", { current: currentPage + 1, total: totalPages })}
-                  </span>
-                  <Button variant="outline" size="icon" className="h-8 w-8" disabled={currentPage === 0} onClick={() => setCurrentPage(0)}>
-                    <ChevronsLeft className="h-4 w-4" />
-                  </Button>
-                  <Button variant="outline" size="icon" className="h-8 w-8" disabled={currentPage === 0} onClick={() => setCurrentPage(currentPage - 1)}>
-                    <ChevronLeft className="h-4 w-4" />
-                  </Button>
-                  <Button variant="outline" size="icon" className="h-8 w-8" disabled={currentPage >= totalPages - 1} onClick={() => setCurrentPage(currentPage + 1)}>
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
-                  <Button variant="outline" size="icon" className="h-8 w-8" disabled={currentPage >= totalPages - 1} onClick={() => setCurrentPage(totalPages - 1)}>
-                    <ChevronsRight className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            )}
+            <TablePagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              totalElements={totalElements}
+              pageSize={pageSize}
+              onPageChange={setCurrentPage}
+              onPageSizeChange={setPageSize}
+            />
             </>
           ) : (
-            <div className="flex flex-col items-center justify-center py-12">
-              <ArrowLeftRight className="h-12 w-12 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold">{t("accountTransactions.noTransactions")}</h3>
-              <p className="text-sm text-muted-foreground mb-4">
-                {t("accountTransactions.noTransactionsDescription")}
-              </p>
-              <Link to={`/ledgers/${ledgerSlug}/transactions`}>
-                <Button variant="outline">{t("accountTransactions.goToTransactions")}</Button>
-              </Link>
-            </div>
+            <EmptyState
+              icon={ArrowLeftRight}
+              title={t("accountTransactions.noTransactions")}
+              description={t("accountTransactions.noTransactionsDescription")}
+              action={
+                <Link to={`/ledgers/${ledgerSlug}/transactions`}>
+                  <Button variant="outline">{t("accountTransactions.goToTransactions")}</Button>
+                </Link>
+              }
+            />
           )}
         </CardContent>
       </Card>

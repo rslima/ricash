@@ -1,10 +1,10 @@
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { Link } from "react-router-dom"
 import { useTranslation } from "react-i18next"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Skeleton } from "@/components/ui/skeleton"
+import { TableSkeleton } from "@/components/ui/table-skeleton"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
@@ -29,6 +29,9 @@ import type { LedgerResource } from "@/api/types"
 import { formatDate } from "@/lib/utils"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { useErrorHandler } from "@/hooks/use-error-handler"
+import { useQueryErrorToast } from "@/hooks/use-query-error-toast"
+import { SignInRequired } from "@/components/SignInRequired"
+import { EmptyState } from "@/components/EmptyState"
 import { Plus, Trash2, BookOpen, MoreHorizontal, Pencil } from "lucide-react"
 import {
   DropdownMenu,
@@ -63,9 +66,7 @@ export function Ledgers() {
   const deleteLedgerMutation = useDeleteLedger()
 
   // Surface fetch failures as a toast (mutations report their own errors inline).
-  useEffect(() => {
-    if (isError) handleError(error, "fetchFailed")
-  }, [isError, error, handleError])
+  useQueryErrorToast({ isLoading, isError, error })
 
   const handleDelete = (slug: string) => {
     if (!confirm(t("ledgers.confirmDelete"))) return
@@ -126,18 +127,7 @@ export function Ledgers() {
   }
 
   if (!isAuthenticated) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full">
-        <Card className="w-full max-w-md">
-          <CardHeader className="text-center">
-            <CardTitle>{t("auth.signInRequired")}</CardTitle>
-            <CardDescription>
-              {t("auth.pleaseSignIn", { resource: t("nav.ledgers").toLowerCase() })}
-            </CardDescription>
-          </CardHeader>
-        </Card>
-      </div>
-    )
+    return <SignInRequired resourceKey="nav.ledgers" />
   }
 
   return (
@@ -276,11 +266,7 @@ export function Ledgers() {
         </CardHeader>
         <CardContent>
           {isLoading ? (
-            <div className="space-y-3">
-              <Skeleton className="h-12 w-full" />
-              <Skeleton className="h-12 w-full" />
-              <Skeleton className="h-12 w-full" />
-            </div>
+            <TableSkeleton />
           ) : ledgers.length > 0 ? (
             isMobile ? (
             <div className="space-y-2">
@@ -388,17 +374,17 @@ export function Ledgers() {
             </Table>
             )
           ) : (
-            <div className="flex flex-col items-center justify-center py-12">
-              <BookOpen className="h-12 w-12 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold">{t("ledgers.noLedgers")}</h3>
-              <p className="text-sm text-muted-foreground mb-4">
-                {t("ledgers.noLedgersDescription")}
-              </p>
-              <Button onClick={() => setIsCreateDialogOpen(true)}>
-                <Plus className="mr-2 h-4 w-4" />
-                {t("ledgers.createLedger")}
-              </Button>
-            </div>
+            <EmptyState
+              icon={BookOpen}
+              title={t("ledgers.noLedgers")}
+              description={t("ledgers.noLedgersDescription")}
+              action={
+                <Button onClick={() => setIsCreateDialogOpen(true)}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  {t("ledgers.createLedger")}
+                </Button>
+              }
+            />
           )}
         </CardContent>
       </Card>

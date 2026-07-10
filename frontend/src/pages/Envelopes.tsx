@@ -1,10 +1,8 @@
 import { useEffect, useState, useMemo } from "react"
-import { useParams } from "react-router-dom"
 import { useTranslation } from "react-i18next"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Skeleton } from "@/components/ui/skeleton"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
@@ -40,6 +38,8 @@ import { useAuth } from "@/contexts/AuthContext"
 import { getEnvelopeAccounts } from "@/api/envelopes"
 import { ApiError } from "@/api/client"
 import { useErrorHandler } from "@/hooks/use-error-handler"
+import { useLedgerSelection } from "@/hooks/use-ledger-selection"
+import { combineQueries, useQueryErrorToast } from "@/hooks/use-query-error-toast"
 import {
   useEnvelopes,
   useCreateEnvelope,
@@ -48,7 +48,10 @@ import {
   useSetEnvelopeAccounts,
 } from "@/api/envelopes.hooks"
 import { useAccounts } from "@/api/accounts.hooks"
-import { useLedgers } from "@/api/ledgers.hooks"
+import { SignInRequired } from "@/components/SignInRequired"
+import { EmptyState } from "@/components/EmptyState"
+import { TableSkeleton } from "@/components/ui/table-skeleton"
+import { LedgerSelector } from "@/components/LedgerSelector"
 import type { EnvelopeResource, EnvelopeType, EnvelopeStatus } from "@/api/types"
 import { Plus, Trash2, MoreHorizontal, Pencil, ChevronRight, ChevronDown, FolderOpen, Link as LinkIcon } from "lucide-react"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -209,10 +212,8 @@ function EnvelopeRow({
 
 export function Envelopes() {
   const { t } = useTranslation()
-  const { ledgerSlug } = useParams<{ ledgerSlug?: string }>()
   const { isAuthenticated } = useAuth()
   const handleError = useErrorHandler()
-  const [selectedLedgerSlug, setSelectedLedgerSlug] = useState<string | null>(ledgerSlug || null)
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [isAccountsDialogOpen, setIsAccountsDialogOpen] = useState(false)
@@ -237,13 +238,8 @@ export function Envelopes() {
   })
 
   // Server state: TanStack Query owns fetching, caching, and loading flags.
-  const {
-    data: ledgersResponse,
-    isLoading: isLoadingLedgers,
-    isError: isLedgersError,
-    error: ledgersError,
-  } = useLedgers(isAuthenticated)
-  const ledgers = useMemo(() => ledgersResponse?.data ?? [], [ledgersResponse])
+  const ledgerSelection = useLedgerSelection()
+  const { ledgers, selectedLedgerSlug, setSelectedLedgerSlug, selectedLedger } = ledgerSelection
 
   const envelopesQuery = useEnvelopes(
     selectedLedgerSlug ?? "",
@@ -264,7 +260,7 @@ export function Envelopes() {
   const deleteEnvelopeMutation = useDeleteEnvelope(selectedLedgerSlug ?? "")
   const setEnvelopeAccountsMutation = useSetEnvelopeAccounts(selectedLedgerSlug ?? "")
 
-  const isLoading = isLoadingLedgers || envelopesQuery.isLoading || accountsQuery.isLoading
+  const { isLoading } = combineQueries(ledgerSelection, envelopesQuery, accountsQuery)
 
   const envelopeTree = useMemo(() => buildEnvelopeTree(envelopes), [envelopes])
 
@@ -301,13 +297,6 @@ export function Envelopes() {
     return envelopes.filter((e) => !excludedIds.has(e.id))
   }, [envelopes, editingEnvelope])
 
-  // Default the selected ledger to the first one once ledgers load.
-  useEffect(() => {
-    if (ledgers.length > 0) {
-      setSelectedLedgerSlug((prev) => prev ?? ledgers[0].attributes.slug)
-    }
-  }, [ledgers])
-
   // Expand all envelopes whenever a fresh list arrives (mirrors prior fetch behavior).
   useEffect(() => {
     if (envelopesQuery.data) {
@@ -316,11 +305,7 @@ export function Envelopes() {
   }, [envelopesQuery.data])
 
   // Surface fetch failures as a toast (mutations report their own errors inline).
-  const isError = isLedgersError || envelopesQuery.isError || accountsQuery.isError
-  const error = ledgersError ?? envelopesQuery.error ?? accountsQuery.error
-  useEffect(() => {
-    if (isError) handleError(error, "fetchFailed")
-  }, [isError, error, handleError])
+  useQueryErrorToast([ledgerSelection, envelopesQuery, accountsQuery])
 
   const handleToggleExpand = (id: string) => {
     setExpandedIds((prev) => {
@@ -488,21 +473,8 @@ export function Envelopes() {
   }
 
   if (!isAuthenticated) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full">
-        <Card className="w-full max-w-md">
-          <CardHeader className="text-center">
-            <CardTitle>{t("auth.signInRequired")}</CardTitle>
-            <CardDescription>
-              {t("auth.pleaseSignIn", { resource: t("nav.envelopes").toLowerCase() })}
-            </CardDescription>
-          </CardHeader>
-        </Card>
-      </div>
-    )
+    return <SignInRequired resourceKey="nav.envelopes" />
   }
-
-  const selectedLedger = ledgers.find((l) => l.attributes.slug === selectedLedgerSlug)
 
   return (
     <div className="space-y-6">
@@ -777,20 +749,11 @@ export function Envelopes() {
         </DialogContent>
       </Dialog>
 
-      {ledgers.length > 0 && (
-        <div className="flex gap-2 flex-wrap">
-          {ledgers.map((ledger) => (
-            <Button
-              key={ledger.id}
-              variant={selectedLedgerSlug === ledger.attributes.slug ? "default" : "outline"}
-              size="sm"
-              onClick={() => setSelectedLedgerSlug(ledger.attributes.slug)}
-            >
-              {ledger.attributes.name}
-            </Button>
-          ))}
-        </div>
-      )}
+      <LedgerSelector
+        ledgers={ledgers}
+        selectedSlug={selectedLedgerSlug}
+        onSelect={setSelectedLedgerSlug}
+      />
 
       <Card>
         <CardHeader>
@@ -819,19 +782,13 @@ export function Envelopes() {
         </CardHeader>
         <CardContent>
           {isLoading ? (
-            <div className="space-y-3">
-              <Skeleton className="h-12 w-full" />
-              <Skeleton className="h-12 w-full" />
-              <Skeleton className="h-12 w-full" />
-            </div>
+            <TableSkeleton />
           ) : !selectedLedgerSlug ? (
-            <div className="flex flex-col items-center justify-center py-12">
-              <FolderOpen className="h-12 w-12 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold">{t("envelopes.noLedgerSelected")}</h3>
-              <p className="text-sm text-muted-foreground mb-4">
-                {t("envelopes.selectLedgerDescription")}
-              </p>
-            </div>
+            <EmptyState
+              icon={FolderOpen}
+              title={t("envelopes.noLedgerSelected")}
+              description={t("envelopes.selectLedgerDescription")}
+            />
           ) : envelopes.length > 0 ? (
             <div className="space-y-6">
               {ENVELOPE_TYPE_ORDER.map((type) => {
@@ -874,17 +831,17 @@ export function Envelopes() {
               })}
             </div>
           ) : (
-            <div className="flex flex-col items-center justify-center py-12">
-              <FolderOpen className="h-12 w-12 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold">{t("envelopes.noEnvelopes")}</h3>
-              <p className="text-sm text-muted-foreground mb-4">
-                {t("envelopes.noEnvelopesDescription")}
-              </p>
-              <Button onClick={() => setIsCreateDialogOpen(true)}>
-                <Plus className="mr-2 h-4 w-4" />
-                {t("envelopes.createEnvelope")}
-              </Button>
-            </div>
+            <EmptyState
+              icon={FolderOpen}
+              title={t("envelopes.noEnvelopes")}
+              description={t("envelopes.noEnvelopesDescription")}
+              action={
+                <Button onClick={() => setIsCreateDialogOpen(true)}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  {t("envelopes.createEnvelope")}
+                </Button>
+              }
+            />
           )}
         </CardContent>
       </Card>

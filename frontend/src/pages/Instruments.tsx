@@ -1,10 +1,8 @@
-import { useEffect, useState, useMemo } from "react"
-import { useParams } from "react-router-dom"
+import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Skeleton } from "@/components/ui/skeleton"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
@@ -37,11 +35,16 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { useAuth } from "@/contexts/AuthContext"
-import { useLedgers } from "@/api/ledgers.hooks"
 import { useInstruments, useCreateInstrument, useUpdateInstrument, useDeleteInstrument } from "@/api/instruments.hooks"
 import type { InstrumentResource, InstrumentType, InstrumentStatus } from "@/api/types"
 import { Plus, Trash2, TrendingUp, MoreHorizontal, Pencil, Briefcase } from "lucide-react"
 import { useErrorHandler } from "@/hooks/use-error-handler"
+import { SignInRequired } from "@/components/SignInRequired"
+import { EmptyState } from "@/components/EmptyState"
+import { TableSkeleton } from "@/components/ui/table-skeleton"
+import { LedgerSelector } from "@/components/LedgerSelector"
+import { useLedgerSelection } from "@/hooks/use-ledger-selection"
+import { combineQueries, useQueryErrorToast } from "@/hooks/use-query-error-toast"
 
 const instrumentTypeColors: Record<InstrumentType, "default" | "secondary" | "destructive" | "outline"> = {
   STOCK: "default",
@@ -53,10 +56,8 @@ const instrumentTypeColors: Record<InstrumentType, "default" | "secondary" | "de
 
 export function Instruments() {
   const { t } = useTranslation()
-  const { ledgerSlug } = useParams<{ ledgerSlug?: string }>()
   const { isAuthenticated } = useAuth()
   const handleError = useErrorHandler()
-  const [selectedLedgerSlug, setSelectedLedgerSlug] = useState<string | null>(ledgerSlug || null)
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [editingInstrument, setEditingInstrument] = useState<InstrumentResource | null>(null)
@@ -93,40 +94,22 @@ export function Instruments() {
   }
 
   // Server state: TanStack Query owns fetching, caching, and loading flags.
-  const { data: ledgersResponse, isLoading: isLedgersLoading, isError: isLedgersError, error: ledgersError } = useLedgers(isAuthenticated)
-  const ledgers = useMemo(() => ledgersResponse?.data ?? [], [ledgersResponse])
-  const {
-    data: instrumentsResponse,
-    isLoading: isInstrumentsLoading,
-    isError: isInstrumentsError,
-    error: instrumentsError,
-  } = useInstruments(
+  const ledgerSelection = useLedgerSelection()
+  const { ledgers, selectedLedgerSlug, setSelectedLedgerSlug, selectedLedger } = ledgerSelection
+  const instrumentsQuery = useInstruments(
     selectedLedgerSlug ?? "",
     { "page[size]": 100 },
     isAuthenticated && !!selectedLedgerSlug
   )
-  const instruments = instrumentsResponse?.data ?? []
-  const isLoading = isLedgersLoading || isInstrumentsLoading
+  const instruments = instrumentsQuery.data?.data ?? []
+  const { isLoading } = combineQueries(ledgerSelection, instrumentsQuery)
 
   const createInstrumentMutation = useCreateInstrument(selectedLedgerSlug ?? "")
   const updateInstrumentMutation = useUpdateInstrument(selectedLedgerSlug ?? "")
   const deleteInstrumentMutation = useDeleteInstrument(selectedLedgerSlug ?? "")
 
-  // Default the selected ledger to the first one once ledgers have loaded.
-  useEffect(() => {
-    if (ledgers.length > 0) {
-      setSelectedLedgerSlug(prev => prev ?? ledgers[0].attributes.slug)
-    }
-  }, [ledgers])
-
   // Surface fetch failures as a toast (mutations report their own errors inline).
-  useEffect(() => {
-    if (isLedgersError) handleError(ledgersError, "fetchFailed")
-  }, [isLedgersError, ledgersError, handleError])
-
-  useEffect(() => {
-    if (isInstrumentsError) handleError(instrumentsError, "fetchFailed")
-  }, [isInstrumentsError, instrumentsError, handleError])
+  useQueryErrorToast([ledgerSelection, instrumentsQuery])
 
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault()
@@ -202,21 +185,8 @@ export function Instruments() {
   }
 
   if (!isAuthenticated) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full">
-        <Card className="w-full max-w-md">
-          <CardHeader className="text-center">
-            <CardTitle>{t("auth.signInRequired")}</CardTitle>
-            <CardDescription>
-              {t("auth.pleaseSignIn", { resource: t("nav.instruments").toLowerCase() })}
-            </CardDescription>
-          </CardHeader>
-        </Card>
-      </div>
-    )
+    return <SignInRequired resourceKey="nav.instruments" />
   }
-
-  const selectedLedger = ledgers.find((l) => l.attributes.slug === selectedLedgerSlug)
 
   return (
     <div className="space-y-4">
@@ -437,20 +407,11 @@ export function Instruments() {
         </DialogContent>
       </Dialog>
 
-      {ledgers.length > 0 && (
-        <div className="flex gap-2 flex-wrap">
-          {ledgers.map((ledger) => (
-            <Button
-              key={ledger.id}
-              variant={selectedLedgerSlug === ledger.attributes.slug ? "default" : "outline"}
-              size="sm"
-              onClick={() => setSelectedLedgerSlug(ledger.attributes.slug)}
-            >
-              {ledger.attributes.name}
-            </Button>
-          ))}
-        </div>
-      )}
+      <LedgerSelector
+        ledgers={ledgers}
+        selectedSlug={selectedLedgerSlug}
+        onSelect={setSelectedLedgerSlug}
+      />
 
       <Card>
         <CardHeader>
@@ -468,19 +429,13 @@ export function Instruments() {
         </CardHeader>
         <CardContent>
           {isLoading ? (
-            <div className="space-y-2">
-              {[1, 2, 3].map((i) => (
-                <Skeleton key={i} className="h-12 w-full" />
-              ))}
-            </div>
+            <TableSkeleton />
           ) : instruments.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-8 text-center">
-              <TrendingUp className="h-12 w-12 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold">{t("instruments.noInstruments")}</h3>
-              <p className="text-muted-foreground">
-                {t("instruments.noInstrumentsDescription")}
-              </p>
-            </div>
+            <EmptyState
+              icon={TrendingUp}
+              title={t("instruments.noInstruments")}
+              description={t("instruments.noInstrumentsDescription")}
+            />
           ) : (
             <div className="rounded-md border">
               <Table>

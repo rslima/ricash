@@ -1,9 +1,9 @@
-import { useEffect, useMemo } from "react"
+import { useMemo } from "react"
 import { useParams, useSearchParams, Link } from "react-router-dom"
 import { useTranslation } from "react-i18next"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Skeleton } from "@/components/ui/skeleton"
+import { TableSkeleton } from "@/components/ui/table-skeleton"
 import {
   Table,
   TableBody,
@@ -15,20 +15,16 @@ import {
 import { useAuth } from "@/contexts/AuthContext"
 import { useCategoryTransactions } from "@/api/transactions.hooks"
 import { formatCurrency, formatDate } from "@/lib/utils"
+import { getMonthLabel } from "@/lib/dates"
 import { ArrowLeft, ArrowLeftRight } from "lucide-react"
-import { useErrorHandler } from "@/hooks/use-error-handler"
-
-const MONTH_KEYS = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
-] as const
+import { SignInRequired } from "@/components/SignInRequired"
+import { useQueryErrorToast } from "@/hooks/use-query-error-toast"
 
 export function CategoryTransactions() {
   const { t } = useTranslation()
   const { ledgerSlug, accountId } = useParams<{ ledgerSlug: string; accountId: string }>()
   const [searchParams] = useSearchParams()
   const { isAuthenticated } = useAuth()
-  const handleError = useErrorHandler()
 
   const year = parseInt(searchParams.get("year") ?? "")
   const month = parseInt(searchParams.get("month") ?? "")
@@ -36,23 +32,22 @@ export function CategoryTransactions() {
   const currency = searchParams.get("currency") ?? "BRL"
 
   // Server state: TanStack Query owns fetching, caching, and loading flags.
-  const { data: resp, isLoading, isError, error } = useCategoryTransactions(
+  const transactionsQuery = useCategoryTransactions(
     ledgerSlug ?? "",
     accountId ?? "",
     year,
     month,
     isAuthenticated && !!ledgerSlug && !!accountId && !!year && !!month
   )
+  const { data: resp, isLoading } = transactionsQuery
   const transactions = useMemo(() => resp?.data ?? [], [resp])
 
   // Surface fetch failures as a toast.
-  useEffect(() => {
-    if (isError) handleError(error, "fetchFailed")
-  }, [isError, error, handleError])
+  useQueryErrorToast(transactionsQuery)
 
   const monthLabel = useMemo(() => {
     if (!month || month < 1 || month > 12 || !year) return ""
-    return `${t(`budget.months.${MONTH_KEYS[month - 1]}`)} ${year}`
+    return getMonthLabel(t, year, month)
   }, [t, month, year])
 
   const total = useMemo(
@@ -61,18 +56,7 @@ export function CategoryTransactions() {
   )
 
   if (!isAuthenticated) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full">
-        <Card className="w-full max-w-md">
-          <CardHeader className="text-center">
-            <CardTitle>{t("auth.signInRequired")}</CardTitle>
-            <CardDescription>
-              {t("auth.pleaseSignIn", { resource: t("nav.reports").toLowerCase() })}
-            </CardDescription>
-          </CardHeader>
-        </Card>
-      </div>
-    )
+    return <SignInRequired resourceKey="nav.reports" />
   }
 
   return (
@@ -98,11 +82,7 @@ export function CategoryTransactions() {
         </CardHeader>
         <CardContent>
           {isLoading ? (
-            <div className="space-y-3">
-              <Skeleton className="h-12 w-full" />
-              <Skeleton className="h-12 w-full" />
-              <Skeleton className="h-12 w-full" />
-            </div>
+            <TableSkeleton />
           ) : transactions.length > 0 ? (
             <Table>
               <TableHeader>

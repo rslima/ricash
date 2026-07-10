@@ -1,10 +1,9 @@
-import { useEffect, useState, useMemo } from "react"
-import { useParams, Link, useLocation } from "react-router-dom"
+import { useEffect, useState } from "react"
+import { Link, useLocation } from "react-router-dom"
 import { useTranslation } from "react-i18next"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Skeleton } from "@/components/ui/skeleton"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
@@ -17,6 +16,11 @@ import {
 } from "@/components/ui/dialog"
 import { AccountAutocomplete } from "@/components/AccountAutocomplete"
 import { DescriptionAutocomplete } from "@/components/DescriptionAutocomplete"
+import { SignInRequired } from "@/components/SignInRequired"
+import { EmptyState } from "@/components/EmptyState"
+import { TableSkeleton } from "@/components/ui/table-skeleton"
+import { LedgerSelector } from "@/components/LedgerSelector"
+import { TablePagination } from "@/components/TablePagination"
 import {
   Table,
   TableBody,
@@ -40,7 +44,6 @@ import {
 } from "@/components/ui/select"
 import { useAuth } from "@/contexts/AuthContext"
 import type { TransactionEntryInput, TransactionFilters } from "@/api/transactions"
-import { useLedgers } from "@/api/ledgers.hooks"
 import { useAccounts } from "@/api/accounts.hooks"
 import { useAllInstruments } from "@/api/instruments.hooks"
 import { useEnvelopes, useEnvelopeMappings } from "@/api/envelopes.hooks"
@@ -53,9 +56,13 @@ import {
 } from "@/api/transactions.hooks"
 import type { TransactionResource } from "@/api/types"
 import { formatCurrency, formatDate } from "@/lib/utils"
+import { todayISO } from "@/lib/dates"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { useErrorHandler } from "@/hooks/use-error-handler"
-import { Plus, Trash2, ArrowLeftRight, MoreHorizontal, X, Pencil, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Search } from "lucide-react"
+import { useLedgerSelection } from "@/hooks/use-ledger-selection"
+import { usePagination } from "@/hooks/use-pagination"
+import { combineQueries, useQueryErrorToast } from "@/hooks/use-query-error-toast"
+import { Plus, Trash2, ArrowLeftRight, MoreHorizontal, X, Pencil, Search } from "lucide-react"
 
 interface TransactionEntry {
   accountId: string
@@ -82,15 +89,22 @@ interface LocationState {
 
 export function Transactions() {
   const { t } = useTranslation()
-  const { ledgerSlug } = useParams<{ ledgerSlug?: string }>()
   const location = useLocation()
   const handleError = useErrorHandler()
   const { isAuthenticated } = useAuth()
   const isMobile = useIsMobile()
   const locationState = location.state as LocationState | undefined
-  const [selectedLedgerSlug, setSelectedLedgerSlug] = useState<string | null>(ledgerSlug || null)
-  const [currentPage, setCurrentPage] = useState(0)
-  const [pageSize, setPageSize] = useState(20)
+  const {
+    ledgers,
+    selectedLedgerSlug,
+    setSelectedLedgerSlug,
+    selectedLedger,
+    ledgerCurrency,
+    isLoading: ledgersLoading,
+    isError: ledgersError,
+    error: ledgersErrorValue,
+  } = useLedgerSelection()
+  const { currentPage, setCurrentPage, pageSize, setPageSize } = usePagination(20)
   const [searchDescription, setSearchDescription] = useState("")
   const [activeSearch, setActiveSearch] = useState("")
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
@@ -98,7 +112,7 @@ export function Transactions() {
   const [editingTransaction, setEditingTransaction] = useState<TransactionResource | null>(null)
 
   // Form state
-  const [date, setDate] = useState(new Date().toISOString().split("T")[0])
+  const [date, setDate] = useState(todayISO())
   const [description, setDescription] = useState("")
   const [entries, setEntries] = useState<TransactionEntry[]>([
     { accountId: "", amount: "", currency: "BRL", type: "CREDIT" },
@@ -120,7 +134,6 @@ export function Transactions() {
     ...(activeSearch ? { description: activeSearch } : {}),
   }
 
-  const ledgersQuery = useLedgers(isAuthenticated)
   const txQuery = useTransactions(selectedLedgerSlug ?? "", filters, dataEnabled)
   const accountsQuery = useAccounts(selectedLedgerSlug ?? "", { "page[size]": 200 }, dataEnabled)
   const instrumentsQuery = useAllInstruments(selectedLedgerSlug ?? "", dataEnabled)
@@ -133,7 +146,6 @@ export function Transactions() {
   const deleteTransactionMutation = useDeleteTransaction(selectedLedgerSlug ?? "")
 
   // Read query results (hooks pass the API response straight through).
-  const ledgers = useMemo(() => ledgersQuery.data?.data ?? [], [ledgersQuery.data])
   const transactions = txQuery.data?.data ?? []
   const accounts = accountsQuery.data?.data ?? []
   const instruments = instrumentsQuery.data ?? []
@@ -144,68 +156,36 @@ export function Transactions() {
   const totalElements = txQuery.data?.meta?.page?.totalElements ?? 0
 
   // Reproduce the old single loading flag: skeleton until the ledger's data is present.
-  const isLoading =
-    ledgersQuery.isLoading ||
-    txQuery.isLoading ||
-    accountsQuery.isLoading ||
-    instrumentsQuery.isLoading ||
-    templatesQuery.isLoading ||
-    envelopesQuery.isLoading ||
-    mappingsQuery.isLoading
-
   // Surface any fetch failure as a toast, preserving the old "fetchFailed" key.
-  const isError =
-    ledgersQuery.isError ||
-    txQuery.isError ||
-    accountsQuery.isError ||
-    instrumentsQuery.isError ||
-    templatesQuery.isError ||
-    envelopesQuery.isError ||
-    mappingsQuery.isError
-  const error =
-    ledgersQuery.error ||
-    txQuery.error ||
-    accountsQuery.error ||
-    instrumentsQuery.error ||
-    templatesQuery.error ||
-    envelopesQuery.error ||
-    mappingsQuery.error
-
-  // Compute selected ledger
-  const selectedLedger = useMemo(
-    () => ledgers.find((l) => l.attributes.slug === selectedLedgerSlug),
-    [ledgers, selectedLedgerSlug]
-  )
-
-  useEffect(() => {
-    if (isError) handleError(error, "fetchFailed")
-  }, [isError, error, handleError])
-
-  // Default to the first ledger once ledgers load (unless one is already selected).
-  useEffect(() => {
-    if (ledgers.length > 0) {
-      setSelectedLedgerSlug((prev) => prev ?? ledgers[0].attributes.slug)
-    }
-  }, [ledgers])
+  const queries = [
+    { isLoading: ledgersLoading, isError: ledgersError, error: ledgersErrorValue },
+    txQuery,
+    accountsQuery,
+    instrumentsQuery,
+    templatesQuery,
+    envelopesQuery,
+    mappingsQuery,
+  ]
+  const { isLoading } = combineQueries(...queries)
+  useQueryErrorToast(queries)
 
   // Handle navigation state to pre-fill transaction form
   useEffect(() => {
     if (locationState?.createTransaction && locationState.prefilledEntry && !isLoading && accounts.length > 0) {
       const prefilled = locationState.prefilledEntry
-      const defaultCurrency = selectedLedger?.attributes.currency || "BRL"
 
       // Create entries with the pre-filled account
       const newEntries: TransactionEntry[] = [
         {
           accountId: prefilled.type === "CREDIT" ? prefilled.accountId : "",
           amount: "",
-          currency: prefilled.type === "CREDIT" ? prefilled.currency : defaultCurrency,
+          currency: prefilled.type === "CREDIT" ? prefilled.currency : ledgerCurrency,
           type: "CREDIT",
         },
         {
           accountId: prefilled.type === "DEBIT" ? prefilled.accountId : "",
           amount: "",
-          currency: prefilled.type === "DEBIT" ? prefilled.currency : defaultCurrency,
+          currency: prefilled.type === "DEBIT" ? prefilled.currency : ledgerCurrency,
           type: "DEBIT",
         },
       ]
@@ -216,7 +196,7 @@ export function Transactions() {
       // Clear the location state to prevent re-triggering
       window.history.replaceState({}, document.title)
     }
-  }, [locationState, isLoading, accounts.length, selectedLedger])
+  }, [locationState, isLoading, accounts.length, ledgerCurrency])
 
   const handleDelete = (transactionId: string) => {
     if (!selectedLedgerSlug) return
@@ -228,20 +208,19 @@ export function Transactions() {
   }
 
   const resetForm = () => {
-    setDate(new Date().toISOString().split("T")[0])
+    setDate(todayISO())
     setDescription("")
     setEntries([
-      { accountId: "", amount: "", currency: selectedLedger?.attributes.currency || "BRL", type: "CREDIT" },
-      { accountId: "", amount: "", currency: selectedLedger?.attributes.currency || "BRL", type: "DEBIT" },
+      { accountId: "", amount: "", currency: ledgerCurrency, type: "CREDIT" },
+      { accountId: "", amount: "", currency: ledgerCurrency, type: "DEBIT" },
     ])
   }
 
   const addEntry = (type: "DEBIT" | "CREDIT", isEdit = false) => {
-    const defaultCurrency = selectedLedger?.attributes.currency || "BRL"
     if (isEdit) {
-      setEditEntries([...editEntries, { accountId: "", amount: "", currency: defaultCurrency, type }])
+      setEditEntries([...editEntries, { accountId: "", amount: "", currency: ledgerCurrency, type }])
     } else {
-      setEntries([...entries, { accountId: "", amount: "", currency: defaultCurrency, type }])
+      setEntries([...entries, { accountId: "", amount: "", currency: ledgerCurrency, type }])
     }
   }
 
@@ -435,7 +414,7 @@ export function Transactions() {
     const templateEntries: TransactionEntry[] = template.attributes.entries?.map((entry) => ({
       accountId: entry.accountId || "",
       amount: entry.amount?.toString() || "",
-      currency: entry.currency || selectedLedger?.attributes.currency || "BRL",
+      currency: entry.currency || ledgerCurrency,
       toAmount: entry.toAmount?.toString(),
       toCurrency: entry.toCurrency,
       type: entry.type || "DEBIT",
@@ -563,11 +542,10 @@ export function Transactions() {
     setEditDescription(transaction.attributes.description)
 
     // Convert entries from the transaction
-    const defaultCurrency = selectedLedger?.attributes.currency || "BRL"
     const transactionEntries: TransactionEntry[] = transaction.attributes.entries?.map((entry) => ({
       accountId: entry.accountId || "",
       amount: entry.amount?.toString() || "0",
-      currency: entry.currency || defaultCurrency,
+      currency: entry.currency || ledgerCurrency,
       toAmount: entry.toAmount?.toString(),
       toCurrency: entry.toCurrency,
       type: entry.type || "DEBIT",
@@ -577,8 +555,8 @@ export function Transactions() {
     })) || []
 
     setEditEntries(transactionEntries.length > 0 ? transactionEntries : [
-      { accountId: "", amount: "", currency: selectedLedger?.attributes.currency || "BRL", type: "CREDIT" },
-      { accountId: "", amount: "", currency: selectedLedger?.attributes.currency || "BRL", type: "DEBIT" },
+      { accountId: "", amount: "", currency: ledgerCurrency, type: "CREDIT" },
+      { accountId: "", amount: "", currency: ledgerCurrency, type: "DEBIT" },
     ])
     setIsEditDialogOpen(true)
   }
@@ -618,18 +596,7 @@ export function Transactions() {
   }
 
   if (!isAuthenticated) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full">
-        <Card className="w-full max-w-md">
-          <CardHeader className="text-center">
-            <CardTitle>{t("auth.signInRequired")}</CardTitle>
-            <CardDescription>
-              {t("auth.pleaseSignIn", { resource: t("nav.transactions").toLowerCase() })}
-            </CardDescription>
-          </CardHeader>
-        </Card>
-      </div>
-    )
+    return <SignInRequired resourceKey="nav.transactions" />
   }
 
   const debitTotal = calculateTotal("DEBIT", entries)
@@ -801,7 +768,7 @@ export function Transactions() {
             )
           })}
         <div className="text-right text-sm font-medium">
-          {t("transactions.total")}: {formatCurrency(total, selectedLedger?.attributes.currency || "BRL")}
+          {t("transactions.total")}: {formatCurrency(total, ledgerCurrency)}
         </div>
       </div>
     )
@@ -865,7 +832,7 @@ export function Transactions() {
             {renderEntryForm(entries, "DEBIT", false, debitTotal)}
             {!isBalanced(entries) && debitTotal > 0 && creditTotal > 0 && (
               <p className="text-sm text-destructive text-center">
-                {t("transactions.notBalanced", { debits: formatCurrency(debitTotal, selectedLedger?.attributes.currency || "BRL"), credits: formatCurrency(creditTotal, selectedLedger?.attributes.currency || "BRL") })}
+                {t("transactions.notBalanced", { debits: formatCurrency(debitTotal, ledgerCurrency), credits: formatCurrency(creditTotal, ledgerCurrency) })}
               </p>
             )}
           </div>
@@ -920,7 +887,7 @@ export function Transactions() {
             {renderEntryForm(editEntries, "DEBIT", true, editDebitTotal)}
             {!isBalanced(editEntries) && editDebitTotal > 0 && editCreditTotal > 0 && (
               <p className="text-sm text-destructive text-center">
-                {t("transactions.notBalanced", { debits: formatCurrency(editDebitTotal, selectedLedger?.attributes.currency || "BRL"), credits: formatCurrency(editCreditTotal, selectedLedger?.attributes.currency || "BRL") })}
+                {t("transactions.notBalanced", { debits: formatCurrency(editDebitTotal, ledgerCurrency), credits: formatCurrency(editCreditTotal, ledgerCurrency) })}
               </p>
             )}
           </div>
@@ -936,20 +903,14 @@ export function Transactions() {
         </DialogContent>
       </Dialog>
 
-      {ledgers.length > 0 && (
-        <div className="flex gap-2 flex-wrap">
-          {ledgers.map((ledger) => (
-            <Button
-              key={ledger.id}
-              variant={selectedLedgerSlug === ledger.attributes.slug ? "default" : "outline"}
-              size="sm"
-              onClick={() => { setSelectedLedgerSlug(ledger.attributes.slug); setCurrentPage(0) }}
-            >
-              {ledger.attributes.name}
-            </Button>
-          ))}
-        </div>
-      )}
+      <LedgerSelector
+        ledgers={ledgers}
+        selectedSlug={selectedLedgerSlug}
+        onSelect={(slug) => {
+          setSelectedLedgerSlug(slug)
+          setCurrentPage(0)
+        }}
+      />
 
       <Card>
         <CardHeader>
@@ -1003,22 +964,18 @@ export function Transactions() {
         </CardHeader>
         <CardContent>
           {isLoading ? (
-            <div className="space-y-3">
-              <Skeleton className="h-12 w-full" />
-              <Skeleton className="h-12 w-full" />
-              <Skeleton className="h-12 w-full" />
-            </div>
+            <TableSkeleton />
           ) : !selectedLedgerSlug ? (
-            <div className="flex flex-col items-center justify-center py-12">
-              <ArrowLeftRight className="h-12 w-12 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold">{t("transactions.noLedgerSelected")}</h3>
-              <p className="text-sm text-muted-foreground mb-4">
-                {t("transactions.selectLedgerDescription")}
-              </p>
-              <Link to="/ledgers">
-                <Button variant="outline">{t("transactions.goToLedgers")}</Button>
-              </Link>
-            </div>
+            <EmptyState
+              icon={ArrowLeftRight}
+              title={t("transactions.noLedgerSelected")}
+              description={t("transactions.selectLedgerDescription")}
+              action={
+                <Link to="/ledgers">
+                  <Button variant="outline">{t("transactions.goToLedgers")}</Button>
+                </Link>
+              }
+            />
           ) : transactions.length > 0 ? (
             <>
             {isMobile ? (
@@ -1145,55 +1102,27 @@ export function Transactions() {
               </TableBody>
             </Table>
             )}
-            {totalPages > 1 && (
-              <div className="flex items-center justify-between pt-4">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <span>{t("transactions.totalTransactions", { count: totalElements })}</span>
-                  <span className="text-muted-foreground/50">·</span>
-                  <Select value={String(pageSize)} onValueChange={(value) => { setPageSize(Number(value)); setCurrentPage(0) }}>
-                    <SelectTrigger className="h-8 w-[70px]">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="10">10</SelectItem>
-                      <SelectItem value="20">20</SelectItem>
-                      <SelectItem value="50">50</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <span>{t("transactions.perPage")}</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <span className="text-sm text-muted-foreground mr-2">
-                    {t("transactions.page", { current: currentPage + 1, total: totalPages })}
-                  </span>
-                  <Button variant="outline" size="icon" className="h-8 w-8" disabled={currentPage === 0} onClick={() => setCurrentPage(0)}>
-                    <ChevronsLeft className="h-4 w-4" />
-                  </Button>
-                  <Button variant="outline" size="icon" className="h-8 w-8" disabled={currentPage === 0} onClick={() => setCurrentPage(currentPage - 1)}>
-                    <ChevronLeft className="h-4 w-4" />
-                  </Button>
-                  <Button variant="outline" size="icon" className="h-8 w-8" disabled={currentPage >= totalPages - 1} onClick={() => setCurrentPage(currentPage + 1)}>
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
-                  <Button variant="outline" size="icon" className="h-8 w-8" disabled={currentPage >= totalPages - 1} onClick={() => setCurrentPage(totalPages - 1)}>
-                    <ChevronsRight className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            )}
+            <TablePagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              totalElements={totalElements}
+              pageSize={pageSize}
+              onPageChange={setCurrentPage}
+              onPageSizeChange={setPageSize}
+            />
             </>
           ) : (
-            <div className="flex flex-col items-center justify-center py-12">
-              <ArrowLeftRight className="h-12 w-12 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold">{t("transactions.noTransactions")}</h3>
-              <p className="text-sm text-muted-foreground mb-4">
-                {t("transactions.noTransactionsDescription")}
-              </p>
-              <Button onClick={() => setIsCreateDialogOpen(true)} disabled={accounts.length === 0}>
-                <Plus className="mr-2 h-4 w-4" />
-                {t("transactions.createTransaction")}
-              </Button>
-            </div>
+            <EmptyState
+              icon={ArrowLeftRight}
+              title={t("transactions.noTransactions")}
+              description={t("transactions.noTransactionsDescription")}
+              action={
+                <Button onClick={() => setIsCreateDialogOpen(true)} disabled={accounts.length === 0}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  {t("transactions.createTransaction")}
+                </Button>
+              }
+            />
           )}
         </CardContent>
       </Card>

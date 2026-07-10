@@ -1,10 +1,10 @@
 import { useEffect, useState, useMemo } from "react"
-import { useParams, Link } from "react-router-dom"
+import { Link } from "react-router-dom"
 import { useTranslation } from "react-i18next"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Skeleton } from "@/components/ui/skeleton"
+import { TableSkeleton } from "@/components/ui/table-skeleton"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
@@ -40,13 +40,17 @@ import { useAuth } from "@/contexts/AuthContext"
 import { useAccounts, useCreateAccount, useUpdateAccount, useDeleteAccount } from "@/api/accounts.hooks"
 import { ApiError } from "@/api/client"
 import { useErrorHandler } from "@/hooks/use-error-handler"
-import { useLedgers } from "@/api/ledgers.hooks"
+import { useLedgerSelection } from "@/hooks/use-ledger-selection"
+import { combineQueries, useQueryErrorToast } from "@/hooks/use-query-error-toast"
 import { useEnvelopes, useEnvelopeMappings, useSetEnvelopeAccounts } from "@/api/envelopes.hooks"
 import { getEnvelopeAccounts } from "@/api/envelopes"
 import type { AccountResource } from "@/api/types"
 import { formatCurrency } from "@/lib/utils"
 import { Plus, Trash2, Wallet, MoreHorizontal, Pencil, ChevronRight, ChevronDown } from "lucide-react"
 import { AccountAutocomplete } from "@/components/AccountAutocomplete"
+import { SignInRequired } from "@/components/SignInRequired"
+import { EmptyState } from "@/components/EmptyState"
+import { LedgerSelector } from "@/components/LedgerSelector"
 
 const accountTypeColors: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
   ASSET: "default",
@@ -195,10 +199,10 @@ function AccountRow({ node, depth, expandedIds, onToggleExpand, onEdit, onDelete
 
 export function Accounts() {
   const { t } = useTranslation()
-  const { ledgerSlug } = useParams<{ ledgerSlug?: string }>()
   const { isAuthenticated } = useAuth()
   const handleError = useErrorHandler()
-  const [selectedLedgerSlug, setSelectedLedgerSlug] = useState<string | null>(ledgerSlug || null)
+  const ledgerSelection = useLedgerSelection()
+  const { ledgers, selectedLedgerSlug, setSelectedLedgerSlug, selectedLedger } = ledgerSelection
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [editingAccount, setEditingAccount] = useState<AccountResource | null>(null)
@@ -221,50 +225,26 @@ export function Accounts() {
   })
 
   // Server state: TanStack Query owns fetching, caching, and loading flags.
-  const {
-    data: ledgersResponse,
-    isLoading: isLedgersLoading,
-    isError: isLedgersError,
-    error: ledgersError,
-  } = useLedgers(isAuthenticated)
-  const ledgers = useMemo(() => ledgersResponse?.data ?? [], [ledgersResponse])
+  const accountsQuery = useAccounts(selectedLedgerSlug ?? "", { "page[size]": 200 }, isAuthenticated)
+  const accounts = useMemo(() => accountsQuery.data?.data ?? [], [accountsQuery.data])
 
-  const {
-    data: accountsResponse,
-    isLoading: isAccountsLoading,
-    isError: isAccountsError,
-    error: accountsError,
-  } = useAccounts(selectedLedgerSlug ?? "", { "page[size]": 200 }, isAuthenticated)
-  const accounts = useMemo(() => accountsResponse?.data ?? [], [accountsResponse])
+  const envelopesQuery = useEnvelopes(selectedLedgerSlug ?? "", { "page[size]": 200 }, isAuthenticated)
+  const envelopes = useMemo(() => envelopesQuery.data?.data ?? [], [envelopesQuery.data])
 
-  const {
-    data: envelopesResponse,
-    isLoading: isEnvelopesLoading,
-    isError: isEnvelopesError,
-    error: envelopesError,
-  } = useEnvelopes(selectedLedgerSlug ?? "", { "page[size]": 200 }, isAuthenticated)
-  const envelopes = useMemo(() => envelopesResponse?.data ?? [], [envelopesResponse])
-
-  const {
-    data: envelopeMappingsData,
-    isLoading: isMappingsLoading,
-    isError: isMappingsError,
-    error: mappingsError,
-  } = useEnvelopeMappings(selectedLedgerSlug ?? "", isAuthenticated)
-  const envelopeMappings = envelopeMappingsData ?? {}
+  const mappingsQuery = useEnvelopeMappings(selectedLedgerSlug ?? "", isAuthenticated)
+  const envelopeMappings = mappingsQuery.data ?? {}
 
   const createAccountMutation = useCreateAccount(selectedLedgerSlug ?? "")
   const updateAccountMutation = useUpdateAccount(selectedLedgerSlug ?? "")
   const deleteAccountMutation = useDeleteAccount(selectedLedgerSlug ?? "")
   const setEnvelopeAccountsMutation = useSetEnvelopeAccounts(selectedLedgerSlug ?? "")
 
-  const isLoading = isLedgersLoading || isAccountsLoading || isEnvelopesLoading || isMappingsLoading
+  const { isLoading } = combineQueries(ledgerSelection, accountsQuery, envelopesQuery, mappingsQuery)
   const isCreating = createAccountMutation.isPending || setEnvelopeAccountsMutation.isPending
   const isUpdating = updateAccountMutation.isPending || setEnvelopeAccountsMutation.isPending
 
-  // Combine query failures into a single fetch-error signal for the toast.
-  const isError = isLedgersError || isAccountsError || isEnvelopesError || isMappingsError
-  const error = ledgersError || accountsError || envelopesError || mappingsError
+  // Surface fetch failures as a toast (mutations report their own errors inline).
+  useQueryErrorToast([ledgerSelection, accountsQuery, envelopesQuery, mappingsQuery])
 
   const accountTree = useMemo(() => buildAccountTree(accounts), [accounts])
 
@@ -305,18 +285,6 @@ export function Accounts() {
 
     return accounts.filter((a) => !excludedIds.has(a.id))
   }, [accounts, editingAccount])
-
-  // Surface fetch failures as a toast (mutations report their own errors inline).
-  useEffect(() => {
-    if (isError) handleError(error, "fetchFailed")
-  }, [isError, error, handleError])
-
-  // Default to the first ledger once ledgers load (unless one is already chosen).
-  useEffect(() => {
-    if (ledgers.length > 0) {
-      setSelectedLedgerSlug((prev) => prev ?? ledgers[0].attributes.slug)
-    }
-  }, [ledgers])
 
   // Expand all accounts by default whenever the account list (re)loads.
   useEffect(() => {
@@ -486,21 +454,8 @@ export function Accounts() {
   }
 
   if (!isAuthenticated) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full">
-        <Card className="w-full max-w-md">
-          <CardHeader className="text-center">
-            <CardTitle>{t("auth.signInRequired")}</CardTitle>
-            <CardDescription>
-              {t("auth.pleaseSignIn", { resource: t("nav.accounts").toLowerCase() })}
-            </CardDescription>
-          </CardHeader>
-        </Card>
-      </div>
-    )
+    return <SignInRequired resourceKey="nav.accounts" />
   }
-
-  const selectedLedger = ledgers.find((l) => l.attributes.slug === selectedLedgerSlug)
 
   return (
     <div className="space-y-6">
@@ -773,20 +728,7 @@ export function Accounts() {
         </DialogContent>
       </Dialog>
 
-      {ledgers.length > 0 && (
-        <div className="flex gap-2 flex-wrap">
-          {ledgers.map((ledger) => (
-            <Button
-              key={ledger.id}
-              variant={selectedLedgerSlug === ledger.attributes.slug ? "default" : "outline"}
-              size="sm"
-              onClick={() => setSelectedLedgerSlug(ledger.attributes.slug)}
-            >
-              {ledger.attributes.name}
-            </Button>
-          ))}
-        </div>
-      )}
+      <LedgerSelector ledgers={ledgers} selectedSlug={selectedLedgerSlug} onSelect={setSelectedLedgerSlug} />
 
       <Card>
         <CardHeader>
@@ -815,22 +757,18 @@ export function Accounts() {
         </CardHeader>
         <CardContent>
           {isLoading ? (
-            <div className="space-y-3">
-              <Skeleton className="h-12 w-full" />
-              <Skeleton className="h-12 w-full" />
-              <Skeleton className="h-12 w-full" />
-            </div>
+            <TableSkeleton />
           ) : !selectedLedgerSlug ? (
-            <div className="flex flex-col items-center justify-center py-12">
-              <Wallet className="h-12 w-12 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold">{t("accounts.noLedgerSelected")}</h3>
-              <p className="text-sm text-muted-foreground mb-4">
-                {t("accounts.selectLedgerDescription")}
-              </p>
-              <Link to="/ledgers">
-                <Button variant="outline">{t("accounts.goToLedgers")}</Button>
-              </Link>
-            </div>
+            <EmptyState
+              icon={Wallet}
+              title={t("accounts.noLedgerSelected")}
+              description={t("accounts.selectLedgerDescription")}
+              action={
+                <Link to="/ledgers">
+                  <Button variant="outline">{t("accounts.goToLedgers")}</Button>
+                </Link>
+              }
+            />
           ) : accounts.length > 0 ? (
             <div className="space-y-6">
               {ACCOUNT_TYPE_ORDER.map((type) => {
@@ -873,17 +811,17 @@ export function Accounts() {
               })}
             </div>
           ) : (
-            <div className="flex flex-col items-center justify-center py-12">
-              <Wallet className="h-12 w-12 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold">{t("accounts.noAccounts")}</h3>
-              <p className="text-sm text-muted-foreground mb-4">
-                {t("accounts.noAccountsDescription")}
-              </p>
-              <Button onClick={() => setIsCreateDialogOpen(true)}>
-                <Plus className="mr-2 h-4 w-4" />
-                {t("accounts.createAccount")}
-              </Button>
-            </div>
+            <EmptyState
+              icon={Wallet}
+              title={t("accounts.noAccounts")}
+              description={t("accounts.noAccountsDescription")}
+              action={
+                <Button onClick={() => setIsCreateDialogOpen(true)}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  {t("accounts.createAccount")}
+                </Button>
+              }
+            />
           )}
         </CardContent>
       </Card>
