@@ -284,7 +284,7 @@ export function Budget() {
 
       {/* Month Selector */}
       <div className="flex items-center justify-center gap-4">
-        <Button variant="outline" size="icon" onClick={handlePreviousMonth}>
+        <Button variant="outline" size="icon" aria-label={t("budget.previousMonth")} onClick={handlePreviousMonth}>
           <ChevronLeft className="h-4 w-4" />
         </Button>
         <div className="flex items-center gap-2">
@@ -319,7 +319,7 @@ export function Budget() {
             </SelectContent>
           </Select>
         </div>
-        <Button variant="outline" size="icon" onClick={handleNextMonth}>
+        <Button variant="outline" size="icon" aria-label={t("budget.nextMonth")} onClick={handleNextMonth}>
           <ChevronRight className="h-4 w-4" />
         </Button>
       </div>

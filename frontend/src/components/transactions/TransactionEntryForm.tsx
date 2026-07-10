@@ -98,6 +98,7 @@ export function TransactionEntryForm({
                     type="button"
                     variant="ghost"
                     size="icon"
+                    aria-label={t("transactions.removeEntry")}
                     onClick={() => form.removeEntry(index)}
                   >
                     <X className="h-4 w-4" />

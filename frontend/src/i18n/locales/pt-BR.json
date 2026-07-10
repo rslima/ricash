@@ -27,7 +27,10 @@
     "next": "Próximo",
     "previous": "Anterior",
     "all": "Todos",
-    "none": "Nenhum"
+    "none": "Nenhum",
+    "expand": "Expandir",
+    "collapse": "Recolher",
+    "clear": "Limpar"
   },
   "app": {
     "tagline": "Gerenciador de Finanças Pessoais"
@@ -56,7 +59,8 @@
     "exchangeRates": "Taxas de Câmbio",
     "settings": "Configurações",
     "more": "Mais",
-    "moreDescription": "Opções adicionais de navegação"
+    "moreDescription": "Opções adicionais de navegação",
+    "toggleSidebar": "Alternar barra lateral"
   },
   "reports": {
     "title": "Relatórios",
@@ -216,7 +220,8 @@
     "prevPage": "Página anterior",
     "nextPage": "Próxima página",
     "lastPage": "Última página",
-    "searchByDescription": "Buscar por descrição..."
+    "searchByDescription": "Buscar por descrição...",
+    "removeEntry": "Remover lançamento"
   },
   "accountTransactions": {
     "title": "Transações de {{name}}",
@@ -417,7 +422,9 @@
       "October": "Outubro",
       "November": "Novembro",
       "December": "Dezembro"
-    }
+    },
+    "previousMonth": "Mês anterior",
+    "nextMonth": "Próximo mês"
   },
   "errors": {
     "generic": "Ocorreu um erro. Por favor, tente novamente.",

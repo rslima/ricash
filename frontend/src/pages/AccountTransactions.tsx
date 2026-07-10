@@ -123,7 +123,7 @@ export function AccountTransactions() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Link to={`/ledgers/${ledgerSlug}/accounts`}>
-            <Button variant="outline" size="icon">
+            <Button variant="outline" size="icon" aria-label={t("common.back")}>
               <ArrowLeft className="h-4 w-4" />
             </Button>
           </Link>

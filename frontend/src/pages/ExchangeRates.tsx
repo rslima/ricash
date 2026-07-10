@@ -396,6 +396,7 @@ export function ExchangeRates() {
                         <Button
                           variant="ghost"
                           size="icon"
+                          aria-label={t("common.delete")}
                           onClick={() => handleDelete(rate.id)}
                           className="text-destructive hover:text-destructive"
                         >

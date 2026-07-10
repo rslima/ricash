@@ -329,7 +329,7 @@ export function Transactions() {
                     className="pl-9"
                   />
                 </div>
-                <Button type="submit" variant="secondary" size="icon">
+                <Button type="submit" variant="secondary" size="icon" aria-label={t("common.search")}>
                   <Search className="h-4 w-4" />
                 </Button>
                 {activeSearch && (
@@ -337,6 +337,7 @@ export function Transactions() {
                     type="button"
                     variant="ghost"
                     size="icon"
+                    aria-label={t("common.clear")}
                     onClick={() => {
                       setSearchDescription("")
                       setActiveSearch("")
@@ -389,7 +390,7 @@ export function Transactions() {
                       </span>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                          <Button variant="ghost" size="icon" className="h-8 w-8" aria-label={t("common.actions")}>
                             <MoreHorizontal className="h-4 w-4" />
                           </Button>
                         </DropdownMenuTrigger>
@@ -466,7 +467,7 @@ export function Transactions() {
                     <TableCell>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon">
+                          <Button variant="ghost" size="icon" aria-label={t("common.actions")}>
                             <MoreHorizontal className="h-4 w-4" />
                           </Button>
                         </DropdownMenuTrigger>

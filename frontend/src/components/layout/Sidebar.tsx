@@ -35,6 +35,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
           <Button
             variant="ghost"
             size="icon"
+            aria-label={t("nav.toggleSidebar")}
             onClick={onToggle}
             className={cn("ml-auto", collapsed && "mx-auto")}
           >

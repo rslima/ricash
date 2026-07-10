@@ -27,7 +27,10 @@
     "next": "Next",
     "previous": "Previous",
     "all": "All",
-    "none": "None"
+    "none": "None",
+    "expand": "Expand",
+    "collapse": "Collapse",
+    "clear": "Clear"
   },
   "app": {
     "tagline": "Personal Finance Manager"
@@ -56,7 +59,8 @@
     "exchangeRates": "Exchange Rates",
     "settings": "Settings",
     "more": "More",
-    "moreDescription": "Additional navigation options"
+    "moreDescription": "Additional navigation options",
+    "toggleSidebar": "Toggle sidebar"
   },
   "reports": {
     "title": "Reports",
@@ -216,7 +220,8 @@
     "prevPage": "Previous page",
     "nextPage": "Next page",
     "lastPage": "Last page",
-    "searchByDescription": "Search by description..."
+    "searchByDescription": "Search by description...",
+    "removeEntry": "Remove entry"
   },
   "accountTransactions": {
     "title": "Transactions for {{name}}",
@@ -417,7 +422,9 @@
       "October": "October",
       "November": "November",
       "December": "December"
-    }
+    },
+    "previousMonth": "Previous month",
+    "nextMonth": "Next month"
   },
   "errors": {
     "generic": "An error occurred. Please try again.",

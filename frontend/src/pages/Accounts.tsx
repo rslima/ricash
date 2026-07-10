@@ -102,6 +102,7 @@ function AccountRow({ node, depth, expandedIds, onToggleExpand, onEdit, onDelete
                 variant="ghost"
                 size="icon"
                 className="h-6 w-6 p-0"
+                aria-label={isExpanded ? t("common.collapse") : t("common.expand")}
                 onClick={() => onToggleExpand(account.id)}
               >
                 {isExpanded ? (
@@ -129,7 +130,7 @@ function AccountRow({ node, depth, expandedIds, onToggleExpand, onEdit, onDelete
         <TableCell>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon">
+              <Button variant="ghost" size="icon" aria-label={t("common.actions")}>
                 <MoreHorizontal className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>

@@ -291,6 +291,7 @@ export function InstrumentPrices() {
                         <Button
                           variant="ghost"
                           size="icon"
+                          aria-label={t("common.delete")}
                           onClick={() => handleDelete(priceEntry.id)}
                           className="text-destructive hover:text-destructive"
                         >
