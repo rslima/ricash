@@ -54,6 +54,158 @@ const instrumentTypeColors: Record<InstrumentType, "default" | "secondary" | "de
   FUND: "secondary",
 }
 
+// Display order of instrument types in the form Select (mirrors the original hand-listed items).
+const INSTRUMENT_TYPE_ORDER: readonly InstrumentType[] = [
+  "STOCK",
+  "ETF",
+  "TREASURY_BOND",
+  "FIXED_INCOME",
+  "FUND",
+]
+
+interface InstrumentFormData {
+  symbol: string
+  name: string
+  type: InstrumentType
+  currency: string
+  market: string
+  isin: string
+  status: InstrumentStatus
+}
+
+const EMPTY_FORM_DATA: InstrumentFormData = {
+  symbol: "",
+  name: "",
+  type: "STOCK",
+  currency: "BRL",
+  market: "",
+  isin: "",
+  status: "ACTIVE",
+}
+
+interface InstrumentFormProps {
+  idPrefix: string
+  formData: InstrumentFormData
+  setFormData: (data: InstrumentFormData) => void
+  onSubmit: (e: React.FormEvent) => void
+  onCancel: () => void
+  submitLabel: string
+  submittingLabel: string
+  isSubmitting: boolean
+  showStatus?: boolean
+}
+
+function InstrumentForm({
+  idPrefix,
+  formData,
+  setFormData,
+  onSubmit,
+  onCancel,
+  submitLabel,
+  submittingLabel,
+  isSubmitting,
+  showStatus = false,
+}: InstrumentFormProps) {
+  const { t } = useTranslation()
+
+  return (
+    <form onSubmit={onSubmit}>
+      <div className="grid gap-4 py-4">
+        <div className="grid grid-cols-4 items-center gap-4">
+          <Label htmlFor={`${idPrefix}symbol`} className="text-right">{t("instruments.symbol")}</Label>
+          <Input
+            id={`${idPrefix}symbol`}
+            value={formData.symbol}
+            onChange={(e) => setFormData({ ...formData, symbol: e.target.value.toUpperCase() })}
+            placeholder="PETR4"
+            className="col-span-3 uppercase"
+            required
+          />
+        </div>
+        <div className="grid grid-cols-4 items-center gap-4">
+          <Label htmlFor={`${idPrefix}name`} className="text-right">{t("common.name")}</Label>
+          <Input
+            id={`${idPrefix}name`}
+            value={formData.name}
+            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+            placeholder="Petrobras PN"
+            className="col-span-3"
+            required
+          />
+        </div>
+        <div className="grid grid-cols-4 items-center gap-4">
+          <Label htmlFor={`${idPrefix}type`} className="text-right">{t("common.type")}</Label>
+          <Select value={formData.type} onValueChange={(value: InstrumentType) => setFormData({ ...formData, type: value })}>
+            <SelectTrigger className="col-span-3">
+              <SelectValue placeholder={t("common.type")} />
+            </SelectTrigger>
+            <SelectContent>
+              {INSTRUMENT_TYPE_ORDER.map((type) => (
+                <SelectItem key={type} value={type}>{t(`instruments.types.${type}`)}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="grid grid-cols-4 items-center gap-4">
+          <Label htmlFor={`${idPrefix}currency`} className="text-right">{t("common.currency")}</Label>
+          <Input
+            id={`${idPrefix}currency`}
+            value={formData.currency}
+            onChange={(e) => setFormData({ ...formData, currency: e.target.value.toUpperCase() })}
+            placeholder="BRL"
+            maxLength={3}
+            className="col-span-3 uppercase"
+            required
+          />
+        </div>
+        <div className="grid grid-cols-4 items-center gap-4">
+          <Label htmlFor={`${idPrefix}market`} className="text-right">{t("instruments.market")} ({t("common.optional")})</Label>
+          <Input
+            id={`${idPrefix}market`}
+            value={formData.market}
+            onChange={(e) => setFormData({ ...formData, market: e.target.value })}
+            placeholder="B3"
+            className="col-span-3"
+          />
+        </div>
+        <div className="grid grid-cols-4 items-center gap-4">
+          <Label htmlFor={`${idPrefix}isin`} className="text-right">ISIN ({t("common.optional")})</Label>
+          <Input
+            id={`${idPrefix}isin`}
+            value={formData.isin}
+            onChange={(e) => setFormData({ ...formData, isin: e.target.value.toUpperCase() })}
+            placeholder="BRPETRACNPR6"
+            maxLength={12}
+            className="col-span-3 uppercase"
+          />
+        </div>
+        {showStatus && (
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor={`${idPrefix}status`} className="text-right">{t("common.status")}</Label>
+            <Select value={formData.status} onValueChange={(value: InstrumentStatus) => setFormData({ ...formData, status: value })}>
+              <SelectTrigger className="col-span-3">
+                <SelectValue placeholder={t("common.status")} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ACTIVE">{t("instruments.status.ACTIVE")}</SelectItem>
+                <SelectItem value="INACTIVE">{t("instruments.status.INACTIVE")}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+      </div>
+      <DialogFooter>
+        <Button type="button" variant="outline" onClick={onCancel}>
+          {t("common.cancel")}
+        </Button>
+        <Button type="submit" disabled={isSubmitting || !formData.symbol || !formData.name}>
+          {isSubmitting ? submittingLabel : submitLabel}
+        </Button>
+      </DialogFooter>
+    </form>
+  )
+}
+
 export function Instruments() {
   const { t } = useTranslation()
   const { isAuthenticated } = useAuth()
@@ -62,35 +214,12 @@ export function Instruments() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [editingInstrument, setEditingInstrument] = useState<InstrumentResource | null>(null)
 
-  // Form state
-  const [formData, setFormData] = useState({
-    symbol: "",
-    name: "",
-    type: "STOCK" as InstrumentType,
-    currency: "BRL",
-    market: "",
-    isin: "",
-  })
-
-  const [editFormData, setEditFormData] = useState({
-    symbol: "",
-    name: "",
-    type: "STOCK" as InstrumentType,
-    currency: "BRL",
-    market: "",
-    isin: "",
-    status: "ACTIVE" as InstrumentStatus,
-  })
+  // Form state (create form never renders/sends `status`; it just carries the default).
+  const [formData, setFormData] = useState<InstrumentFormData>(EMPTY_FORM_DATA)
+  const [editFormData, setEditFormData] = useState<InstrumentFormData>(EMPTY_FORM_DATA)
 
   const resetForm = () => {
-    setFormData({
-      symbol: "",
-      name: "",
-      type: "STOCK",
-      currency: "BRL",
-      market: "",
-      isin: "",
-    })
+    setFormData(EMPTY_FORM_DATA)
   }
 
   // Server state: TanStack Query owns fetching, caching, and loading flags.
@@ -213,88 +342,16 @@ export function Instruments() {
               {t("instruments.createDescription")}
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleCreate}>
-            <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="symbol" className="text-right">{t("instruments.symbol")}</Label>
-                <Input
-                  id="symbol"
-                  value={formData.symbol}
-                  onChange={(e) => setFormData({ ...formData, symbol: e.target.value.toUpperCase() })}
-                  placeholder="PETR4"
-                  className="col-span-3 uppercase"
-                  required
-                />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="name" className="text-right">{t("common.name")}</Label>
-                <Input
-                  id="name"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  placeholder="Petrobras PN"
-                  className="col-span-3"
-                  required
-                />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="type" className="text-right">{t("common.type")}</Label>
-                <Select value={formData.type} onValueChange={(value: InstrumentType) => setFormData({ ...formData, type: value })}>
-                  <SelectTrigger className="col-span-3">
-                    <SelectValue placeholder={t("common.type")} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="STOCK">{t("instruments.types.STOCK")}</SelectItem>
-                    <SelectItem value="ETF">{t("instruments.types.ETF")}</SelectItem>
-                    <SelectItem value="TREASURY_BOND">{t("instruments.types.TREASURY_BOND")}</SelectItem>
-                    <SelectItem value="FIXED_INCOME">{t("instruments.types.FIXED_INCOME")}</SelectItem>
-                    <SelectItem value="FUND">{t("instruments.types.FUND")}</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="currency" className="text-right">{t("common.currency")}</Label>
-                <Input
-                  id="currency"
-                  value={formData.currency}
-                  onChange={(e) => setFormData({ ...formData, currency: e.target.value.toUpperCase() })}
-                  placeholder="BRL"
-                  maxLength={3}
-                  className="col-span-3 uppercase"
-                  required
-                />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="market" className="text-right">{t("instruments.market")} ({t("common.optional")})</Label>
-                <Input
-                  id="market"
-                  value={formData.market}
-                  onChange={(e) => setFormData({ ...formData, market: e.target.value })}
-                  placeholder="B3"
-                  className="col-span-3"
-                />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="isin" className="text-right">ISIN ({t("common.optional")})</Label>
-                <Input
-                  id="isin"
-                  value={formData.isin}
-                  onChange={(e) => setFormData({ ...formData, isin: e.target.value.toUpperCase() })}
-                  placeholder="BRPETRACNPR6"
-                  maxLength={12}
-                  className="col-span-3 uppercase"
-                />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
-                {t("common.cancel")}
-              </Button>
-              <Button type="submit" disabled={createInstrumentMutation.isPending || !formData.symbol || !formData.name}>
-                {createInstrumentMutation.isPending ? t("instruments.creating") : t("common.create")}
-              </Button>
-            </DialogFooter>
-          </form>
+          <InstrumentForm
+            idPrefix=""
+            formData={formData}
+            setFormData={setFormData}
+            onSubmit={handleCreate}
+            onCancel={() => setIsCreateDialogOpen(false)}
+            submitLabel={t("common.create")}
+            submittingLabel={t("instruments.creating")}
+            isSubmitting={createInstrumentMutation.isPending}
+          />
         </DialogContent>
       </Dialog>
 
@@ -310,100 +367,17 @@ export function Instruments() {
               {t("instruments.editDescription")}
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleUpdate}>
-            <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="edit-symbol" className="text-right">{t("instruments.symbol")}</Label>
-                <Input
-                  id="edit-symbol"
-                  value={editFormData.symbol}
-                  onChange={(e) => setEditFormData({ ...editFormData, symbol: e.target.value.toUpperCase() })}
-                  placeholder="PETR4"
-                  className="col-span-3 uppercase"
-                  required
-                />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="edit-name" className="text-right">{t("common.name")}</Label>
-                <Input
-                  id="edit-name"
-                  value={editFormData.name}
-                  onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
-                  placeholder="Petrobras PN"
-                  className="col-span-3"
-                  required
-                />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="edit-type" className="text-right">{t("common.type")}</Label>
-                <Select value={editFormData.type} onValueChange={(value: InstrumentType) => setEditFormData({ ...editFormData, type: value })}>
-                  <SelectTrigger className="col-span-3">
-                    <SelectValue placeholder={t("common.type")} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="STOCK">{t("instruments.types.STOCK")}</SelectItem>
-                    <SelectItem value="ETF">{t("instruments.types.ETF")}</SelectItem>
-                    <SelectItem value="TREASURY_BOND">{t("instruments.types.TREASURY_BOND")}</SelectItem>
-                    <SelectItem value="FIXED_INCOME">{t("instruments.types.FIXED_INCOME")}</SelectItem>
-                    <SelectItem value="FUND">{t("instruments.types.FUND")}</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="edit-currency" className="text-right">{t("common.currency")}</Label>
-                <Input
-                  id="edit-currency"
-                  value={editFormData.currency}
-                  onChange={(e) => setEditFormData({ ...editFormData, currency: e.target.value.toUpperCase() })}
-                  placeholder="BRL"
-                  maxLength={3}
-                  className="col-span-3 uppercase"
-                  required
-                />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="edit-market" className="text-right">{t("instruments.market")} ({t("common.optional")})</Label>
-                <Input
-                  id="edit-market"
-                  value={editFormData.market}
-                  onChange={(e) => setEditFormData({ ...editFormData, market: e.target.value })}
-                  placeholder="B3"
-                  className="col-span-3"
-                />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="edit-isin" className="text-right">ISIN ({t("common.optional")})</Label>
-                <Input
-                  id="edit-isin"
-                  value={editFormData.isin}
-                  onChange={(e) => setEditFormData({ ...editFormData, isin: e.target.value.toUpperCase() })}
-                  placeholder="BRPETRACNPR6"
-                  maxLength={12}
-                  className="col-span-3 uppercase"
-                />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="edit-status" className="text-right">{t("common.status")}</Label>
-                <Select value={editFormData.status} onValueChange={(value: InstrumentStatus) => setEditFormData({ ...editFormData, status: value })}>
-                  <SelectTrigger className="col-span-3">
-                    <SelectValue placeholder={t("common.status")} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ACTIVE">{t("instruments.status.ACTIVE")}</SelectItem>
-                    <SelectItem value="INACTIVE">{t("instruments.status.INACTIVE")}</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)}>
-                {t("common.cancel")}
-              </Button>
-              <Button type="submit" disabled={updateInstrumentMutation.isPending || !editFormData.symbol || !editFormData.name}>
-                {updateInstrumentMutation.isPending ? t("instruments.saving") : t("common.save")}
-              </Button>
-            </DialogFooter>
-          </form>
+          <InstrumentForm
+            idPrefix="edit-"
+            formData={editFormData}
+            setFormData={setEditFormData}
+            onSubmit={handleUpdate}
+            onCancel={() => setIsEditDialogOpen(false)}
+            submitLabel={t("common.save")}
+            submittingLabel={t("instruments.saving")}
+            isSubmitting={updateInstrumentMutation.isPending}
+            showStatus
+          />
         </DialogContent>
       </Dialog>
 
