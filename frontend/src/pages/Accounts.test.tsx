@@ -116,7 +116,8 @@ describe("Accounts", () => {
 
       // Accounts are now grouped by type, so we see the group header
       expect(screen.getByText("Assets")).toBeInTheDocument()
-      expect(screen.getByText(/US\$\s*1\.000,50/)).toBeInTheDocument()
+      // en locale (pinned in test setup) formats USD as $1,000.50
+      expect(screen.getByText(/\$\s*1,000\.50/)).toBeInTheDocument()
     })
 
     it("shows empty state when no accounts in ledger", async () => {

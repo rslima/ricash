@@ -1,7 +1,11 @@
 import "@testing-library/jest-dom/vitest"
 import { cleanup } from "@testing-library/react"
 import { afterEach, vi } from "vitest"
-import "@/i18n"
+import i18n from "@/i18n"
+
+// Pin the language so UI copy and locale-aware formatting are deterministic
+// regardless of the environment's navigator.language.
+await i18n.changeLanguage("en")
 
 // Cleanup after each test
 afterEach(() => {

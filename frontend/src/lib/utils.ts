@@ -1,6 +1,19 @@
 import { type ClassValue, clsx } from "clsx"
 import { twMerge } from "tailwind-merge"
 import slugifyLib from "slugify"
+import i18n from "@/i18n"
+
+// Maps the app language to an Intl locale for number/date formatting.
+// Defaults to pt-BR (the app's original hardcoded locale) when i18n isn't
+// initialized or reports an unknown language.
+const INTL_LOCALES: Record<string, string> = {
+  en: "en-US",
+  "pt-BR": "pt-BR",
+}
+
+function currentLocale(): string {
+  return INTL_LOCALES[i18n.language] ?? "pt-BR"
+}
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -14,7 +27,7 @@ export function slugify(input: string): string {
 export const DEFAULT_CURRENCY = "BRL"
 
 export function formatCurrency(amount: number, currency: string = DEFAULT_CURRENCY): string {
-  return new Intl.NumberFormat("pt-BR", {
+  return new Intl.NumberFormat(currentLocale(), {
     style: "currency",
     currency,
   }).format(amount)
@@ -30,7 +43,7 @@ export function formatDate(date: string | Date): string {
   } else {
     dateObj = date
   }
-  return new Intl.DateTimeFormat("pt-BR", {
+  return new Intl.DateTimeFormat(currentLocale(), {
     year: "numeric",
     month: "short",
     day: "numeric",
