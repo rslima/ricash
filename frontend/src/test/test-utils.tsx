@@ -45,7 +45,6 @@ export function mockUseAuth(overrides: Partial<AuthContextType> = {}): AuthConte
     loginError: null,
     logout: vi.fn(),
     startLogin: vi.fn(),
-    exchangeCodeForToken: vi.fn(async () => true),
     ...overrides,
   }
 }
