@@ -1,23 +1,9 @@
 import { NavLink } from "react-router-dom"
 import { useTranslation } from "react-i18next"
-import {
-  LayoutDashboard,
-  BookOpen,
-  Wallet,
-  ArrowLeftRight,
-  TrendingUp,
-  Briefcase,
-  DollarSign,
-  PieChart,
-  Settings,
-  ChevronLeft,
-  ChevronRight,
-  FolderOpen,
-  PiggyBank,
-  FileBarChart,
-} from "lucide-react"
+import { ChevronLeft, ChevronRight } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import { navItems } from "@/components/layout/nav-items"
 import {
   Tooltip,
   TooltipContent,
@@ -29,21 +15,6 @@ interface SidebarProps {
   collapsed: boolean
   onToggle: () => void
 }
-
-const navigation = [
-  { key: "dashboard", href: "/", icon: LayoutDashboard },
-  { key: "ledgers", href: "/ledgers", icon: BookOpen },
-  { key: "accounts", href: "/accounts", icon: Wallet },
-  { key: "transactions", href: "/transactions", icon: ArrowLeftRight },
-  { key: "budget", href: "/budget", icon: PiggyBank },
-  { key: "envelopes", href: "/envelopes", icon: FolderOpen },
-  { key: "instruments", href: "/instruments", icon: Briefcase },
-  { key: "instrumentPrices", href: "/instrument-prices", icon: DollarSign },
-  { key: "portfolio", href: "/portfolio", icon: PieChart },
-  { key: "reports", href: "/reports", icon: FileBarChart },
-  { key: "exchangeRates", href: "/exchange-rates", icon: TrendingUp },
-  { key: "settings", href: "/settings", icon: Settings },
-]
 
 export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const { t } = useTranslation()
@@ -64,6 +35,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
           <Button
             variant="ghost"
             size="icon"
+            aria-label={t("nav.toggleSidebar")}
             onClick={onToggle}
             className={cn("ml-auto", collapsed && "mx-auto")}
           >
@@ -76,7 +48,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
         </div>
 
         <nav className="flex-1 space-y-1 p-2">
-          {navigation.map((item) => {
+          {navItems.map((item) => {
             const name = t(`nav.${item.key}`)
             const NavItem = (
               <NavLink
@@ -113,7 +85,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
         <div className="border-t border-sidebar-border p-4">
           {!collapsed && (
             <p className="text-xs text-muted-foreground">
-              Personal Finance Manager
+              {t("app.tagline")}
             </p>
           )}
         </div>

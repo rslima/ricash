@@ -1,5 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import type { PaginationParams } from "./types"
+import { createLedgerScopedKeys } from "./queryKeys"
+import { accountKeys } from "./accounts.hooks"
 import {
   getEnvelopes,
   getEnvelope,
@@ -23,12 +25,7 @@ import {
  * along with the envelope lists.
  */
 export const envelopeKeys = {
-  all: ["envelopes"] as const,
-  ledger: (ledgerSlug: string) => ["envelopes", ledgerSlug] as const,
-  list: (ledgerSlug: string, params?: PaginationParams) =>
-    ["envelopes", ledgerSlug, "list", params ?? {}] as const,
-  detail: (ledgerSlug: string, envelopeId: string) =>
-    ["envelopes", ledgerSlug, "detail", envelopeId] as const,
+  ...createLedgerScopedKeys("envelopes"),
   balance: (ledgerSlug: string, envelopeId: string, year: number, month: number) =>
     ["envelopes", ledgerSlug, "balance", envelopeId, year, month] as const,
   accounts: (ledgerSlug: string, envelopeId: string) =>
@@ -134,7 +131,7 @@ export function useSetEnvelopeAccounts(ledgerSlug: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: envelopeKeys.ledger(ledgerSlug) })
       // The envelope↔account mapping also drives account-side views.
-      queryClient.invalidateQueries({ queryKey: ["accounts", ledgerSlug] })
+      queryClient.invalidateQueries({ queryKey: accountKeys.ledger(ledgerSlug) })
     },
   })
 }

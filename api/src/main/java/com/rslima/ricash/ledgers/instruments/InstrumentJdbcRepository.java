@@ -90,6 +90,20 @@ public class InstrumentJdbcRepository implements InstrumentRepository {
     }
 
     @Override
+    public List<Instrument> findAllActiveWithIsinSystemWide() {
+        log.debug("Finding all active instruments with an ISIN across all ledgers");
+
+        return jdbcClient.sql("""
+                SELECT id, ledger_id, symbol, name, type, currency, market, isin, status, created_at
+                FROM instruments
+                WHERE status = 'ACTIVE' AND isin IS NOT NULL AND isin <> ''
+                ORDER BY ledger_id, symbol
+                """)
+            .query(this::mapRow)
+            .list();
+    }
+
+    @Override
     public Instrument save(Instrument instrument) {
         log.debug("Saving instrument: {}", instrument.symbol());
 

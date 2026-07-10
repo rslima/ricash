@@ -1,11 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { render, screen, waitFor } from "@testing-library/react"
+import { screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { BrowserRouter } from "react-router-dom"
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { Ledgers } from "./Ledgers"
 import * as ledgersApi from "@/api/ledgers"
-import type { LedgerResource } from "@/api/types"
+import { renderWithProviders, mockUseAuth, mockAuthenticatedUser } from "@/test/test-utils"
+import { makeLedger } from "@/test/fixtures"
 
 // Mock the auth context
 vi.mock("@/contexts/AuthContext", () => ({
@@ -22,50 +21,14 @@ vi.mock("@/api/ledgers", () => ({
 
 import { useAuth } from "@/contexts/AuthContext"
 
-const mockLedger: LedgerResource = {
-  type: "ledgers",
-  id: "ledger-1",
-  attributes: {
-    slug: "personal-finance",
-    name: "Personal Finance",
-    description: "My personal ledger",
-    currency: "USD",
-    createdAt: "2024-01-01T00:00:00Z",
-    updatedAt: "2024-01-01T00:00:00Z",
-  },
-}
+const mockLedger = makeLedger()
 
-function renderLedgers() {
-  // Fresh client per render so cache never bleeds between tests; retries off
-  // so a failing query surfaces immediately instead of after backoff.
-  const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
-  })
-  return render(
-    <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <Ledgers />
-      </BrowserRouter>
-    </QueryClientProvider>
-  )
-}
+const renderLedgers = () => renderWithProviders(<Ledgers />)
 
 describe("Ledgers", () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
   describe("when not authenticated", () => {
     beforeEach(() => {
-      vi.mocked(useAuth).mockReturnValue({
-        isAuthenticated: false,
-        user: null,
-        accessToken: null,
-        isLoading: false,
-        logout: vi.fn(),
-        startLogin: vi.fn(),
-        exchangeCodeForToken: vi.fn(),
-      })
+      vi.mocked(useAuth).mockReturnValue(mockUseAuth())
     })
 
     it("shows sign in required message", () => {
@@ -78,15 +41,9 @@ describe("Ledgers", () => {
 
   describe("when authenticated", () => {
     beforeEach(() => {
-      vi.mocked(useAuth).mockReturnValue({
-        isAuthenticated: true,
-        user: { id: "user-1", username: "testuser", email: "test@example.com", name: "Test User", roles: [] },
-        accessToken: "test-token",
-        isLoading: false,
-        logout: vi.fn(),
-        startLogin: vi.fn(),
-        exchangeCodeForToken: vi.fn(),
-      })
+      vi.mocked(useAuth).mockReturnValue(
+        mockUseAuth({ isAuthenticated: true, user: mockAuthenticatedUser, accessToken: "test-token" })
+      )
     })
 
     it("shows loading state initially", () => {
@@ -182,8 +139,7 @@ describe("Ledgers", () => {
     })
 
     it("displays multiple ledgers", async () => {
-      const ledger2: LedgerResource = {
-        type: "ledgers",
+      const ledger2 = makeLedger({
         id: "ledger-2",
         attributes: {
           slug: "business",
@@ -193,7 +149,7 @@ describe("Ledgers", () => {
           createdAt: "2024-02-01T00:00:00Z",
           updatedAt: "2024-02-01T00:00:00Z",
         },
-      }
+      })
 
       vi.mocked(ledgersApi.getLedgers).mockResolvedValue({
         data: [mockLedger, ledger2],

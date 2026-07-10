@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import type { PaginationParams } from "./types"
+import { createLedgerScopedKeys } from "./queryKeys"
 import {
   getAccounts,
   getAccount,
@@ -17,12 +18,7 @@ import {
  * account list/detail/balance query for that ledger.
  */
 export const accountKeys = {
-  all: ["accounts"] as const,
-  ledger: (ledgerSlug: string) => ["accounts", ledgerSlug] as const,
-  list: (ledgerSlug: string, params?: PaginationParams) =>
-    ["accounts", ledgerSlug, "list", params ?? {}] as const,
-  detail: (ledgerSlug: string, accountId: string) =>
-    ["accounts", ledgerSlug, "detail", accountId] as const,
+  ...createLedgerScopedKeys("accounts"),
   balanceSummary: (ledgerSlug: string) => ["accounts", ledgerSlug, "balance-summary"] as const,
 }
 

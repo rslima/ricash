@@ -166,9 +166,14 @@ public class DbFixtures {
     }
 
     public void insertInstrument(String id, String ledgerId, String symbol, String name, String type, String currency) {
+        insertInstrument(id, ledgerId, symbol, name, type, currency, null, "ACTIVE");
+    }
+
+    public void insertInstrument(String id, String ledgerId, String symbol, String name, String type, String currency,
+                                 String isin, String status) {
         jdbcClient.sql("""
-                        INSERT INTO instruments (id, ledger_id, symbol, name, type, currency, status, created_at)
-                        VALUES (:id, :ledgerId, :symbol, :name, :type, :currency, 'ACTIVE', :createdAt)
+                        INSERT INTO instruments (id, ledger_id, symbol, name, type, currency, isin, status, created_at)
+                        VALUES (:id, :ledgerId, :symbol, :name, :type, :currency, :isin, :status, :createdAt)
                         """)
                 .param("id", id)
                 .param("ledgerId", ledgerId)
@@ -176,6 +181,8 @@ public class DbFixtures {
                 .param("name", name)
                 .param("type", type)
                 .param("currency", currency)
+                .param("isin", isin)
+                .param("status", status)
                 .param("createdAt", Timestamp.from(Instant.now()))
                 .update();
     }

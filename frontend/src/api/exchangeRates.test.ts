@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest"
+import { describe, it, expect, vi } from "vitest"
 import { getExchangeRates, createExchangeRate, deleteExchangeRate } from "./exchangeRates"
 import { apiClient } from "./client"
 import type { JsonApiListResponse, JsonApiResponse, ExchangeRateResource } from "./types"
@@ -25,10 +25,6 @@ const mockRate: ExchangeRateResource = {
 }
 
 describe("getExchangeRates", () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
   it("fetches exchange rates", async () => {
     const mockResponse: JsonApiListResponse<ExchangeRateResource> = { data: [mockRate] }
     vi.mocked(apiClient.get).mockResolvedValueOnce(mockResponse)
@@ -42,10 +38,6 @@ describe("getExchangeRates", () => {
 })
 
 describe("createExchangeRate", () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
   it("creates an exchange rate", async () => {
     const mockResponse: JsonApiResponse<ExchangeRateResource> = { data: mockRate }
     vi.mocked(apiClient.post).mockResolvedValueOnce(mockResponse)
@@ -69,10 +61,6 @@ describe("createExchangeRate", () => {
 })
 
 describe("deleteExchangeRate", () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
   it("deletes an exchange rate", async () => {
     vi.mocked(apiClient.delete).mockResolvedValueOnce(undefined)
 

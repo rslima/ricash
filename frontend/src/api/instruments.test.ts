@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest"
+import { describe, it, expect, vi } from "vitest"
 import {
   getInstruments,
   getAllInstruments,
@@ -78,10 +78,6 @@ const mockPosition: InstrumentPositionResource = {
 }
 
 describe("getInstruments", () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
   it("fetches instruments without pagination", async () => {
     const mockResponse: JsonApiListResponse<InstrumentResource> = { data: [mockInstrument] }
     vi.mocked(apiClient.get).mockResolvedValueOnce(mockResponse)
@@ -106,10 +102,6 @@ describe("getInstruments", () => {
 })
 
 describe("getAllInstruments", () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
   it("fetches all instruments", async () => {
     const mockResponse: JsonApiListResponse<InstrumentResource> = { data: [mockInstrument] }
     vi.mocked(apiClient.get).mockResolvedValueOnce(mockResponse)
@@ -122,10 +114,6 @@ describe("getAllInstruments", () => {
 })
 
 describe("getInstrument", () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
   it("fetches a single instrument", async () => {
     const mockResponse: JsonApiResponse<InstrumentResource> = { data: mockInstrument }
     vi.mocked(apiClient.get).mockResolvedValueOnce(mockResponse)
@@ -138,10 +126,6 @@ describe("getInstrument", () => {
 })
 
 describe("createInstrument", () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
   it("creates an instrument", async () => {
     const mockResponse: JsonApiResponse<InstrumentResource> = { data: mockInstrument }
     vi.mocked(apiClient.post).mockResolvedValueOnce(mockResponse)
@@ -155,10 +139,6 @@ describe("createInstrument", () => {
 })
 
 describe("updateInstrument", () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
   it("updates an instrument", async () => {
     const mockResponse: JsonApiResponse<InstrumentResource> = { data: mockInstrument }
     vi.mocked(apiClient.put).mockResolvedValueOnce(mockResponse)
@@ -177,10 +157,6 @@ describe("updateInstrument", () => {
 })
 
 describe("deleteInstrument", () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
   it("deletes an instrument", async () => {
     vi.mocked(apiClient.delete).mockResolvedValueOnce(undefined)
 
@@ -191,10 +167,6 @@ describe("deleteInstrument", () => {
 })
 
 describe("getInstrumentPrices", () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
   it("fetches instrument prices", async () => {
     const mockResponse: JsonApiListResponse<InstrumentPriceResource> = { data: [mockPrice] }
     vi.mocked(apiClient.get).mockResolvedValueOnce(mockResponse)
@@ -209,10 +181,6 @@ describe("getInstrumentPrices", () => {
 })
 
 describe("createInstrumentPrice", () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
   it("creates an instrument price", async () => {
     const mockResponse: JsonApiResponse<InstrumentPriceResource> = { data: mockPrice }
     vi.mocked(apiClient.post).mockResolvedValueOnce(mockResponse)
@@ -226,10 +194,6 @@ describe("createInstrumentPrice", () => {
 })
 
 describe("deleteInstrumentPrice", () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
   it("deletes an instrument price", async () => {
     vi.mocked(apiClient.delete).mockResolvedValueOnce(undefined)
 
@@ -240,10 +204,6 @@ describe("deleteInstrumentPrice", () => {
 })
 
 describe("getPortfolio", () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
   it("fetches portfolio positions", async () => {
     const mockResponse: JsonApiListResponse<InstrumentPositionResource> = { data: [mockPosition] }
     vi.mocked(apiClient.get).mockResolvedValueOnce(mockResponse)
@@ -256,10 +216,6 @@ describe("getPortfolio", () => {
 })
 
 describe("getAccountPortfolio", () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
   it("fetches account-specific portfolio", async () => {
     const mockResponse: JsonApiListResponse<InstrumentPositionResource> = { data: [mockPosition] }
     vi.mocked(apiClient.get).mockResolvedValueOnce(mockResponse)

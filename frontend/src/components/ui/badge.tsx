@@ -33,4 +33,6 @@ function Badge({ className, variant, ...props }: BadgeProps) {
   )
 }
 
-export { Badge, badgeVariants }
+// badgeVariants is intentionally not exported: nothing imports it, and
+// exporting it alongside the component breaks Fast Refresh for this file.
+export { Badge }

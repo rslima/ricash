@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
+import { useQueries } from "@tanstack/react-query"
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from "recharts"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -12,9 +13,13 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { getAccounts } from "@/api/accounts"
+import { accountKeys } from "@/api/accounts.hooks"
 import { getMonthlyExpenseBreakdown } from "@/api/transactions"
+import { transactionKeys } from "@/api/transactions.hooks"
 import type { LedgerResource, AccountResource } from "@/api/types"
 import { formatCurrency } from "@/lib/utils"
+import { MONTH_KEYS } from "@/lib/dates"
+import { CHART_COLORS, CHART_TOOLTIP_CONTENT_STYLE } from "@/components/charts/chart-theme"
 import { ArrowLeft } from "lucide-react"
 
 interface Props {
@@ -27,12 +32,10 @@ interface SliceData {
   accountId: string
 }
 
+// The breakdown pie shows up to 8 slices, so extend the shared 5-color
+// palette with three extra hues.
 const COLORS = [
-  "var(--color-chart-1)",
-  "var(--color-chart-2)",
-  "var(--color-chart-3)",
-  "var(--color-chart-4)",
-  "var(--color-chart-5)",
+  ...CHART_COLORS,
   "hsl(250 60% 55%)",
   "hsl(190 50% 50%)",
   "hsl(60 70% 50%)",
@@ -42,15 +45,8 @@ const OTHERS_SLICE_ID = "__others__"
 
 type Mode = "all-time" | "monthly"
 
-const MONTH_KEYS = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
-] as const
-
 export function ExpenseBreakdownChart({ ledgers }: Props) {
   const { t } = useTranslation()
-  const [allAccounts, setAllAccounts] = useState<AccountResource[]>([])
-  const [isLoadingAccounts, setIsLoadingAccounts] = useState(true)
   const [drillParentId, setDrillParentId] = useState<string | null>(null)
   const [drillParentName, setDrillParentName] = useState<string | null>(null)
   const [othersCurrency, setOthersCurrency] = useState<string | null>(null)
@@ -59,46 +55,53 @@ export function ExpenseBreakdownChart({ ledgers }: Props) {
   const [mode, setMode] = useState<Mode>("all-time")
   const [selectedYear, setSelectedYear] = useState(now.getFullYear())
   const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1)
-  const [monthlyExpenses, setMonthlyExpenses] = useState<Record<string, number>>({})
-  const [isLoadingMonthly, setIsLoadingMonthly] = useState(false)
 
-  useEffect(() => {
-    Promise.all(
-      ledgers.map((l) => getAccounts(l.attributes.slug, { "page[size]": 200 }))
-    )
-      .then((responses) => {
-        const accounts: AccountResource[] = []
-        for (const res of responses) {
-          for (const account of res.data) {
-            if (account.attributes.type === "EXPENSE") {
-              accounts.push(account)
-            }
-          }
-        }
-        setAllAccounts(accounts)
-      })
-      .catch(() => setAllAccounts([]))
-      .finally(() => setIsLoadingAccounts(false))
-  }, [ledgers])
+  // Server state: TanStack Query fans out one accounts fetch per ledger.
+  // Keys mirror accountKeys so cache entries are shared with the rest of
+  // the app; errored queries simply contribute no data.
+  const accountQueries = useQueries({
+    queries: ledgers.map((l) => ({
+      queryKey: accountKeys.list(l.attributes.slug, { "page[size]": 200 }),
+      queryFn: () => getAccounts(l.attributes.slug, { "page[size]": 200 }),
+    })),
+  })
 
-  useEffect(() => {
-    if (mode !== "monthly") return
-    setIsLoadingMonthly(true)
-    Promise.all(
-      ledgers.map((l) => getMonthlyExpenseBreakdown(l.attributes.slug, selectedYear, selectedMonth))
-    )
-      .then((responses) => {
-        const merged: Record<string, number> = {}
-        for (const report of responses) {
-          for (const [accountId, amount] of Object.entries(report.expensesByAccountId ?? {})) {
-            merged[accountId] = (merged[accountId] ?? 0) + Number(amount)
-          }
+  // Monthly breakdowns are only fetched while the monthly mode is active;
+  // year/month are part of the key so period changes refetch automatically.
+  const monthlyQueries = useQueries({
+    queries: ledgers.map((l) => ({
+      queryKey: transactionKeys.expenseBreakdown(l.attributes.slug, selectedYear, selectedMonth),
+      queryFn: () => getMonthlyExpenseBreakdown(l.attributes.slug, selectedYear, selectedMonth),
+      enabled: mode === "monthly",
+    })),
+  })
+
+  const isLoadingAccounts = accountQueries.some((q) => q.isLoading)
+  const isLoadingMonthly = monthlyQueries.some((q) => q.isLoading)
+
+  const allAccounts = useMemo(() => {
+    const accounts: AccountResource[] = []
+    for (const query of accountQueries) {
+      if (!query.data) continue
+      for (const account of query.data.data) {
+        if (account.attributes.type === "EXPENSE") {
+          accounts.push(account)
         }
-        setMonthlyExpenses(merged)
-      })
-      .catch(() => setMonthlyExpenses({}))
-      .finally(() => setIsLoadingMonthly(false))
-  }, [ledgers, mode, selectedYear, selectedMonth])
+      }
+    }
+    return accounts
+  }, [accountQueries])
+
+  const monthlyExpenses = useMemo(() => {
+    const merged: Record<string, number> = {}
+    for (const query of monthlyQueries) {
+      if (!query.data) continue
+      for (const [accountId, amount] of Object.entries(query.data.expensesByAccountId ?? {})) {
+        merged[accountId] = (merged[accountId] ?? 0) + Number(amount)
+      }
+    }
+    return merged
+  }, [monthlyQueries])
 
   const valueForAccount = useCallback(
     (account: AccountResource): number => {
@@ -292,6 +295,7 @@ export function ExpenseBreakdownChart({ ledgers }: Props) {
                         style={{ cursor: "pointer" }}
                         onClick={(_, index) => {
                           const slice = slices[index]
+                          if (!slice) return
                           handleSliceClick(slice.accountId, slice.name, currency)
                         }}
                       >
@@ -301,7 +305,7 @@ export function ExpenseBreakdownChart({ ledgers }: Props) {
                       </Pie>
                       <Tooltip
                         formatter={(value) => formatCurrency(Number(value), currency)}
-                        contentStyle={{ borderRadius: "8px", border: "1px solid var(--color-border)", background: "var(--color-card)", color: "var(--color-card-foreground)" }}
+                        contentStyle={CHART_TOOLTIP_CONTENT_STYLE}
                       />
                       <Legend />
                     </PieChart>

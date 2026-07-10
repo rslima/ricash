@@ -1,9 +1,11 @@
-import { useEffect, useState } from "react"
+import { useMemo } from "react"
 import { useTranslation } from "react-i18next"
+import { useQueries } from "@tanstack/react-query"
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Skeleton } from "@/components/ui/skeleton"
+import { ChartCard } from "@/components/charts/ChartCard"
+import { CHART_TOOLTIP_CONTENT_STYLE } from "@/components/charts/chart-theme"
 import { getMonthlyReport } from "@/api/transactions"
+import { transactionKeys } from "@/api/transactions.hooks"
 import type { MonthlyReport } from "@/api/transactions"
 import type { LedgerResource } from "@/api/types"
 import { formatCurrency } from "@/lib/utils"
@@ -67,24 +69,35 @@ function buildChartData(monthReports: MonthReports[], currency: string): MonthDa
 
 export function IncomeVsExpensesChart({ ledgers, defaultCurrency }: Props) {
   const { t } = useTranslation()
-  const [monthReports, setMonthReports] = useState<MonthReports[]>([])
-  const [isLoading, setIsLoading] = useState(true)
 
-  useEffect(() => {
-    const months = getLast6Months()
+  const months = useMemo(() => getLast6Months(), [])
 
-    Promise.all(
-      months.map(async ({ year, month, label }) => {
-        const reports = await Promise.all(
-          ledgers.map((l) => getMonthlyReport(l.attributes.slug, year, month))
-        )
+  // One flat fan-out over the month x ledger cross product; query i belongs to
+  // months[Math.floor(i / ledgers.length)]. Keys mirror transactionKeys so the
+  // cache is shared with the rest of the app.
+  const reportQueries = useQueries({
+    queries: months.flatMap(({ year, month }) =>
+      ledgers.map((l) => ({
+        queryKey: transactionKeys.monthlyReport(l.attributes.slug, year, month),
+        queryFn: () => getMonthlyReport(l.attributes.slug, year, month),
+      }))
+    ),
+  })
+
+  const isLoading = reportQueries.some((q) => q.isLoading)
+
+  const monthReports = useMemo<MonthReports[]>(
+    () =>
+      months.map(({ label }, monthIndex) => {
+        const reports: MonthlyReport[] = []
+        for (let i = 0; i < ledgers.length; i++) {
+          const data = reportQueries[monthIndex * ledgers.length + i]?.data
+          if (data) reports.push(data)
+        }
         return { label, reports }
-      })
-    )
-      .then(setMonthReports)
-      .catch(() => setMonthReports([]))
-      .finally(() => setIsLoading(false))
-  }, [ledgers, defaultCurrency])
+      }),
+    [months, ledgers, reportQueries]
+  )
 
   const currencies = collectCurrencies(monthReports)
   // Put defaultCurrency first if present
@@ -93,49 +106,41 @@ export function IncomeVsExpensesChart({ ledgers, defaultCurrency }: Props) {
     : currencies
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{t("dashboard.charts.incomeVsExpenses")}</CardTitle>
-        <CardDescription>{t("dashboard.charts.incomeVsExpensesDescription")}</CardDescription>
-      </CardHeader>
-      <CardContent>
-        {isLoading ? (
-          <Skeleton className="h-[300px] w-full" />
-        ) : sortedCurrencies.length === 0 ? (
-          <p className="text-sm text-muted-foreground text-center py-8">
-            {t("dashboard.charts.noData")}
-          </p>
-        ) : (
-          <div className="space-y-6">
-            {sortedCurrencies.map((currency) => {
-              const data = buildChartData(monthReports, currency)
-              const hasData = data.some((d) => d.income !== 0 || d.expenses !== 0)
-              if (!hasData) return null
-              return (
-                <div key={currency}>
-                  {sortedCurrencies.length > 1 && (
-                    <p className="text-sm font-medium text-muted-foreground mb-2">{currency}</p>
-                  )}
-                  <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={data}>
-                      <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                      <XAxis dataKey="month" className="text-xs" />
-                      <YAxis className="text-xs" tickFormatter={(v) => formatCurrency(v, currency)} width={100} />
-                      <Tooltip
-                        formatter={(value) => formatCurrency(Number(value), currency)}
-                        contentStyle={{ borderRadius: "8px", border: "1px solid var(--color-border)", background: "var(--color-card)", color: "var(--color-card-foreground)" }}
-                      />
-                      <Legend />
-                      <Bar dataKey="income" name={t("dashboard.charts.income")} fill="var(--color-chart-2)" radius={[4, 4, 0, 0]} />
-                      <Bar dataKey="expenses" name={t("dashboard.charts.expenses")} fill="var(--color-chart-1)" radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              )
-            })}
-          </div>
-        )}
-      </CardContent>
-    </Card>
+    <ChartCard
+      title={t("dashboard.charts.incomeVsExpenses")}
+      description={t("dashboard.charts.incomeVsExpensesDescription")}
+      isLoading={isLoading}
+      isEmpty={sortedCurrencies.length === 0}
+      emptyLabel={t("dashboard.charts.noData")}
+    >
+      <div className="space-y-6">
+        {sortedCurrencies.map((currency) => {
+          const data = buildChartData(monthReports, currency)
+          const hasData = data.some((d) => d.income !== 0 || d.expenses !== 0)
+          if (!hasData) return null
+          return (
+            <div key={currency}>
+              {sortedCurrencies.length > 1 && (
+                <p className="text-sm font-medium text-muted-foreground mb-2">{currency}</p>
+              )}
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={data}>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                  <XAxis dataKey="month" className="text-xs" />
+                  <YAxis className="text-xs" tickFormatter={(v) => formatCurrency(v, currency)} width={100} />
+                  <Tooltip
+                    formatter={(value) => formatCurrency(Number(value), currency)}
+                    contentStyle={CHART_TOOLTIP_CONTENT_STYLE}
+                  />
+                  <Legend />
+                  <Bar dataKey="income" name={t("dashboard.charts.income")} fill="var(--color-chart-2)" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="expenses" name={t("dashboard.charts.expenses")} fill="var(--color-chart-1)" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )
+        })}
+      </div>
+    </ChartCard>
   )
 }

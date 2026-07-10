@@ -1,16 +1,10 @@
-import { useEffect, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
 import { useQueries } from "@tanstack/react-query"
 import { useNavigate } from "react-router-dom"
 import { useTranslation } from "react-i18next"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
+import { MonthYearPicker } from "@/components/MonthYearPicker"
 import {
   Table,
   TableBody,
@@ -30,13 +24,9 @@ import { accountKeys } from "@/api/accounts.hooks"
 import { transactionKeys } from "@/api/transactions.hooks"
 import type { AccountResource } from "@/api/types"
 import { formatCurrency } from "@/lib/utils"
-import { useErrorHandler } from "@/hooks/use-error-handler"
+import { getMonthLabel } from "@/lib/dates"
+import { useQueryErrorToast } from "@/hooks/use-query-error-toast"
 import { ArrowUpRight, ArrowDownRight, Scale } from "lucide-react"
-
-const MONTH_KEYS = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
-] as const
 
 interface CategoryRow {
   accountId: string
@@ -67,9 +57,9 @@ function buildCategoryRows(
     .map((a) => ({
       accountId: a.id,
       name: a.attributes.name,
-      value: valueByAccountId[a.id],
+      value: valueByAccountId[a.id] ?? 0,
       currency: a.attributes.currency,
-      ledgerSlug: ledgerSlugByAccountId[a.id],
+      ledgerSlug: ledgerSlugByAccountId[a.id] ?? "",
     }))
     .sort((a, b) => b.value - a.value)
 }
@@ -144,7 +134,6 @@ export function Reports() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const { isAuthenticated } = useAuth()
-  const handleError = useErrorHandler()
 
   const now = useMemo(() => new Date(), [])
   const [selectedYear, setSelectedYear] = useState(now.getFullYear())
@@ -245,27 +234,12 @@ export function Reports() {
   }, [expenseQueries])
 
   // Surface any fetch failure as a toast.
-  const isError =
-    ledgersIsError ||
-    accountQueries.some((q) => q.isError) ||
-    incomeQueries.some((q) => q.isError) ||
-    expenseQueries.some((q) => q.isError)
-  const error =
-    ledgersError ??
-    accountQueries.find((q) => q.isError)?.error ??
-    incomeQueries.find((q) => q.isError)?.error ??
-    expenseQueries.find((q) => q.isError)?.error
-  useEffect(() => {
-    if (isError) handleError(error, "fetchFailed")
-  }, [isError, error, handleError])
-
-  const yearOptions = useMemo(() => {
-    const current = now.getFullYear()
-    const years = new Set<number>()
-    for (let y = current - 5; y <= current + 1; y++) years.add(y)
-    years.add(selectedYear)
-    return [...years].sort((a, b) => a - b)
-  }, [now, selectedYear])
+  useQueryErrorToast([
+    { isLoading: ledgersLoading, isError: ledgersIsError, error: ledgersError },
+    ...accountQueries,
+    ...incomeQueries,
+    ...expenseQueries,
+  ])
 
   // All currencies that have any income or expense activity this month.
   const currencies = useMemo(() => {
@@ -288,7 +262,7 @@ export function Reports() {
     })
   }, [currencies, accounts, incomeByAccountId, expenseByAccountId, ledgerSlugByAccountId])
 
-  const monthLabel = `${t(`budget.months.${MONTH_KEYS[selectedMonth - 1]}`)} ${selectedYear}`
+  const monthLabel = getMonthLabel(t, selectedYear, selectedMonth)
 
   if (!isAuthenticated) {
     return (
@@ -310,32 +284,12 @@ export function Reports() {
           <h2 className="text-2xl font-bold tracking-tight">{t("reports.title")}</h2>
           <p className="text-muted-foreground">{t("reports.subtitle")}</p>
         </div>
-        <div className="flex items-center gap-2">
-          <Select value={selectedMonth.toString()} onValueChange={(v) => setSelectedMonth(parseInt(v))}>
-            <SelectTrigger className="h-9 w-36">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {MONTH_KEYS.map((m, index) => (
-                <SelectItem key={m} value={(index + 1).toString()}>
-                  {t(`budget.months.${m}`)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={selectedYear.toString()} onValueChange={(v) => setSelectedYear(parseInt(v))}>
-            <SelectTrigger className="h-9 w-24">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {yearOptions.map((y) => (
-                <SelectItem key={y} value={y.toString()}>
-                  {y}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        <MonthYearPicker
+          month={selectedMonth}
+          year={selectedYear}
+          onMonthChange={setSelectedMonth}
+          onYearChange={setSelectedYear}
+        />
       </div>
 
       {/* Summary cards */}

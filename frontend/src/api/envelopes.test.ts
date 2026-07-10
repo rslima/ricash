@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest"
+import { describe, it, expect, vi } from "vitest"
 import {
   getEnvelopes,
   getEnvelope,
@@ -46,10 +46,6 @@ const mockEnvelope: EnvelopeResource = {
 }
 
 describe("getEnvelopes", () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
   it("fetches envelopes without pagination", async () => {
     const mockResponse: JsonApiListResponse<EnvelopeResource> = { data: [mockEnvelope] }
     vi.mocked(apiClient.get).mockResolvedValueOnce(mockResponse)
@@ -74,10 +70,6 @@ describe("getEnvelopes", () => {
 })
 
 describe("getEnvelope", () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
   it("fetches a single envelope", async () => {
     const mockResponse: JsonApiResponse<EnvelopeResource> = { data: mockEnvelope }
     vi.mocked(apiClient.get).mockResolvedValueOnce(mockResponse)
@@ -90,10 +82,6 @@ describe("getEnvelope", () => {
 })
 
 describe("createEnvelope", () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
   it("creates an envelope", async () => {
     const mockResponse: JsonApiResponse<EnvelopeResource> = { data: mockEnvelope }
     vi.mocked(apiClient.post).mockResolvedValueOnce(mockResponse)
@@ -107,10 +95,6 @@ describe("createEnvelope", () => {
 })
 
 describe("updateEnvelope", () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
   it("updates an envelope", async () => {
     const mockResponse: JsonApiResponse<EnvelopeResource> = { data: mockEnvelope }
     vi.mocked(apiClient.put).mockResolvedValueOnce(mockResponse)
@@ -128,10 +112,6 @@ describe("updateEnvelope", () => {
 })
 
 describe("deleteEnvelope", () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
   it("deletes an envelope", async () => {
     vi.mocked(apiClient.delete).mockResolvedValueOnce(undefined)
 
@@ -142,10 +122,6 @@ describe("deleteEnvelope", () => {
 })
 
 describe("allocateEnvelope", () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
   it("allocates to an envelope", async () => {
     const mockAllocation: JsonApiResponse<EnvelopeAllocationResource> = {
       data: {
@@ -173,10 +149,6 @@ describe("allocateEnvelope", () => {
 })
 
 describe("getEnvelopeBalance", () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
   it("fetches envelope balance", async () => {
     const mockBalance: EnvelopeBalance = {
       envelopeId: "env-1",
@@ -200,10 +172,6 @@ describe("getEnvelopeBalance", () => {
 })
 
 describe("getEnvelopeAccounts", () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
   it("fetches envelope account mappings", async () => {
     vi.mocked(apiClient.get).mockResolvedValueOnce({ accountIds: ["acc-1", "acc-2"] })
 
@@ -215,10 +183,6 @@ describe("getEnvelopeAccounts", () => {
 })
 
 describe("setEnvelopeAccounts", () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
   it("sets envelope account mappings", async () => {
     vi.mocked(apiClient.put).mockResolvedValueOnce({ accountIds: ["acc-1"] })
 
@@ -230,10 +194,6 @@ describe("setEnvelopeAccounts", () => {
 })
 
 describe("getBudgetSummary", () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
   it("fetches budget summary", async () => {
     const mockSummary: BudgetSummary = {
       id: "budget-1",
@@ -252,10 +212,6 @@ describe("getBudgetSummary", () => {
 })
 
 describe("getEnvelopeMappings", () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
   it("fetches all envelope mappings", async () => {
     vi.mocked(apiClient.get).mockResolvedValueOnce({ "acc-1": "env-1" })
 

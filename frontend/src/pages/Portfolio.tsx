@@ -1,10 +1,6 @@
-import { useEffect, useState } from "react"
-import { useParams } from "react-router-dom"
 import { useTranslation } from "react-i18next"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Skeleton } from "@/components/ui/skeleton"
 import {
   Table,
   TableBody,
@@ -14,13 +10,17 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { useAuth } from "@/contexts/AuthContext"
-import { useLedgers } from "@/api/ledgers.hooks"
 import { usePortfolio } from "@/api/instruments.hooks"
 import type { InstrumentType } from "@/api/types"
 import { formatCurrency } from "@/lib/utils"
 import { TrendingUp, Briefcase, PieChart, DollarSign } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { useErrorHandler } from "@/hooks/use-error-handler"
+import { SignInRequired } from "@/components/SignInRequired"
+import { EmptyState } from "@/components/EmptyState"
+import { TableSkeleton } from "@/components/ui/table-skeleton"
+import { LedgerSelector } from "@/components/LedgerSelector"
+import { useLedgerSelection } from "@/hooks/use-ledger-selection"
+import { combineQueries, useQueryErrorToast } from "@/hooks/use-query-error-toast"
 
 const instrumentTypeColors: Record<InstrumentType, "default" | "secondary" | "destructive" | "outline"> = {
   STOCK: "default",
@@ -32,52 +32,26 @@ const instrumentTypeColors: Record<InstrumentType, "default" | "secondary" | "de
 
 export function Portfolio() {
   const { t } = useTranslation()
-  const { ledgerSlug } = useParams<{ ledgerSlug?: string }>()
   const { isAuthenticated } = useAuth()
-  const handleError = useErrorHandler()
-  const [selectedLedgerSlug, setSelectedLedgerSlug] = useState<string | null>(ledgerSlug || null)
 
   // Server state: TanStack Query owns fetching, caching, and loading flags.
-  const { data: ledgersResponse, isLoading: isLedgersLoading, isError: isLedgersError, error: ledgersError } = useLedgers(isAuthenticated)
-  const ledgers = ledgersResponse?.data ?? []
+  const ledgerSelection = useLedgerSelection()
+  const { ledgers, selectedLedgerSlug, setSelectedLedgerSlug, selectedLedger } = ledgerSelection
 
-  // Resolve the ledger slug from the current selection, falling back to the
-  // first ledger once the list loads (mirrors the previous default-to-first behavior).
-  const resolvedLedgerSlug = selectedLedgerSlug ?? ledgers[0]?.attributes.slug ?? null
-
-  const { data: portfolioResponse, isLoading: isPortfolioLoading, isError: isPortfolioError, error: portfolioError } = usePortfolio(
-    resolvedLedgerSlug ?? "",
-    isAuthenticated && !!resolvedLedgerSlug
+  const portfolioQuery = usePortfolio(
+    selectedLedgerSlug ?? "",
+    isAuthenticated && !!selectedLedgerSlug
   )
-  const positions = portfolioResponse?.data ?? []
+  const positions = portfolioQuery.data?.data ?? []
 
-  const isLoading = isLedgersLoading || isPortfolioLoading
+  const { isLoading } = combineQueries(ledgerSelection, portfolioQuery)
 
   // Surface fetch failures as a toast.
-  useEffect(() => {
-    if (isLedgersError) handleError(ledgersError, "fetchFailed")
-  }, [isLedgersError, ledgersError, handleError])
-
-  useEffect(() => {
-    if (isPortfolioError) handleError(portfolioError, "fetchFailed")
-  }, [isPortfolioError, portfolioError, handleError])
+  useQueryErrorToast([ledgerSelection, portfolioQuery])
 
   if (!isAuthenticated) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full">
-        <Card className="w-full max-w-md">
-          <CardHeader className="text-center">
-            <CardTitle>{t("auth.signInRequired")}</CardTitle>
-            <CardDescription>
-              {t("auth.pleaseSignIn", { resource: t("nav.portfolio").toLowerCase() })}
-            </CardDescription>
-          </CardHeader>
-        </Card>
-      </div>
-    )
+    return <SignInRequired resourceKey="nav.portfolio" />
   }
-
-  const selectedLedger = ledgers.find((l) => l.attributes.slug === resolvedLedgerSlug)
 
   // Group totals by currency
   const totalsByCurrency = positions.reduce((acc, p) => {
@@ -106,20 +80,11 @@ export function Portfolio() {
         </div>
       </div>
 
-      {ledgers.length > 0 && (
-        <div className="flex gap-2 flex-wrap">
-          {ledgers.map((ledger) => (
-            <Button
-              key={ledger.id}
-              variant={resolvedLedgerSlug === ledger.attributes.slug ? "default" : "outline"}
-              size="sm"
-              onClick={() => setSelectedLedgerSlug(ledger.attributes.slug)}
-            >
-              {ledger.attributes.name}
-            </Button>
-          ))}
-        </div>
-      )}
+      <LedgerSelector
+        ledgers={ledgers}
+        selectedSlug={selectedLedgerSlug}
+        onSelect={setSelectedLedgerSlug}
+      />
 
       {/* Summary Cards */}
       {!isLoading && positions.length > 0 && (
@@ -133,11 +98,15 @@ export function Portfolio() {
             </CardHeader>
             <CardContent>
               <div className="space-y-1">
-                {currencies.map((currency) => (
-                  <div key={currency} className="text-2xl font-bold">
-                    {formatCurrency(totalsByCurrency[currency].cost, currency)}
-                  </div>
-                ))}
+                {currencies.map((currency) => {
+                  const totals = totalsByCurrency[currency]
+                  if (!totals) return null
+                  return (
+                    <div key={currency} className="text-2xl font-bold">
+                      {formatCurrency(totals.cost, currency)}
+                    </div>
+                  )
+                })}
               </div>
               <p className="text-xs text-muted-foreground">
                 {t("portfolio.investedAmount")}
@@ -153,13 +122,15 @@ export function Portfolio() {
             </CardHeader>
             <CardContent>
               <div className="space-y-1">
-                {currencies.map((currency) => (
-                  <div key={currency} className="text-2xl font-bold">
-                    {totalsByCurrency[currency].hasPrice
-                      ? formatCurrency(totalsByCurrency[currency].value, currency)
-                      : "-"}
-                  </div>
-                ))}
+                {currencies.map((currency) => {
+                  const totals = totalsByCurrency[currency]
+                  if (!totals) return null
+                  return (
+                    <div key={currency} className="text-2xl font-bold">
+                      {totals.hasPrice ? formatCurrency(totals.value, currency) : "-"}
+                    </div>
+                  )
+                })}
               </div>
               <p className="text-xs text-muted-foreground">
                 {hasCurrentPrices ? t("portfolio.marketValue") : t("portfolio.noPrices")}
@@ -177,6 +148,7 @@ export function Portfolio() {
               <div className="space-y-1">
                 {currencies.map((currency) => {
                   const totals = totalsByCurrency[currency]
+                  if (!totals) return null
                   const gainPercent = totals.cost > 0 ? ((totals.gain / totals.cost) * 100) : 0
                   return (
                     <div key={currency}>
@@ -225,19 +197,13 @@ export function Portfolio() {
         </CardHeader>
         <CardContent>
           {isLoading ? (
-            <div className="space-y-2">
-              {[1, 2, 3].map((i) => (
-                <Skeleton key={i} className="h-12 w-full" />
-              ))}
-            </div>
+            <TableSkeleton />
           ) : positions.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-8 text-center">
-              <Briefcase className="h-12 w-12 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold">{t("portfolio.noPositions")}</h3>
-              <p className="text-muted-foreground">
-                {t("portfolio.noPositionsDescription")}
-              </p>
-            </div>
+            <EmptyState
+              icon={Briefcase}
+              title={t("portfolio.noPositions")}
+              description={t("portfolio.noPositionsDescription")}
+            />
           ) : (
             <div className="rounded-md border">
               <Table>

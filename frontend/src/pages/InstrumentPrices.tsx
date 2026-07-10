@@ -1,10 +1,8 @@
-import { useEffect, useState, useMemo } from "react"
-import { useParams } from "react-router-dom"
+import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Skeleton } from "@/components/ui/skeleton"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
@@ -31,7 +29,6 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { useAuth } from "@/contexts/AuthContext"
-import { useLedgers } from "@/api/ledgers.hooks"
 import {
   useInstrumentPrices,
   useAllInstruments,
@@ -40,75 +37,57 @@ import {
 } from "@/api/instruments.hooks"
 import type { InstrumentPriceResource } from "@/api/types"
 import { formatDate, formatCurrency } from "@/lib/utils"
+import { todayISO } from "@/lib/dates"
 import { Plus, Trash2, TrendingUp, DollarSign } from "lucide-react"
 import { useErrorHandler } from "@/hooks/use-error-handler"
+import { useLedgerSelection } from "@/hooks/use-ledger-selection"
+import { combineQueries, useQueryErrorToast } from "@/hooks/use-query-error-toast"
+import { SignInRequired } from "@/components/SignInRequired"
+import { EmptyState } from "@/components/EmptyState"
+import { TableSkeleton } from "@/components/ui/table-skeleton"
+import { LedgerSelector } from "@/components/LedgerSelector"
 
 export function InstrumentPrices() {
   const { t } = useTranslation()
-  const { ledgerSlug } = useParams<{ ledgerSlug?: string }>()
   const { isAuthenticated } = useAuth()
   const handleError = useErrorHandler()
-  const [selectedLedgerSlug, setSelectedLedgerSlug] = useState<string | null>(ledgerSlug || null)
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
 
   // Form state
   const [instrumentId, setInstrumentId] = useState("")
   const [price, setPrice] = useState("")
-  const [effectiveDate, setEffectiveDate] = useState(new Date().toISOString().split("T")[0])
+  const [effectiveDate, setEffectiveDate] = useState(todayISO())
 
   const resetForm = () => {
     setInstrumentId("")
     setPrice("")
-    setEffectiveDate(new Date().toISOString().split("T")[0])
+    setEffectiveDate(todayISO())
   }
 
   // Server state: TanStack Query owns fetching, caching, and loading flags.
-  const {
-    data: ledgersResponse,
-    isLoading: ledgersLoading,
-    isError: ledgersIsError,
-    error: ledgersError,
-  } = useLedgers(isAuthenticated)
-  const ledgers = useMemo(() => ledgersResponse?.data ?? [], [ledgersResponse])
+  const ledgerSelection = useLedgerSelection()
+  const { ledgers, selectedLedgerSlug, setSelectedLedgerSlug, selectedLedger } = ledgerSelection
 
-  // Default to the first ledger once ledgers load, unless one is already selected.
-  useEffect(() => {
-    if (ledgers.length > 0) {
-      setSelectedLedgerSlug(prev => prev ?? ledgers[0].attributes.slug)
-    }
-  }, [ledgers])
-
-  const {
-    data: pricesResponse,
-    isLoading: pricesLoading,
-    isError: pricesIsError,
-    error: pricesError,
-  } = useInstrumentPrices(
+  const pricesQuery = useInstrumentPrices(
     selectedLedgerSlug ?? "",
     { "page[size]": 100 },
     isAuthenticated && !!selectedLedgerSlug
   )
-  const prices = pricesResponse?.data ?? []
+  const prices = pricesQuery.data?.data ?? []
 
-  const {
-    data: instrumentsResponse,
-    isLoading: instrumentsLoading,
-    isError: instrumentsIsError,
-    error: instrumentsError,
-  } = useAllInstruments(selectedLedgerSlug ?? "", isAuthenticated && !!selectedLedgerSlug)
-  const instruments = instrumentsResponse ?? []
+  const instrumentsQuery = useAllInstruments(
+    selectedLedgerSlug ?? "",
+    isAuthenticated && !!selectedLedgerSlug
+  )
+  const instruments = instrumentsQuery.data ?? []
 
   const createPriceMutation = useCreateInstrumentPrice(selectedLedgerSlug ?? "")
   const deletePriceMutation = useDeleteInstrumentPrice(selectedLedgerSlug ?? "")
 
-  const isLoading = ledgersLoading || pricesLoading || instrumentsLoading
-  const isError = ledgersIsError || pricesIsError || instrumentsIsError
-  const error = ledgersError ?? pricesError ?? instrumentsError
+  const { isLoading } = combineQueries(ledgerSelection, pricesQuery, instrumentsQuery)
 
   // Surface fetch failures as a toast (mutations report their own errors inline).
-  useEffect(() => {
-    if (isError) handleError(error, "fetchFailed")
-  }, [isError, error, handleError])
+  useQueryErrorToast([ledgerSelection, pricesQuery, instrumentsQuery])
 
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault()
@@ -156,21 +135,8 @@ export function InstrumentPrices() {
   }
 
   if (!isAuthenticated) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full">
-        <Card className="w-full max-w-md">
-          <CardHeader className="text-center">
-            <CardTitle>{t("auth.signInRequired")}</CardTitle>
-            <CardDescription>
-              {t("auth.pleaseSignIn", { resource: t("nav.instrumentPrices").toLowerCase() })}
-            </CardDescription>
-          </CardHeader>
-        </Card>
-      </div>
-    )
+    return <SignInRequired resourceKey="nav.instrumentPrices" />
   }
-
-  const selectedLedger = ledgers.find((l) => l.attributes.slug === selectedLedgerSlug)
 
   return (
     <div className="space-y-4">
@@ -261,20 +227,11 @@ export function InstrumentPrices() {
         </DialogContent>
       </Dialog>
 
-      {ledgers.length > 0 && (
-        <div className="flex gap-2 flex-wrap">
-          {ledgers.map((ledger) => (
-            <Button
-              key={ledger.id}
-              variant={selectedLedgerSlug === ledger.attributes.slug ? "default" : "outline"}
-              size="sm"
-              onClick={() => setSelectedLedgerSlug(ledger.attributes.slug)}
-            >
-              {ledger.attributes.name}
-            </Button>
-          ))}
-        </div>
-      )}
+      <LedgerSelector
+        ledgers={ledgers}
+        selectedSlug={selectedLedgerSlug}
+        onSelect={setSelectedLedgerSlug}
+      />
 
       <Card>
         <CardHeader>
@@ -292,19 +249,13 @@ export function InstrumentPrices() {
         </CardHeader>
         <CardContent>
           {isLoading ? (
-            <div className="space-y-2">
-              {[1, 2, 3].map((i) => (
-                <Skeleton key={i} className="h-12 w-full" />
-              ))}
-            </div>
+            <TableSkeleton />
           ) : prices.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-8 text-center">
-              <TrendingUp className="h-12 w-12 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold">{t("instrumentPrices.noPrices")}</h3>
-              <p className="text-muted-foreground">
-                {t("instrumentPrices.noPricesDescription")}
-              </p>
-            </div>
+            <EmptyState
+              icon={TrendingUp}
+              title={t("instrumentPrices.noPrices")}
+              description={t("instrumentPrices.noPricesDescription")}
+            />
           ) : (
             <div className="rounded-md border">
               <Table>
@@ -340,6 +291,7 @@ export function InstrumentPrices() {
                         <Button
                           variant="ghost"
                           size="icon"
+                          aria-label={t("common.delete")}
                           onClick={() => handleDelete(priceEntry.id)}
                           className="text-destructive hover:text-destructive"
                         >

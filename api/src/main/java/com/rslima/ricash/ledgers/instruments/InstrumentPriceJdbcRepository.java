@@ -98,11 +98,15 @@ public class InstrumentPriceJdbcRepository implements InstrumentPriceRepository 
         final var id = price.id() != null ? price.id() : UuidCreator.getTimeOrderedEpoch().toString();
         final var createdAt = price.createdAt() != null ? price.createdAt() : Instant.now();
 
-        jdbcClient.sql("""
+        // RETURNING reflects the conflict path: the existing row keeps its
+        // original id and created_at, and callers must see those, not the
+        // tentative ones generated for the insert attempt.
+        return jdbcClient.sql("""
                 INSERT INTO instrument_prices (id, instrument_id, price, effective_date, source, created_at)
                 VALUES (:id, :instrumentId, :price, :effectiveDate, :source, :createdAt)
                 ON CONFLICT (instrument_id, effective_date)
                 DO UPDATE SET price = EXCLUDED.price, source = EXCLUDED.source
+                RETURNING id, instrument_id, price, effective_date, source, created_at
                 """)
             .param("id", id)
             .param("instrumentId", price.instrumentId())
@@ -110,16 +114,8 @@ public class InstrumentPriceJdbcRepository implements InstrumentPriceRepository 
             .param("effectiveDate", Date.valueOf(price.effectiveDate()))
             .param("source", price.source())
             .param("createdAt", Timestamp.from(createdAt))
-            .update();
-
-        return new InstrumentPrice(
-            id,
-            price.instrumentId(),
-            price.price(),
-            price.effectiveDate(),
-            price.source(),
-            createdAt
-        );
+            .query(this::mapRow)
+            .single();
     }
 
     @Override

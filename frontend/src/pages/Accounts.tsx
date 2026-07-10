@@ -1,10 +1,10 @@
-import { useEffect, useState, useMemo } from "react"
-import { useParams, Link } from "react-router-dom"
+import { useState, useMemo } from "react"
+import { Link } from "react-router-dom"
 import { useTranslation } from "react-i18next"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Skeleton } from "@/components/ui/skeleton"
+import { TableSkeleton } from "@/components/ui/table-skeleton"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
@@ -40,13 +40,19 @@ import { useAuth } from "@/contexts/AuthContext"
 import { useAccounts, useCreateAccount, useUpdateAccount, useDeleteAccount } from "@/api/accounts.hooks"
 import { ApiError } from "@/api/client"
 import { useErrorHandler } from "@/hooks/use-error-handler"
-import { useLedgers } from "@/api/ledgers.hooks"
+import { useLedgerSelection } from "@/hooks/use-ledger-selection"
+import { combineQueries, useQueryErrorToast } from "@/hooks/use-query-error-toast"
 import { useEnvelopes, useEnvelopeMappings, useSetEnvelopeAccounts } from "@/api/envelopes.hooks"
 import { getEnvelopeAccounts } from "@/api/envelopes"
-import type { AccountResource } from "@/api/types"
+import type { AccountResource, EnvelopeResource } from "@/api/types"
+import { buildTree, countTreeNodes, collectDescendantIds, type TreeNode } from "@/lib/tree"
+import { useExpandableTree } from "@/hooks/use-expandable-tree"
 import { formatCurrency } from "@/lib/utils"
 import { Plus, Trash2, Wallet, MoreHorizontal, Pencil, ChevronRight, ChevronDown } from "lucide-react"
 import { AccountAutocomplete } from "@/components/AccountAutocomplete"
+import { SignInRequired } from "@/components/SignInRequired"
+import { EmptyState } from "@/components/EmptyState"
+import { LedgerSelector } from "@/components/LedgerSelector"
 
 const accountTypeColors: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
   ASSET: "default",
@@ -60,45 +66,17 @@ type AccountType = "ASSET" | "LIABILITY" | "EQUITY" | "INCOME" | "EXPENSE"
 
 const ACCOUNT_TYPE_ORDER: AccountType[] = ["ASSET", "LIABILITY", "EQUITY", "INCOME", "EXPENSE"]
 
-interface AccountTreeNode {
-  account: AccountResource
-  children: AccountTreeNode[]
-}
-
-function buildAccountTree(accounts: AccountResource[]): AccountTreeNode[] {
-  const accountMap = new Map<string, AccountTreeNode>()
-  const roots: AccountTreeNode[] = []
-
-  // Create nodes for all accounts
-  accounts.forEach((account) => {
-    accountMap.set(account.id, { account, children: [] })
-  })
-
-  // Build the tree structure
-  accounts.forEach((account) => {
-    const node = accountMap.get(account.id)!
-    const parentId = account.attributes.parentAccountId
-
-    if (parentId && accountMap.has(parentId)) {
-      accountMap.get(parentId)!.children.push(node)
-    } else {
-      roots.push(node)
-    }
-  })
-
-  return roots
-}
-
-function countTreeNodes(nodes: AccountTreeNode[]): number {
-  let count = 0
-  for (const node of nodes) {
-    count += 1 + countTreeNodes(node.children)
-  }
-  return count
+interface AccountFormData {
+  name: string
+  description: string
+  currency: string
+  type: AccountType
+  parentAccountId: string
+  envelopeId: string
 }
 
 interface AccountRowProps {
-  node: AccountTreeNode
+  node: TreeNode<AccountResource>
   depth: number
   expandedIds: Set<string>
   onToggleExpand: (id: string) => void
@@ -106,11 +84,11 @@ interface AccountRowProps {
   onDelete: (accountId: string) => void
   onCreateChild: (account: AccountResource) => void
   ledgerSlug: string
-  t: (key: string) => string
 }
 
-function AccountRow({ node, depth, expandedIds, onToggleExpand, onEdit, onDelete, onCreateChild, ledgerSlug, t }: AccountRowProps) {
-  const { account, children } = node
+function AccountRow({ node, depth, expandedIds, onToggleExpand, onEdit, onDelete, onCreateChild, ledgerSlug }: AccountRowProps) {
+  const { t } = useTranslation()
+  const { item: account, children } = node
   const hasChildren = children.length > 0
   const isExpanded = expandedIds.has(account.id)
 
@@ -124,6 +102,7 @@ function AccountRow({ node, depth, expandedIds, onToggleExpand, onEdit, onDelete
                 variant="ghost"
                 size="icon"
                 className="h-6 w-6 p-0"
+                aria-label={isExpanded ? t("common.collapse") : t("common.expand")}
                 onClick={() => onToggleExpand(account.id)}
               >
                 {isExpanded ? (
@@ -151,7 +130,7 @@ function AccountRow({ node, depth, expandedIds, onToggleExpand, onEdit, onDelete
         <TableCell>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon">
+              <Button variant="ghost" size="icon" aria-label={t("common.actions")}>
                 <MoreHorizontal className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
@@ -178,7 +157,7 @@ function AccountRow({ node, depth, expandedIds, onToggleExpand, onEdit, onDelete
       {isExpanded &&
         children.map((child) => (
           <AccountRow
-            key={child.account.id}
+            key={child.item.id}
             node={child}
             depth={depth + 1}
             expandedIds={expandedIds}
@@ -187,91 +166,211 @@ function AccountRow({ node, depth, expandedIds, onToggleExpand, onEdit, onDelete
             onDelete={onDelete}
             onCreateChild={onCreateChild}
             ledgerSlug={ledgerSlug}
-            t={t}
           />
         ))}
     </>
   )
 }
 
+interface AccountFormProps {
+  idPrefix: string
+  value: AccountFormData
+  onChange: (value: AccountFormData) => void
+  /** Parent-account options: all accounts on create, the non-descendant subset on edit. */
+  accounts: AccountResource[]
+  envelopes: EnvelopeResource[]
+  onSubmit: (e: React.FormEvent) => void
+  onCancel: () => void
+  submitLabel: string
+  submittingLabel: string
+  isSubmitting: boolean
+  currencyPlaceholder: string
+}
+
+function AccountForm({
+  idPrefix,
+  value,
+  onChange,
+  accounts,
+  envelopes,
+  onSubmit,
+  onCancel,
+  submitLabel,
+  submittingLabel,
+  isSubmitting,
+  currencyPlaceholder,
+}: AccountFormProps) {
+  const { t } = useTranslation()
+
+  const handleParentChange = (parentAccountId: string) => {
+    if (parentAccountId) {
+      const parentAccount = accounts.find((a) => a.id === parentAccountId)
+      if (parentAccount) {
+        onChange({
+          ...value,
+          parentAccountId,
+          type: parentAccount.attributes.type as AccountType,
+          currency: parentAccount.attributes.currency,
+        })
+      }
+    } else {
+      onChange({ ...value, parentAccountId: "" })
+    }
+  }
+
+  return (
+    <form onSubmit={onSubmit}>
+      <div className="grid gap-4 py-4">
+        <div className="grid gap-2">
+          <Label htmlFor={`${idPrefix}name`}>{t("common.name")}</Label>
+          <Input
+            id={`${idPrefix}name`}
+            value={value.name}
+            onChange={(e) => onChange({ ...value, name: e.target.value })}
+            placeholder="Checking Account"
+            required
+          />
+        </div>
+        <div className="grid gap-2">
+          <Label htmlFor={`${idPrefix}type`}>{t("common.type")}</Label>
+          <Select
+            value={value.type}
+            onValueChange={(type: AccountType) => onChange({ ...value, type })}
+            disabled={!!value.parentAccountId}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder={t("common.type")} />
+            </SelectTrigger>
+            <SelectContent>
+              {ACCOUNT_TYPE_ORDER.map((type) => (
+                <SelectItem key={type} value={type}>
+                  {t(`accounts.types.${type}`)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="grid gap-2">
+          <Label htmlFor={`${idPrefix}parentAccount`}>{t("accounts.parentAccount")} ({t("common.optional")})</Label>
+          <AccountAutocomplete
+            accounts={accounts}
+            value={value.parentAccountId}
+            onValueChange={handleParentChange}
+            placeholder={t("accounts.parentAccount")}
+            allowNone
+          />
+        </div>
+        <div className="grid gap-2">
+          <Label htmlFor={`${idPrefix}currency`}>{t("common.currency")}</Label>
+          <Input
+            id={`${idPrefix}currency`}
+            value={value.currency}
+            onChange={(e) => onChange({ ...value, currency: e.target.value })}
+            placeholder={currencyPlaceholder}
+            required
+          />
+        </div>
+        <div className="grid gap-2">
+          <Label htmlFor={`${idPrefix}description`}>{t("common.description")} ({t("common.optional")})</Label>
+          <Input
+            id={`${idPrefix}description`}
+            value={value.description}
+            onChange={(e) => onChange({ ...value, description: e.target.value })}
+            placeholder="Main checking account for daily expenses"
+          />
+        </div>
+        <div className="grid gap-2">
+          <Label htmlFor={`${idPrefix}envelope`}>{t("transactions.envelope")} ({t("common.optional")})</Label>
+          <Select
+            value={value.envelopeId || "none"}
+            onValueChange={(envelopeId) =>
+              onChange({ ...value, envelopeId: envelopeId === "none" ? "" : envelopeId })
+            }
+          >
+            <SelectTrigger>
+              <SelectValue placeholder={t("transactions.selectEnvelope")} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">{t("common.none")}</SelectItem>
+              {envelopes.map((envelope) => (
+                <SelectItem key={envelope.id} value={envelope.id}>
+                  {envelope.attributes.name} ({t(`envelopes.types.${envelope.attributes.type}`)})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+      <DialogFooter>
+        <Button type="button" variant="outline" onClick={onCancel}>
+          {t("common.cancel")}
+        </Button>
+        <Button type="submit" disabled={isSubmitting}>
+          {isSubmitting ? submittingLabel : submitLabel}
+        </Button>
+      </DialogFooter>
+    </form>
+  )
+}
+
 export function Accounts() {
   const { t } = useTranslation()
-  const { ledgerSlug } = useParams<{ ledgerSlug?: string }>()
   const { isAuthenticated } = useAuth()
   const handleError = useErrorHandler()
-  const [selectedLedgerSlug, setSelectedLedgerSlug] = useState<string | null>(ledgerSlug || null)
+  const ledgerSelection = useLedgerSelection()
+  const { ledgers, selectedLedgerSlug, setSelectedLedgerSlug, selectedLedger } = ledgerSelection
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [editingAccount, setEditingAccount] = useState<AccountResource | null>(null)
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<AccountFormData>({
     name: "",
     description: "",
     currency: "BRL",
-    type: "ASSET" as AccountType,
+    type: "ASSET",
     parentAccountId: "",
     envelopeId: "",
   })
-  const [editFormData, setEditFormData] = useState({
+  const [editFormData, setEditFormData] = useState<AccountFormData>({
     name: "",
     description: "",
-    type: "ASSET" as AccountType,
+    type: "ASSET",
     currency: "BRL",
     parentAccountId: "",
     envelopeId: "",
   })
 
   // Server state: TanStack Query owns fetching, caching, and loading flags.
-  const {
-    data: ledgersResponse,
-    isLoading: isLedgersLoading,
-    isError: isLedgersError,
-    error: ledgersError,
-  } = useLedgers(isAuthenticated)
-  const ledgers = useMemo(() => ledgersResponse?.data ?? [], [ledgersResponse])
+  const accountsQuery = useAccounts(selectedLedgerSlug ?? "", { "page[size]": 200 }, isAuthenticated)
+  const accounts = useMemo(() => accountsQuery.data?.data ?? [], [accountsQuery.data])
 
-  const {
-    data: accountsResponse,
-    isLoading: isAccountsLoading,
-    isError: isAccountsError,
-    error: accountsError,
-  } = useAccounts(selectedLedgerSlug ?? "", { "page[size]": 200 }, isAuthenticated)
-  const accounts = useMemo(() => accountsResponse?.data ?? [], [accountsResponse])
+  const envelopesQuery = useEnvelopes(selectedLedgerSlug ?? "", { "page[size]": 200 }, isAuthenticated)
+  const envelopes = useMemo(() => envelopesQuery.data?.data ?? [], [envelopesQuery.data])
 
-  const {
-    data: envelopesResponse,
-    isLoading: isEnvelopesLoading,
-    isError: isEnvelopesError,
-    error: envelopesError,
-  } = useEnvelopes(selectedLedgerSlug ?? "", { "page[size]": 200 }, isAuthenticated)
-  const envelopes = useMemo(() => envelopesResponse?.data ?? [], [envelopesResponse])
-
-  const {
-    data: envelopeMappingsData,
-    isLoading: isMappingsLoading,
-    isError: isMappingsError,
-    error: mappingsError,
-  } = useEnvelopeMappings(selectedLedgerSlug ?? "", isAuthenticated)
-  const envelopeMappings = envelopeMappingsData ?? {}
+  const mappingsQuery = useEnvelopeMappings(selectedLedgerSlug ?? "", isAuthenticated)
+  const envelopeMappings = mappingsQuery.data ?? {}
 
   const createAccountMutation = useCreateAccount(selectedLedgerSlug ?? "")
   const updateAccountMutation = useUpdateAccount(selectedLedgerSlug ?? "")
   const deleteAccountMutation = useDeleteAccount(selectedLedgerSlug ?? "")
   const setEnvelopeAccountsMutation = useSetEnvelopeAccounts(selectedLedgerSlug ?? "")
 
-  const isLoading = isLedgersLoading || isAccountsLoading || isEnvelopesLoading || isMappingsLoading
+  const { isLoading } = combineQueries(ledgerSelection, accountsQuery, envelopesQuery, mappingsQuery)
   const isCreating = createAccountMutation.isPending || setEnvelopeAccountsMutation.isPending
   const isUpdating = updateAccountMutation.isPending || setEnvelopeAccountsMutation.isPending
 
-  // Combine query failures into a single fetch-error signal for the toast.
-  const isError = isLedgersError || isAccountsError || isEnvelopesError || isMappingsError
-  const error = ledgersError || accountsError || envelopesError || mappingsError
+  // Surface fetch failures as a toast (mutations report their own errors inline).
+  useQueryErrorToast([ledgerSelection, accountsQuery, envelopesQuery, mappingsQuery])
 
-  const accountTree = useMemo(() => buildAccountTree(accounts), [accounts])
+  const { expandedIds, toggle, expandAll, collapseAll } = useExpandableTree(accounts)
+
+  const accountTree = useMemo(
+    () => buildTree(accounts, (a) => a.id, (a) => a.attributes.parentAccountId),
+    [accounts]
+  )
 
   // Group account trees by type
   const accountsByType = useMemo(() => {
-    const grouped: Record<AccountType, AccountTreeNode[]> = {
+    const grouped: Record<AccountType, TreeNode<AccountResource>[]> = {
       ASSET: [],
       LIABILITY: [],
       EQUITY: [],
@@ -280,7 +379,7 @@ export function Accounts() {
     }
 
     accountTree.forEach((node) => {
-      const type = node.account.attributes.type as AccountType
+      const type = node.item.attributes.type as AccountType
       if (grouped[type]) {
         grouped[type].push(node)
       }
@@ -293,76 +392,18 @@ export function Accounts() {
   const validParentAccountsForEdit = useMemo(() => {
     if (!editingAccount) return accounts
 
-    const excludedIds = new Set<string>([editingAccount.id])
-    const findDescendants = (id: string) => {
-      accounts
-        .filter((a) => a.attributes.parentAccountId === id)
-        .forEach((child) => {
-          excludedIds.add(child.id)
-          findDescendants(child.id)
-        })
-    }
-    findDescendants(editingAccount.id)
+    const excludedIds = new Set(
+      collectDescendantIds(accounts, editingAccount.id, (a) => a.id, (a) => a.attributes.parentAccountId)
+    )
 
     return accounts.filter((a) => !excludedIds.has(a.id))
   }, [accounts, editingAccount])
 
-  // Surface fetch failures as a toast (mutations report their own errors inline).
-  useEffect(() => {
-    if (isError) handleError(error, "fetchFailed")
-  }, [isError, error, handleError])
-
-  // Default to the first ledger once ledgers load (unless one is already chosen).
-  useEffect(() => {
-    if (ledgers.length > 0) {
-      setSelectedLedgerSlug((prev) => prev ?? ledgers[0].attributes.slug)
-    }
-  }, [ledgers])
-
-  // Expand all accounts by default whenever the account list (re)loads.
-  useEffect(() => {
-    setExpandedIds(new Set(accounts.map((a) => a.id)))
-  }, [accounts])
-
-  const handleToggleExpand = (id: string) => {
-    setExpandedIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) {
-        next.delete(id)
-      } else {
-        next.add(id)
-      }
-      return next
-    })
-  }
-
-  const handleExpandAll = () => {
-    setExpandedIds(new Set(accounts.map((a) => a.id)))
-  }
-
-  const handleCollapseAll = () => {
-    setExpandedIds(new Set())
-  }
-
-  // Get all descendant IDs of an account (including the account itself)
-  const getAllDescendantIds = (accountId: string): string[] => {
-    const descendants: string[] = [accountId]
-    const findDescendants = (id: string) => {
-      accounts
-        .filter((a) => a.attributes.parentAccountId === id)
-        .forEach((child) => {
-          descendants.push(child.id)
-          findDescendants(child.id)
-        })
-    }
-    findDescendants(accountId)
-    return descendants
-  }
-
   const handleDelete = (accountId: string) => {
     if (!selectedLedgerSlug) return
 
-    const childCount = getAllDescendantIds(accountId).length - 1
+    const childCount =
+      collectDescendantIds(accounts, accountId, (a) => a.id, (a) => a.attributes.parentAccountId).length - 1
 
     const message = childCount > 0
       ? t("accounts.confirmDeleteWithChildren", { count: childCount })
@@ -487,21 +528,8 @@ export function Accounts() {
   }
 
   if (!isAuthenticated) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full">
-        <Card className="w-full max-w-md">
-          <CardHeader className="text-center">
-            <CardTitle>{t("auth.signInRequired")}</CardTitle>
-            <CardDescription>
-              {t("auth.pleaseSignIn", { resource: t("nav.accounts").toLowerCase() })}
-            </CardDescription>
-          </CardHeader>
-        </Card>
-      </div>
-    )
+    return <SignInRequired resourceKey="nav.accounts" />
   }
-
-  const selectedLedger = ledgers.find((l) => l.attributes.slug === selectedLedgerSlug)
 
   return (
     <div className="space-y-6">
@@ -526,123 +554,19 @@ export function Accounts() {
               {t("accounts.createDescription")}
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleCreate}>
-            <div className="grid gap-4 py-4">
-              <div className="grid gap-2">
-                <Label htmlFor="name">{t("common.name")}</Label>
-                <Input
-                  id="name"
-                  value={formData.name}
-                  onChange={(e) =>
-                    setFormData({ ...formData, name: e.target.value })
-                  }
-                  placeholder="Checking Account"
-                  required
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="type">{t("common.type")}</Label>
-                <Select
-                  value={formData.type}
-                  onValueChange={(value: AccountType) =>
-                    setFormData({ ...formData, type: value })
-                  }
-                  disabled={!!formData.parentAccountId}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder={t("common.type")} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ASSET">{t("accounts.types.ASSET")}</SelectItem>
-                    <SelectItem value="LIABILITY">{t("accounts.types.LIABILITY")}</SelectItem>
-                    <SelectItem value="EQUITY">{t("accounts.types.EQUITY")}</SelectItem>
-                    <SelectItem value="INCOME">{t("accounts.types.INCOME")}</SelectItem>
-                    <SelectItem value="EXPENSE">{t("accounts.types.EXPENSE")}</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="parentAccount">{t("accounts.parentAccount")} ({t("common.optional")})</Label>
-                <AccountAutocomplete
-                  accounts={accounts}
-                  value={formData.parentAccountId}
-                  onValueChange={(value) => {
-                    if (value) {
-                      const parentAccount = accounts.find((a) => a.id === value)
-                      if (parentAccount) {
-                        setFormData({
-                          ...formData,
-                          parentAccountId: value,
-                          type: parentAccount.attributes.type as AccountType,
-                          currency: parentAccount.attributes.currency,
-                        })
-                      }
-                    } else {
-                      setFormData({ ...formData, parentAccountId: "" })
-                    }
-                  }}
-                  placeholder={t("accounts.parentAccount")}
-                  allowNone
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="currency">{t("common.currency")}</Label>
-                <Input
-                  id="currency"
-                  value={formData.currency}
-                  onChange={(e) =>
-                    setFormData({ ...formData, currency: e.target.value })
-                  }
-                  placeholder="USD"
-                  required
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="description">{t("common.description")} ({t("common.optional")})</Label>
-                <Input
-                  id="description"
-                  value={formData.description}
-                  onChange={(e) =>
-                    setFormData({ ...formData, description: e.target.value })
-                  }
-                  placeholder="Main checking account for daily expenses"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="envelope">{t("transactions.envelope")} ({t("common.optional")})</Label>
-                <Select
-                  value={formData.envelopeId || "none"}
-                  onValueChange={(value) =>
-                    setFormData({ ...formData, envelopeId: value === "none" ? "" : value })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder={t("transactions.selectEnvelope")} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">{t("common.none")}</SelectItem>
-                    {envelopes.map((envelope) => (
-                      <SelectItem key={envelope.id} value={envelope.id}>
-                        {envelope.attributes.name} ({t(`envelopes.types.${envelope.attributes.type}`)})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setIsCreateDialogOpen(false)}
-              >
-                {t("common.cancel")}
-              </Button>
-              <Button type="submit" disabled={isCreating}>
-                {isCreating ? t("accounts.creating") : t("accounts.createAccount")}
-              </Button>
-            </DialogFooter>
-          </form>
+          <AccountForm
+            idPrefix=""
+            value={formData}
+            onChange={setFormData}
+            accounts={accounts}
+            envelopes={envelopes}
+            onSubmit={handleCreate}
+            onCancel={() => setIsCreateDialogOpen(false)}
+            submitLabel={t("accounts.createAccount")}
+            submittingLabel={t("accounts.creating")}
+            isSubmitting={isCreating}
+            currencyPlaceholder="USD"
+          />
         </DialogContent>
       </Dialog>
 
@@ -654,140 +578,23 @@ export function Accounts() {
               {t("accounts.editDescription")}
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleUpdate}>
-            <div className="grid gap-4 py-4">
-              <div className="grid gap-2">
-                <Label htmlFor="edit-name">{t("common.name")}</Label>
-                <Input
-                  id="edit-name"
-                  value={editFormData.name}
-                  onChange={(e) =>
-                    setEditFormData({ ...editFormData, name: e.target.value })
-                  }
-                  placeholder="Checking Account"
-                  required
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="edit-type">{t("common.type")}</Label>
-                <Select
-                  value={editFormData.type}
-                  onValueChange={(value: AccountType) =>
-                    setEditFormData({ ...editFormData, type: value })
-                  }
-                  disabled={!!editFormData.parentAccountId}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder={t("common.type")} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ASSET">{t("accounts.types.ASSET")}</SelectItem>
-                    <SelectItem value="LIABILITY">{t("accounts.types.LIABILITY")}</SelectItem>
-                    <SelectItem value="EQUITY">{t("accounts.types.EQUITY")}</SelectItem>
-                    <SelectItem value="INCOME">{t("accounts.types.INCOME")}</SelectItem>
-                    <SelectItem value="EXPENSE">{t("accounts.types.EXPENSE")}</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="edit-parentAccount">{t("accounts.parentAccount")} ({t("common.optional")})</Label>
-                <AccountAutocomplete
-                  accounts={validParentAccountsForEdit}
-                  value={editFormData.parentAccountId}
-                  onValueChange={(value) => {
-                    if (value) {
-                      const parentAccount = accounts.find((a) => a.id === value)
-                      if (parentAccount) {
-                        setEditFormData({
-                          ...editFormData,
-                          parentAccountId: value,
-                          type: parentAccount.attributes.type as AccountType,
-                          currency: parentAccount.attributes.currency,
-                        })
-                      }
-                    } else {
-                      setEditFormData({ ...editFormData, parentAccountId: "" })
-                    }
-                  }}
-                  placeholder={t("accounts.parentAccount")}
-                  allowNone
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="edit-currency">{t("common.currency")}</Label>
-                <Input
-                  id="edit-currency"
-                  value={editFormData.currency}
-                  onChange={(e) =>
-                    setEditFormData({ ...editFormData, currency: e.target.value })
-                  }
-                  placeholder="BRL"
-                  required
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="edit-description">{t("common.description")} ({t("common.optional")})</Label>
-                <Input
-                  id="edit-description"
-                  value={editFormData.description}
-                  onChange={(e) =>
-                    setEditFormData({ ...editFormData, description: e.target.value })
-                  }
-                  placeholder="Main checking account for daily expenses"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="edit-envelope">{t("transactions.envelope")} ({t("common.optional")})</Label>
-                <Select
-                  value={editFormData.envelopeId || "none"}
-                  onValueChange={(value) =>
-                    setEditFormData({ ...editFormData, envelopeId: value === "none" ? "" : value })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder={t("transactions.selectEnvelope")} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">{t("common.none")}</SelectItem>
-                    {envelopes.map((envelope) => (
-                      <SelectItem key={envelope.id} value={envelope.id}>
-                        {envelope.attributes.name} ({t(`envelopes.types.${envelope.attributes.type}`)})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setIsEditDialogOpen(false)}
-              >
-                {t("common.cancel")}
-              </Button>
-              <Button type="submit" disabled={isUpdating}>
-                {isUpdating ? t("accounts.saving") : t("common.save")}
-              </Button>
-            </DialogFooter>
-          </form>
+          <AccountForm
+            idPrefix="edit-"
+            value={editFormData}
+            onChange={setEditFormData}
+            accounts={validParentAccountsForEdit}
+            envelopes={envelopes}
+            onSubmit={handleUpdate}
+            onCancel={() => setIsEditDialogOpen(false)}
+            submitLabel={t("common.save")}
+            submittingLabel={t("accounts.saving")}
+            isSubmitting={isUpdating}
+            currencyPlaceholder="BRL"
+          />
         </DialogContent>
       </Dialog>
 
-      {ledgers.length > 0 && (
-        <div className="flex gap-2 flex-wrap">
-          {ledgers.map((ledger) => (
-            <Button
-              key={ledger.id}
-              variant={selectedLedgerSlug === ledger.attributes.slug ? "default" : "outline"}
-              size="sm"
-              onClick={() => setSelectedLedgerSlug(ledger.attributes.slug)}
-            >
-              {ledger.attributes.name}
-            </Button>
-          ))}
-        </div>
-      )}
+      <LedgerSelector ledgers={ledgers} selectedSlug={selectedLedgerSlug} onSelect={setSelectedLedgerSlug} />
 
       <Card>
         <CardHeader>
@@ -804,10 +611,10 @@ export function Accounts() {
             </div>
             {accounts.length > 0 && (
               <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={handleExpandAll}>
+                <Button variant="outline" size="sm" onClick={expandAll}>
                   {t("accounts.expandAll")}
                 </Button>
-                <Button variant="outline" size="sm" onClick={handleCollapseAll}>
+                <Button variant="outline" size="sm" onClick={collapseAll}>
                   {t("accounts.collapseAll")}
                 </Button>
               </div>
@@ -816,22 +623,18 @@ export function Accounts() {
         </CardHeader>
         <CardContent>
           {isLoading ? (
-            <div className="space-y-3">
-              <Skeleton className="h-12 w-full" />
-              <Skeleton className="h-12 w-full" />
-              <Skeleton className="h-12 w-full" />
-            </div>
+            <TableSkeleton />
           ) : !selectedLedgerSlug ? (
-            <div className="flex flex-col items-center justify-center py-12">
-              <Wallet className="h-12 w-12 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold">{t("accounts.noLedgerSelected")}</h3>
-              <p className="text-sm text-muted-foreground mb-4">
-                {t("accounts.selectLedgerDescription")}
-              </p>
-              <Link to="/ledgers">
-                <Button variant="outline">{t("accounts.goToLedgers")}</Button>
-              </Link>
-            </div>
+            <EmptyState
+              icon={Wallet}
+              title={t("accounts.noLedgerSelected")}
+              description={t("accounts.selectLedgerDescription")}
+              action={
+                <Link to="/ledgers">
+                  <Button variant="outline">{t("accounts.goToLedgers")}</Button>
+                </Link>
+              }
+            />
           ) : accounts.length > 0 ? (
             <div className="space-y-6">
               {ACCOUNT_TYPE_ORDER.map((type) => {
@@ -856,16 +659,15 @@ export function Accounts() {
                       <TableBody>
                         {typeAccounts.map((node) => (
                           <AccountRow
-                            key={node.account.id}
+                            key={node.item.id}
                             node={node}
                             depth={0}
                             expandedIds={expandedIds}
-                            onToggleExpand={handleToggleExpand}
+                            onToggleExpand={toggle}
                             onEdit={handleEdit}
                             onDelete={handleDelete}
                             onCreateChild={handleCreateChild}
                             ledgerSlug={selectedLedgerSlug!}
-                            t={t}
                           />
                         ))}
                       </TableBody>
@@ -875,17 +677,17 @@ export function Accounts() {
               })}
             </div>
           ) : (
-            <div className="flex flex-col items-center justify-center py-12">
-              <Wallet className="h-12 w-12 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold">{t("accounts.noAccounts")}</h3>
-              <p className="text-sm text-muted-foreground mb-4">
-                {t("accounts.noAccountsDescription")}
-              </p>
-              <Button onClick={() => setIsCreateDialogOpen(true)}>
-                <Plus className="mr-2 h-4 w-4" />
-                {t("accounts.createAccount")}
-              </Button>
-            </div>
+            <EmptyState
+              icon={Wallet}
+              title={t("accounts.noAccounts")}
+              description={t("accounts.noAccountsDescription")}
+              action={
+                <Button onClick={() => setIsCreateDialogOpen(true)}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  {t("accounts.createAccount")}
+                </Button>
+              }
+            />
           )}
         </CardContent>
       </Card>

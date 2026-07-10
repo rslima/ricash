@@ -1,5 +1,6 @@
 package com.rslima.ricash.ledgers.instruments;
 
+import com.rslima.ricash.configuration.InstrumentPriceProviderProperties;
 import com.rslima.ricash.ledgers.LedgerAccess;
 
 import com.github.f4b6a3.uuid.UuidCreator;
@@ -22,8 +23,14 @@ public class InstrumentPriceServiceBean implements InstrumentPriceService {
     private final InstrumentPriceRepository instrumentPriceRepository;
     private final InstrumentRepository instrumentRepository;
     private final LedgerAccess ledgerAccess;
+    private final YahooFinancePriceService yahooFinancePriceService;
+    private final InstrumentPriceProviderProperties properties;
 
     private static final int PRICE_SCALE = 6;
+    private static final String SOURCE_YAHOO = "YAHOO";
+
+    /** Provider chart requests encode dates as epoch seconds; also bounds the backfill upsert loop. */
+    private static final LocalDate EPOCH_FLOOR = LocalDate.of(1970, 1, 1);
 
     @Override
     public Page<InstrumentPrice> listByInstrument(String userId, String ledgerSlug, String instrumentId, Pageable pageable) {
@@ -65,6 +72,94 @@ public class InstrumentPriceServiceBean implements InstrumentPriceService {
         return instrumentPriceRepository.save(instrumentPrice);
     }
 
+    // Deliberately NOT @Transactional: the provider performs several sequential
+    // HTTP calls and must not hold a pooled DB connection while doing so. Each
+    // repository save is a single atomic upsert and the operation is idempotent,
+    // so an interrupted backfill simply completes on the next fetch.
+    @Override
+    public InstrumentPrice fetchPrices(String userId, String ledgerSlug, String instrumentId, LocalDate from) {
+        final var instrument = requireInstrumentInLedger(userId, ledgerSlug, instrumentId);
+
+        if (instrument.isin() == null || instrument.isin().isBlank()) {
+            throw new IllegalArgumentException(
+                "Instrument %s has no ISIN; set one before fetching prices".formatted(instrument.symbol()));
+        }
+        if (from != null && from.isAfter(LocalDate.now())) {
+            throw new IllegalArgumentException("Cannot backfill prices from a future date: " + from);
+        }
+        if (from != null && from.isBefore(EPOCH_FLOOR)) {
+            throw new IllegalArgumentException("Cannot backfill prices from before %s: %s".formatted(EPOCH_FLOOR, from));
+        }
+
+        List<InstrumentPrice> saved = refreshFromProvider(instrument, from);
+        if (saved.isEmpty()) {
+            throw new InstrumentPriceNotAvailableException(instrument.symbol(), instrument.isin());
+        }
+        return saved.getLast();
+    }
+
+    @Override
+    public int refreshAllActivePrices() {
+        List<Instrument> instruments = instrumentRepository.findAllActiveWithIsinSystemWide();
+        log.info("Refreshing prices for {} active instrument(s) with an ISIN", instruments.size());
+
+        int refreshed = 0;
+        for (int i = 0; i < instruments.size(); i++) {
+            if (i > 0 && !throttle()) {
+                break;
+            }
+            final var instrument = instruments.get(i);
+            try {
+                if (!refreshFromProvider(instrument, null).isEmpty()) {
+                    refreshed++;
+                } else {
+                    log.warn("No price available for instrument {} (ISIN {})",
+                        instrument.symbol(), instrument.isin());
+                }
+            } catch (RuntimeException e) {
+                log.warn("Failed to refresh prices for instrument {} (ISIN {}): {}",
+                    instrument.symbol(), instrument.isin(), e.getMessage());
+            }
+        }
+        return refreshed;
+    }
+
+    private List<InstrumentPrice> refreshFromProvider(Instrument instrument, LocalDate from) {
+        List<InstrumentPrice> saved = yahooFinancePriceService
+            .fetchQuotes(instrument.isin(), instrument.currency(), from)
+            .stream()
+            .filter(quote -> quote.price().compareTo(BigDecimal.ZERO) > 0)
+            .map(quote -> instrumentPriceRepository.save(new InstrumentPrice(
+                UuidCreator.getTimeOrderedEpoch().toString(),
+                instrument.id(),
+                quote.price().setScale(PRICE_SCALE, RoundingMode.HALF_UP),
+                quote.date(),
+                SOURCE_YAHOO,
+                Instant.now()
+            )))
+            .toList();
+
+        log.info("Upserted {} price(s) for instrument {} from {}",
+            saved.size(), instrument.symbol(), SOURCE_YAHOO);
+        return saved;
+    }
+
+    /** Pauses between provider calls in the sweep; false when interrupted (abort). */
+    private boolean throttle() {
+        long millis = properties.refreshThrottleMillis();
+        if (millis <= 0) {
+            return true;
+        }
+        try {
+            Thread.sleep(millis);
+            return true;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.warn("Instrument price refresh interrupted; aborting sweep");
+            return false;
+        }
+    }
+
     @Override
     @Transactional
     public void delete(String userId, String ledgerSlug, String priceId) {
@@ -77,9 +172,9 @@ public class InstrumentPriceServiceBean implements InstrumentPriceService {
         }
     }
 
-    private void requireInstrumentInLedger(String userId, String ledgerSlug, String instrumentId) {
+    private Instrument requireInstrumentInLedger(String userId, String ledgerSlug, String instrumentId) {
         final var ledger = ledgerAccess.requireLedger(userId, ledgerSlug);
-        instrumentRepository.findById(ledger.id(), instrumentId)
+        return instrumentRepository.findById(ledger.id(), instrumentId)
                 .orElseThrow(() -> new InstrumentNotFoundException(instrumentId));
     }
 }

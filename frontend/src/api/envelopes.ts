@@ -4,18 +4,35 @@ import type {
   JsonApiResponse,
   EnvelopeResource,
   EnvelopeAllocationResource,
-  EnvelopeBalance,
-  BudgetSummary,
   PaginationParams,
   EnvelopeType,
   EnvelopeStatus,
 } from "./types"
 
+// Plain JSON report types served by the budget endpoints (not JSON:API)
+export interface EnvelopeBalance {
+  envelopeId: string
+  periodYear: number
+  periodMonth: number
+  rollover: number
+  allocated: number
+  spent: number
+  available: number
+}
+
+export interface BudgetSummary {
+  id: string
+  periodYear: number
+  periodMonth: number
+  toBeBudgeted: number
+  envelopeBalances: EnvelopeBalance[]
+}
+
 export async function getEnvelopes(
   ledgerSlug: string,
   params?: PaginationParams
 ): Promise<JsonApiListResponse<EnvelopeResource>> {
-  return apiClient.get(`/ledgers/${ledgerSlug}/envelopes`, params as Record<string, string | number | undefined>)
+  return apiClient.get(`/ledgers/${ledgerSlug}/envelopes`, params)
 }
 
 export async function getEnvelope(

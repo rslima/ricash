@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import type { PaginationParams } from "./types"
+import { createLedgerScopedKeys } from "./queryKeys"
 import {
   getInstruments,
   getAllInstruments,
@@ -23,13 +24,8 @@ import {
  * portfolio valuations) invalidates the whole ledger subtree.
  */
 export const instrumentKeys = {
-  all: ["instruments"] as const,
-  ledger: (ledgerSlug: string) => ["instruments", ledgerSlug] as const,
-  list: (ledgerSlug: string, params?: PaginationParams) =>
-    ["instruments", ledgerSlug, "list", params ?? {}] as const,
+  ...createLedgerScopedKeys("instruments"),
   allList: (ledgerSlug: string) => ["instruments", ledgerSlug, "all"] as const,
-  detail: (ledgerSlug: string, instrumentId: string) =>
-    ["instruments", ledgerSlug, "detail", instrumentId] as const,
   prices: (ledgerSlug: string, params?: PaginationParams & { instrumentId?: string }) =>
     ["instruments", ledgerSlug, "prices", params ?? {}] as const,
   portfolio: (ledgerSlug: string) => ["instruments", ledgerSlug, "portfolio"] as const,

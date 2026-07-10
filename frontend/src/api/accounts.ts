@@ -1,11 +1,17 @@
 import { apiClient } from "./client"
-import type { JsonApiListResponse, JsonApiResponse, AccountResource, BalanceSummary, PaginationParams } from "./types"
+import type { JsonApiListResponse, JsonApiResponse, AccountResource, PaginationParams } from "./types"
+
+// Plain JSON report type served by the balance-summary endpoint (not JSON:API)
+export interface BalanceSummary {
+  id: string
+  balanceByCurrency: Record<string, number>
+}
 
 export async function getAccounts(
   ledgerSlug: string,
   params?: PaginationParams
 ): Promise<JsonApiListResponse<AccountResource>> {
-  return apiClient.get(`/ledgers/${ledgerSlug}/accounts`, params as Record<string, string | number | undefined>)
+  return apiClient.get(`/ledgers/${ledgerSlug}/accounts`, params)
 }
 
 export async function getAccount(ledgerSlug: string, accountId: string): Promise<JsonApiResponse<AccountResource>> {

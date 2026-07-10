@@ -1,7 +1,12 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "https://ricash.app/api/v1"
 
+// Query-param bag accepted by every GET. Domain param types (PaginationParams,
+// TransactionFilters, ...) must stay type aliases — aliases are assignable to
+// this index signature without casts, interfaces are not.
+export type QueryParams = Record<string, string | number | undefined>
+
 interface RequestOptions extends RequestInit {
-  params?: Record<string, string | number | undefined>
+  params?: QueryParams
 }
 
 class ApiClient {
@@ -16,7 +21,7 @@ class ApiClient {
     this.accessToken = token
   }
 
-  private buildUrl(endpoint: string, params?: Record<string, string | number | undefined>): string {
+  private buildUrl(endpoint: string, params?: QueryParams): string {
     // A relative base (e.g. "/api/v1" via the dev proxy) needs an origin to
     // resolve against; for an absolute base the second arg is ignored.
     const url = new URL(`${this.baseUrl}${endpoint}`, window.location.origin)
@@ -60,7 +65,7 @@ class ApiClient {
     return response.json()
   }
 
-  async get<T>(endpoint: string, params?: Record<string, string | number | undefined>): Promise<T> {
+  async get<T>(endpoint: string, params?: QueryParams): Promise<T> {
     return this.request<T>(endpoint, { method: "GET", params })
   }
 

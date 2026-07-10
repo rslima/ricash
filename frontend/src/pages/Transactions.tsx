@@ -1,22 +1,16 @@
-import { useEffect, useState, useMemo } from "react"
-import { useParams, Link, useLocation } from "react-router-dom"
+import { useEffect, useState } from "react"
+import { Link, useLocation } from "react-router-dom"
 import { useTranslation } from "react-i18next"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Skeleton } from "@/components/ui/skeleton"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
-import { AccountAutocomplete } from "@/components/AccountAutocomplete"
-import { DescriptionAutocomplete } from "@/components/DescriptionAutocomplete"
+import { SignInRequired } from "@/components/SignInRequired"
+import { EmptyState } from "@/components/EmptyState"
+import { TableSkeleton } from "@/components/ui/table-skeleton"
+import { LedgerSelector } from "@/components/LedgerSelector"
+import { TablePagination } from "@/components/TablePagination"
+import { TransactionFormDialog } from "@/components/transactions/TransactionFormDialog"
 import {
   Table,
   TableBody,
@@ -31,16 +25,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { useAuth } from "@/contexts/AuthContext"
 import type { TransactionEntryInput, TransactionFilters } from "@/api/transactions"
-import { useLedgers } from "@/api/ledgers.hooks"
 import { useAccounts } from "@/api/accounts.hooks"
 import { useAllInstruments } from "@/api/instruments.hooks"
 import { useEnvelopes, useEnvelopeMappings } from "@/api/envelopes.hooks"
@@ -52,22 +38,15 @@ import {
   useDeleteTransaction,
 } from "@/api/transactions.hooks"
 import type { TransactionResource } from "@/api/types"
+import type { TransactionEntry } from "@/lib/transaction-entries"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { useErrorHandler } from "@/hooks/use-error-handler"
-import { Plus, Trash2, ArrowLeftRight, MoreHorizontal, X, Pencil, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Search } from "lucide-react"
-
-interface TransactionEntry {
-  accountId: string
-  amount: string
-  currency: string
-  toAmount?: string
-  toCurrency?: string
-  type: "DEBIT" | "CREDIT"
-  instrumentId?: string
-  quantity?: string
-  envelopeId?: string
-}
+import { useLedgerSelection } from "@/hooks/use-ledger-selection"
+import { usePagination } from "@/hooks/use-pagination"
+import { useTransactionForm } from "@/hooks/use-transaction-form"
+import { combineQueries, useQueryErrorToast } from "@/hooks/use-query-error-toast"
+import { Plus, Trash2, ArrowLeftRight, MoreHorizontal, X, Pencil, Search } from "lucide-react"
 
 interface PrefilledEntry {
   accountId: string
@@ -80,35 +59,43 @@ interface LocationState {
   prefilledEntry?: PrefilledEntry
 }
 
+function toEntryInputs(entries: readonly TransactionEntry[]): TransactionEntryInput[] {
+  return entries.map((e) => ({
+    accountId: e.accountId,
+    amount: parseFloat(e.amount),
+    currency: e.currency,
+    toAmount: e.toAmount ? parseFloat(e.toAmount) : undefined,
+    toCurrency: e.toCurrency || undefined,
+    type: e.type,
+    instrumentId: e.instrumentId || undefined,
+    quantity: e.quantity ? parseFloat(e.quantity) : undefined,
+    envelopeId: e.envelopeId || undefined,
+  }))
+}
+
 export function Transactions() {
   const { t } = useTranslation()
-  const { ledgerSlug } = useParams<{ ledgerSlug?: string }>()
   const location = useLocation()
   const handleError = useErrorHandler()
   const { isAuthenticated } = useAuth()
   const isMobile = useIsMobile()
   const locationState = location.state as LocationState | undefined
-  const [selectedLedgerSlug, setSelectedLedgerSlug] = useState<string | null>(ledgerSlug || null)
-  const [currentPage, setCurrentPage] = useState(0)
-  const [pageSize, setPageSize] = useState(20)
+  const {
+    ledgers,
+    selectedLedgerSlug,
+    setSelectedLedgerSlug,
+    selectedLedger,
+    ledgerCurrency,
+    isLoading: ledgersLoading,
+    isError: ledgersError,
+    error: ledgersErrorValue,
+  } = useLedgerSelection()
+  const { currentPage, setCurrentPage, pageSize, setPageSize } = usePagination(20)
   const [searchDescription, setSearchDescription] = useState("")
   const [activeSearch, setActiveSearch] = useState("")
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [editingTransaction, setEditingTransaction] = useState<TransactionResource | null>(null)
-
-  // Form state
-  const [date, setDate] = useState(new Date().toISOString().split("T")[0])
-  const [description, setDescription] = useState("")
-  const [entries, setEntries] = useState<TransactionEntry[]>([
-    { accountId: "", amount: "", currency: "BRL", type: "CREDIT" },
-    { accountId: "", amount: "", currency: "BRL", type: "DEBIT" },
-  ])
-
-  // Edit form state
-  const [editDate, setEditDate] = useState("")
-  const [editDescription, setEditDescription] = useState("")
-  const [editEntries, setEditEntries] = useState<TransactionEntry[]>([])
 
   // Server state: TanStack Query owns fetching, caching, and loading flags.
   // Queries are gated on auth + a selected ledger; the page/search filters feed
@@ -120,7 +107,6 @@ export function Transactions() {
     ...(activeSearch ? { description: activeSearch } : {}),
   }
 
-  const ledgersQuery = useLedgers(isAuthenticated)
   const txQuery = useTransactions(selectedLedgerSlug ?? "", filters, dataEnabled)
   const accountsQuery = useAccounts(selectedLedgerSlug ?? "", { "page[size]": 200 }, dataEnabled)
   const instrumentsQuery = useAllInstruments(selectedLedgerSlug ?? "", dataEnabled)
@@ -133,7 +119,6 @@ export function Transactions() {
   const deleteTransactionMutation = useDeleteTransaction(selectedLedgerSlug ?? "")
 
   // Read query results (hooks pass the API response straight through).
-  const ledgers = useMemo(() => ledgersQuery.data?.data ?? [], [ledgersQuery.data])
   const transactions = txQuery.data?.data ?? []
   const accounts = accountsQuery.data?.data ?? []
   const instruments = instrumentsQuery.data ?? []
@@ -143,80 +128,54 @@ export function Transactions() {
   const totalPages = txQuery.data?.meta?.page?.totalPages ?? 0
   const totalElements = txQuery.data?.meta?.page?.totalElements ?? 0
 
+  // One form instance per dialog; each owns its date/description/entries state.
+  const createForm = useTransactionForm({ defaultCurrency: ledgerCurrency, accounts, envelopeMappings })
+  const editForm = useTransactionForm({ defaultCurrency: ledgerCurrency, accounts, envelopeMappings })
+
   // Reproduce the old single loading flag: skeleton until the ledger's data is present.
-  const isLoading =
-    ledgersQuery.isLoading ||
-    txQuery.isLoading ||
-    accountsQuery.isLoading ||
-    instrumentsQuery.isLoading ||
-    templatesQuery.isLoading ||
-    envelopesQuery.isLoading ||
-    mappingsQuery.isLoading
-
   // Surface any fetch failure as a toast, preserving the old "fetchFailed" key.
-  const isError =
-    ledgersQuery.isError ||
-    txQuery.isError ||
-    accountsQuery.isError ||
-    instrumentsQuery.isError ||
-    templatesQuery.isError ||
-    envelopesQuery.isError ||
-    mappingsQuery.isError
-  const error =
-    ledgersQuery.error ||
-    txQuery.error ||
-    accountsQuery.error ||
-    instrumentsQuery.error ||
-    templatesQuery.error ||
-    envelopesQuery.error ||
-    mappingsQuery.error
+  const queries = [
+    { isLoading: ledgersLoading, isError: ledgersError, error: ledgersErrorValue },
+    txQuery,
+    accountsQuery,
+    instrumentsQuery,
+    templatesQuery,
+    envelopesQuery,
+    mappingsQuery,
+  ]
+  const { isLoading } = combineQueries(...queries)
+  useQueryErrorToast(queries)
 
-  // Compute selected ledger
-  const selectedLedger = useMemo(
-    () => ledgers.find((l) => l.attributes.slug === selectedLedgerSlug),
-    [ledgers, selectedLedgerSlug]
-  )
-
-  useEffect(() => {
-    if (isError) handleError(error, "fetchFailed")
-  }, [isError, error, handleError])
-
-  // Default to the first ledger once ledgers load (unless one is already selected).
-  useEffect(() => {
-    if (ledgers.length > 0) {
-      setSelectedLedgerSlug((prev) => prev ?? ledgers[0].attributes.slug)
-    }
-  }, [ledgers])
+  const { setEntries: setCreateEntries } = createForm
 
   // Handle navigation state to pre-fill transaction form
   useEffect(() => {
     if (locationState?.createTransaction && locationState.prefilledEntry && !isLoading && accounts.length > 0) {
       const prefilled = locationState.prefilledEntry
-      const defaultCurrency = selectedLedger?.attributes.currency || "BRL"
 
       // Create entries with the pre-filled account
       const newEntries: TransactionEntry[] = [
         {
           accountId: prefilled.type === "CREDIT" ? prefilled.accountId : "",
           amount: "",
-          currency: prefilled.type === "CREDIT" ? prefilled.currency : defaultCurrency,
+          currency: prefilled.type === "CREDIT" ? prefilled.currency : ledgerCurrency,
           type: "CREDIT",
         },
         {
           accountId: prefilled.type === "DEBIT" ? prefilled.accountId : "",
           amount: "",
-          currency: prefilled.type === "DEBIT" ? prefilled.currency : defaultCurrency,
+          currency: prefilled.type === "DEBIT" ? prefilled.currency : ledgerCurrency,
           type: "DEBIT",
         },
       ]
 
-      setEntries(newEntries)
+      setCreateEntries(newEntries)
       setIsCreateDialogOpen(true)
 
       // Clear the location state to prevent re-triggering
       window.history.replaceState({}, document.title)
     }
-  }, [locationState, isLoading, accounts.length, selectedLedger])
+  }, [locationState, isLoading, accounts.length, ledgerCurrency, setCreateEntries])
 
   const handleDelete = (transactionId: string) => {
     if (!selectedLedgerSlug) return
@@ -227,322 +186,14 @@ export function Transactions() {
     })
   }
 
-  const resetForm = () => {
-    setDate(new Date().toISOString().split("T")[0])
-    setDescription("")
-    setEntries([
-      { accountId: "", amount: "", currency: selectedLedger?.attributes.currency || "BRL", type: "CREDIT" },
-      { accountId: "", amount: "", currency: selectedLedger?.attributes.currency || "BRL", type: "DEBIT" },
-    ])
-  }
-
-  const addEntry = (type: "DEBIT" | "CREDIT", isEdit = false) => {
-    const defaultCurrency = selectedLedger?.attributes.currency || "BRL"
-    if (isEdit) {
-      setEditEntries([...editEntries, { accountId: "", amount: "", currency: defaultCurrency, type }])
-    } else {
-      setEntries([...entries, { accountId: "", amount: "", currency: defaultCurrency, type }])
-    }
-  }
-
-  const removeEntry = (index: number, isEdit = false) => {
-    if (isEdit) {
-      if (editEntries.length > 2) {
-        setEditEntries(editEntries.filter((_, i) => i !== index))
-      }
-    } else {
-      if (entries.length > 2) {
-        setEntries(entries.filter((_, i) => i !== index))
-      }
-    }
-  }
-
-  const updateEntry = (index: number, field: keyof TransactionEntry, value: string, isEdit = false) => {
-    if (isEdit) {
-      const newEntries = [...editEntries]
-      newEntries[index] = { ...newEntries[index], [field]: value }
-
-      // Auto-fill toCurrency when account is selected and needs conversion
-      if (field === "accountId" && value) {
-        const account = accounts.find(a => a.id === value)
-        const entryCurrency = newEntries[index].currency
-        if (account && account.attributes.currency !== entryCurrency) {
-          newEntries[index].toCurrency = account.attributes.currency
-        } else {
-          // Clear conversion fields if same currency
-          newEntries[index].toAmount = undefined
-          newEntries[index].toCurrency = undefined
-        }
-        // Auto-fill envelope from account mapping
-        if (!newEntries[index].envelopeId && envelopeMappings[value]) {
-          newEntries[index].envelopeId = envelopeMappings[value]
-        }
-      }
-
-      // Auto-update toCurrency when currency changes
-      if (field === "currency" && newEntries[index].accountId) {
-        const account = accounts.find(a => a.id === newEntries[index].accountId)
-        if (account && account.attributes.currency !== value) {
-          newEntries[index].toCurrency = account.attributes.currency
-        } else {
-          // Clear conversion fields if same currency
-          newEntries[index].toAmount = undefined
-          newEntries[index].toCurrency = undefined
-        }
-      }
-
-      setEditEntries(newEntries)
-    } else {
-      const newEntries = [...entries]
-      newEntries[index] = { ...newEntries[index], [field]: value }
-
-      // Auto-fill toCurrency when account is selected and needs conversion
-      if (field === "accountId" && value) {
-        const account = accounts.find(a => a.id === value)
-        const entryCurrency = newEntries[index].currency
-        if (account && account.attributes.currency !== entryCurrency) {
-          newEntries[index].toCurrency = account.attributes.currency
-        } else {
-          // Clear conversion fields if same currency
-          newEntries[index].toAmount = undefined
-          newEntries[index].toCurrency = undefined
-        }
-        // Auto-fill envelope from account mapping
-        if (!newEntries[index].envelopeId && envelopeMappings[value]) {
-          newEntries[index].envelopeId = envelopeMappings[value]
-        }
-      }
-
-      // Auto-update toCurrency when currency changes
-      if (field === "currency" && newEntries[index].accountId) {
-        const account = accounts.find(a => a.id === newEntries[index].accountId)
-        if (account && account.attributes.currency !== value) {
-          newEntries[index].toCurrency = account.attributes.currency
-        } else {
-          // Clear conversion fields if same currency
-          newEntries[index].toAmount = undefined
-          newEntries[index].toCurrency = undefined
-        }
-      }
-
-      setEntries(newEntries)
-    }
-  }
-
-  const calculateTotal = (type: "DEBIT" | "CREDIT", entryList: TransactionEntry[]) => {
-    return entryList
-      .filter((e) => e.type === type)
-      .reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0)
-  }
-
-  // Safe number parser to avoid NaN propagation
-  const parseAmount = (value: string | undefined): number => {
-    if (!value || value.trim() === "") return 0
-    const parsed = parseFloat(value)
-    return isNaN(parsed) ? 0 : parsed
-  }
-
-  // Check if an amount is considered "empty" for auto-balance purposes
-  const isAmountEmpty = (amount: string | undefined): boolean => {
-    if (!amount || amount.trim() === "") return true
-    const parsed = parseFloat(amount)
-    return isNaN(parsed) || parsed === 0
-  }
-
-  // Auto-balance: if exactly one entry has an empty/zero amount, fill it with the value needed to balance
-  const autoBalanceEntries = (entryList: TransactionEntry[]): TransactionEntry[] => {
-    // Group entries by currency
-    const byCurrency: Record<string, { entries: { index: number; entry: TransactionEntry }[]; debits: number; credits: number }> = {}
-
-    entryList.forEach((entry, index) => {
-      const currency = entry.currency
-      if (!currency) return
-
-      if (!byCurrency[currency]) {
-        byCurrency[currency] = { entries: [], debits: 0, credits: 0 }
-      }
-
-      byCurrency[currency].entries.push({ index, entry })
-
-      // Only count non-empty amounts for balance calculation
-      if (!isAmountEmpty(entry.amount)) {
-        const amount = parseAmount(entry.amount)
-        if (entry.type === "DEBIT") {
-          byCurrency[currency].debits += amount
-        } else {
-          byCurrency[currency].credits += amount
-        }
-      }
-    })
-
-    // Check each currency group
-    const newEntries = [...entryList]
-    let modified = false
-
-    for (const currency of Object.keys(byCurrency)) {
-      const group = byCurrency[currency]
-
-      // Find entries with empty/zero amount in this currency
-      const emptyEntries = group.entries.filter(({ entry }) => isAmountEmpty(entry.amount))
-
-      // Only auto-fill if exactly one entry is empty/zero
-      if (emptyEntries.length !== 1) continue
-
-      const { index: emptyIndex, entry: emptyEntry } = emptyEntries[0]
-
-      // Calculate the balance needed
-      const { debits, credits } = group
-
-      let neededAmount: number
-      if (emptyEntry.type === "DEBIT") {
-        // Need more debits to balance credits
-        neededAmount = credits - debits
-      } else {
-        // Need more credits to balance debits
-        neededAmount = debits - credits
-      }
-
-      // Only fill if the needed amount is positive
-      if (neededAmount > 0) {
-        newEntries[emptyIndex] = {
-          ...newEntries[emptyIndex],
-          amount: neededAmount.toFixed(2)
-        }
-        modified = true
-      }
-    }
-
-    return modified ? newEntries : entryList
-  }
-
-  // Trigger auto-balance when user finishes editing an amount field
-  const handleAmountBlur = (isEdit: boolean) => {
-    if (isEdit) {
-      const balanced = autoBalanceEntries(editEntries)
-      if (balanced !== editEntries) {
-        setEditEntries(balanced)
-      }
-    } else {
-      const balanced = autoBalanceEntries(entries)
-      if (balanced !== entries) {
-        setEntries(balanced)
-      }
-    }
-  }
-
-  // Populate form fields from a template when a description is selected
-  const handleTemplateSelect = (template: TransactionResource, isEdit: boolean) => {
-    const templateEntries: TransactionEntry[] = template.attributes.entries?.map((entry) => ({
-      accountId: entry.accountId || "",
-      amount: entry.amount?.toString() || "",
-      currency: entry.currency || selectedLedger?.attributes.currency || "BRL",
-      toAmount: entry.toAmount?.toString(),
-      toCurrency: entry.toCurrency,
-      type: entry.type || "DEBIT",
-      instrumentId: entry.instrumentId,
-      quantity: entry.quantity?.toString(),
-      envelopeId: entry.envelopeId,
-    })) || []
-
-    if (isEdit) {
-      setEditEntries(templateEntries.length > 0 ? templateEntries : editEntries)
-    } else {
-      setEntries(templateEntries.length > 0 ? templateEntries : entries)
-    }
-  }
-
-  // Multi-currency balance validation:
-  // Must match backend logic in TransactionServiceBean.validateMultiCurrencyBalance()
-  // Group by ORIGINAL currency (entry.currency) and use ORIGINAL amount (entry.amount)
-  // This allows multi-currency transactions to balance in the transaction currency
-  const isBalanced = (entryList: TransactionEntry[]) => {
-    // Early return if no entries
-    if (!entryList || entryList.length === 0) {
-      return false
-    }
-
-    // Group by ORIGINAL currency (the transaction currency, not the account currency)
-    const byCurrency: Record<string, { debits: number, credits: number }> = {}
-
-    for (const entry of entryList) {
-      const currency = entry.currency
-      if (!currency) continue
-
-      if (!byCurrency[currency]) {
-        byCurrency[currency] = { debits: 0, credits: 0 }
-      }
-
-      // Use the ORIGINAL amount (transaction currency)
-      const amount = parseAmount(entry.amount)
-
-      if (entry.type === "DEBIT") {
-        byCurrency[currency].debits += amount
-      } else {
-        byCurrency[currency].credits += amount
-      }
-    }
-
-    // Check if all currencies are balanced
-    const currencies = Object.keys(byCurrency)
-    if (currencies.length === 0) {
-      return false
-    }
-
-    // Each currency must have debits ≈ credits
-    return currencies.every(currency => {
-      const { debits, credits } = byCurrency[currency]
-      return Math.abs(debits - credits) < 0.01
-    })
-  }
-
-  const isFormValid = (entryList: TransactionEntry[], dateValue: string, descValue: string) => {
-    // Check basic fields
-    if (!dateValue || !descValue.trim()) {
-      return false
-    }
-
-    // Check each entry
-    const entriesValid = entryList.every((e) => {
-      // Must have account and amount
-      if (!e.accountId || !e.amount || parseFloat(e.amount) <= 0) {
-        return false
-      }
-
-      // toAmount is optional - if provided, it must be positive
-      if (e.toAmount && parseFloat(e.toAmount) < 0) {
-        return false
-      }
-
-      return true
-    })
-
-    if (!entriesValid) {
-      return false
-    }
-
-    return isBalanced(entryList)
-  }
-
   const handleSubmit = () => {
-    if (!selectedLedgerSlug || !isFormValid(entries, date, description)) return
-
-    const transactionEntries: TransactionEntryInput[] = entries.map((e) => ({
-      accountId: e.accountId,
-      amount: parseFloat(e.amount),
-      currency: e.currency,
-      toAmount: e.toAmount ? parseFloat(e.toAmount) : undefined,
-      toCurrency: e.toCurrency || undefined,
-      type: e.type,
-      instrumentId: e.instrumentId || undefined,
-      quantity: e.quantity ? parseFloat(e.quantity) : undefined,
-      envelopeId: e.envelopeId || undefined,
-    }))
+    if (!selectedLedgerSlug || !createForm.isValid) return
 
     createTransactionMutation.mutate(
       {
-        date,
-        description,
-        entries: transactionEntries,
+        date: createForm.date,
+        description: createForm.description,
+        entries: toEntryInputs(createForm.entries),
       },
       {
         onSuccess: () => {
@@ -550,7 +201,7 @@ export function Transactions() {
           // already invalidated transactions (incl. templates), accounts, envelopes.
           setCurrentPage(0)
           setIsCreateDialogOpen(false)
-          resetForm()
+          createForm.reset()
         },
         onError: (error) => handleError(error, "createFailed"),
       }
@@ -559,52 +210,20 @@ export function Transactions() {
 
   const handleEdit = (transaction: TransactionResource) => {
     setEditingTransaction(transaction)
-    setEditDate(transaction.attributes.date)
-    setEditDescription(transaction.attributes.description)
-
-    // Convert entries from the transaction
-    const defaultCurrency = selectedLedger?.attributes.currency || "BRL"
-    const transactionEntries: TransactionEntry[] = transaction.attributes.entries?.map((entry) => ({
-      accountId: entry.accountId || "",
-      amount: entry.amount?.toString() || "0",
-      currency: entry.currency || defaultCurrency,
-      toAmount: entry.toAmount?.toString(),
-      toCurrency: entry.toCurrency,
-      type: entry.type || "DEBIT",
-      instrumentId: entry.instrumentId,
-      quantity: entry.quantity?.toString(),
-      envelopeId: entry.envelopeId,
-    })) || []
-
-    setEditEntries(transactionEntries.length > 0 ? transactionEntries : [
-      { accountId: "", amount: "", currency: selectedLedger?.attributes.currency || "BRL", type: "CREDIT" },
-      { accountId: "", amount: "", currency: selectedLedger?.attributes.currency || "BRL", type: "DEBIT" },
-    ])
+    editForm.loadFromTransaction(transaction)
     setIsEditDialogOpen(true)
   }
 
   const handleUpdate = () => {
-    if (!selectedLedgerSlug || !editingTransaction || !isFormValid(editEntries, editDate, editDescription)) return
-
-    const transactionEntries: TransactionEntryInput[] = editEntries.map((e) => ({
-      accountId: e.accountId,
-      amount: parseFloat(e.amount),
-      currency: e.currency,
-      toAmount: e.toAmount ? parseFloat(e.toAmount) : undefined,
-      toCurrency: e.toCurrency || undefined,
-      type: e.type,
-      instrumentId: e.instrumentId || undefined,
-      quantity: e.quantity ? parseFloat(e.quantity) : undefined,
-      envelopeId: e.envelopeId || undefined,
-    }))
+    if (!selectedLedgerSlug || !editingTransaction || !editForm.isValid) return
 
     updateTransactionMutation.mutate(
       {
         transactionId: editingTransaction.id,
         data: {
-          date: editDate,
-          description: editDescription,
-          entries: transactionEntries,
+          date: editForm.date,
+          description: editForm.description,
+          entries: toEntryInputs(editForm.entries),
         },
       },
       {
@@ -618,193 +237,7 @@ export function Transactions() {
   }
 
   if (!isAuthenticated) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full">
-        <Card className="w-full max-w-md">
-          <CardHeader className="text-center">
-            <CardTitle>{t("auth.signInRequired")}</CardTitle>
-            <CardDescription>
-              {t("auth.pleaseSignIn", { resource: t("nav.transactions").toLowerCase() })}
-            </CardDescription>
-          </CardHeader>
-        </Card>
-      </div>
-    )
-  }
-
-  const debitTotal = calculateTotal("DEBIT", entries)
-  const creditTotal = calculateTotal("CREDIT", entries)
-  const editDebitTotal = calculateTotal("DEBIT", editEntries)
-  const editCreditTotal = calculateTotal("CREDIT", editEntries)
-
-  const renderEntryForm = (
-    entryList: TransactionEntry[],
-    type: "DEBIT" | "CREDIT",
-    isEdit: boolean,
-    total: number
-  ) => {
-    const getAccountCurrency = (accountId: string) => {
-      const account = accounts.find(a => a.id === accountId)
-      return account?.attributes.currency
-    }
-
-    return (
-      <div className="border rounded-lg p-4 space-y-4">
-        <div className="flex items-center justify-between">
-          <h4 className="font-medium">{type === "DEBIT" ? t("transactions.debitEntries") : t("transactions.creditEntries")}</h4>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => addEntry(type, isEdit)}
-          >
-            <Plus className="h-4 w-4 mr-1" />
-            {type === "DEBIT" ? t("transactions.addDebit") : t("transactions.addCredit")}
-          </Button>
-        </div>
-        {entryList
-          .map((entry, index) => ({ entry, index }))
-          .filter(({ entry }) => entry.type === type)
-          .map(({ entry, index }) => {
-            const accountCurrency = getAccountCurrency(entry.accountId)
-            const needsConversion = accountCurrency && entry.currency !== accountCurrency
-
-            return (
-              <div key={index} className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <div className="flex-1">
-                    <AccountAutocomplete
-                      accounts={accounts}
-                      value={entry.accountId}
-                      onValueChange={(value) => updateEntry(index, "accountId", value, isEdit)}
-                      placeholder={t("transactions.selectAccount")}
-                    />
-                  </div>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={entry.amount}
-                    onChange={(e) => updateEntry(index, "amount", e.target.value, isEdit)}
-                    onBlur={() => handleAmountBlur(isEdit)}
-                    placeholder="0.00"
-                    className="w-28"
-                  />
-                  <Input
-                    type="text"
-                    value={entry.currency}
-                    onChange={(e) => updateEntry(index, "currency", e.target.value.toUpperCase(), isEdit)}
-                    placeholder="USD"
-                    maxLength={3}
-                    className="w-20 uppercase"
-                  />
-                  {entryList.filter((e) => e.type === type).length > 1 && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => removeEntry(index, isEdit)}
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  )}
-                </div>
-                {needsConversion && (
-                  <div className="pl-4 space-y-2">
-                    <div className="text-sm text-muted-foreground">
-                      → {t("transactions.accountCurrency")}: {accountCurrency}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Label className="text-xs text-muted-foreground w-24">{t("transactions.convertedTo")}:</Label>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={entry.toAmount || ""}
-                        onChange={(e) => updateEntry(index, "toAmount", e.target.value, isEdit)}
-                        placeholder={t("transactions.autoConversion")}
-                        className="w-28 h-8 text-sm"
-                      />
-                      <Input
-                        type="text"
-                        value={entry.toCurrency || ""}
-                        readOnly
-                        placeholder={accountCurrency}
-                        className="w-20 h-8 text-sm uppercase bg-muted"
-                      />
-                      <span className="text-xs text-muted-foreground">
-                        ({t("transactions.manualConversion")})
-                      </span>
-                    </div>
-                  </div>
-                )}
-                {/* Instrument selection (optional) */}
-                {instruments.length > 0 && (
-                  <div className="pl-4 space-y-2">
-                    <div className="flex items-center gap-2">
-                      <Label className="text-xs text-muted-foreground w-24">{t("transactions.instrument")}:</Label>
-                      <Select
-                        value={entry.instrumentId || "none"}
-                        onValueChange={(value) => updateEntry(index, "instrumentId", value === "none" ? "" : value, isEdit)}
-                      >
-                        <SelectTrigger className="w-40 h-8 text-sm">
-                          <SelectValue placeholder={t("transactions.selectInstrument")} />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">{t("common.none")}</SelectItem>
-                          {instruments.map((instrument) => (
-                            <SelectItem key={instrument.id} value={instrument.id}>
-                              {instrument.attributes.symbol}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      {entry.instrumentId && (
-                        <Input
-                          type="number"
-                          step="0.00000001"
-                          min="0"
-                          value={entry.quantity || ""}
-                          onChange={(e) => updateEntry(index, "quantity", e.target.value, isEdit)}
-                          placeholder={t("transactions.quantity")}
-                          className="w-28 h-8 text-sm"
-                        />
-                      )}
-                    </div>
-                  </div>
-                )}
-                {/* Envelope selection (optional) */}
-                {envelopes.length > 0 && (
-                  <div className="pl-4 space-y-2">
-                    <div className="flex items-center gap-2">
-                      <Label className="text-xs text-muted-foreground w-24">{t("transactions.envelope")}:</Label>
-                      <Select
-                        value={entry.envelopeId || "none"}
-                        onValueChange={(value) => updateEntry(index, "envelopeId", value === "none" ? "" : value, isEdit)}
-                      >
-                        <SelectTrigger className="w-48 h-8 text-sm">
-                          <SelectValue placeholder={t("transactions.selectEnvelope")} />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">{t("common.none")}</SelectItem>
-                          {envelopes.map((envelope) => (
-                            <SelectItem key={envelope.id} value={envelope.id}>
-                              {envelope.attributes.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )
-          })}
-        <div className="text-right text-sm font-medium">
-          {t("transactions.total")}: {formatCurrency(total, selectedLedger?.attributes.currency || "BRL")}
-        </div>
-      </div>
-    )
+    return <SignInRequired resourceKey="nav.transactions" />
   }
 
   return (
@@ -826,130 +259,46 @@ export function Transactions() {
         </Button>
       </div>
 
-      {/* Create Dialog */}
-      <Dialog open={isCreateDialogOpen} onOpenChange={(open) => {
-        setIsCreateDialogOpen(open)
-        if (!open) resetForm()
-      }}>
-        <DialogContent className="sm:max-w-[700px] lg:max-w-[900px] flex flex-col md:max-h-[90vh]">
-          <DialogHeader>
-            <DialogTitle>{t("transactions.createTransaction")}</DialogTitle>
-            <DialogDescription>
-              {t("transactions.createDescription")}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4 flex-1 min-h-0 overflow-y-auto">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="date" className="text-right">{t("common.date")}</Label>
-              <Input
-                id="date"
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                className="col-span-3"
-              />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="description" className="text-right">{t("common.description")}</Label>
-              <div className="col-span-3">
-                <DescriptionAutocomplete
-                  templates={transactionTemplates}
-                  value={description}
-                  onValueChange={setDescription}
-                  onTemplateSelect={(template) => handleTemplateSelect(template, false)}
-                  placeholder={t("common.description")}
-                />
-              </div>
-            </div>
-            {renderEntryForm(entries, "CREDIT", false, creditTotal)}
-            {renderEntryForm(entries, "DEBIT", false, debitTotal)}
-            {!isBalanced(entries) && debitTotal > 0 && creditTotal > 0 && (
-              <p className="text-sm text-destructive text-center">
-                {t("transactions.notBalanced", { debits: formatCurrency(debitTotal, selectedLedger?.attributes.currency || "BRL"), credits: formatCurrency(creditTotal, selectedLedger?.attributes.currency || "BRL") })}
-              </p>
-            )}
-          </div>
-          <DialogFooter>
-            <Button
-              type="submit"
-              onClick={handleSubmit}
-              disabled={!isFormValid(entries, date, description) || createTransactionMutation.isPending}
-            >
-              {createTransactionMutation.isPending ? t("transactions.creating") : t("transactions.createTransaction")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <TransactionFormDialog
+        mode="create"
+        open={isCreateDialogOpen}
+        onOpenChange={(open) => {
+          setIsCreateDialogOpen(open)
+          if (!open) createForm.reset()
+        }}
+        form={createForm}
+        accounts={accounts}
+        instruments={instruments}
+        envelopes={envelopes}
+        templates={transactionTemplates}
+        onSubmit={handleSubmit}
+        isPending={createTransactionMutation.isPending}
+      />
 
-      {/* Edit Dialog */}
-      <Dialog open={isEditDialogOpen} onOpenChange={(open) => {
-        setIsEditDialogOpen(open)
-        if (!open) setEditingTransaction(null)
-      }}>
-        <DialogContent className="sm:max-w-[700px] lg:max-w-[900px] flex flex-col md:max-h-[90vh]">
-          <DialogHeader>
-            <DialogTitle>{t("transactions.editTransaction")}</DialogTitle>
-            <DialogDescription>
-              {t("transactions.editDescription")}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4 flex-1 min-h-0 overflow-y-auto">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="edit-date" className="text-right">{t("common.date")}</Label>
-              <Input
-                id="edit-date"
-                type="date"
-                value={editDate}
-                onChange={(e) => setEditDate(e.target.value)}
-                className="col-span-3"
-              />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="edit-description" className="text-right">{t("common.description")}</Label>
-              <div className="col-span-3">
-                <DescriptionAutocomplete
-                  templates={transactionTemplates}
-                  value={editDescription}
-                  onValueChange={setEditDescription}
-                  onTemplateSelect={(template) => handleTemplateSelect(template, true)}
-                  placeholder={t("common.description")}
-                />
-              </div>
-            </div>
-            {renderEntryForm(editEntries, "CREDIT", true, editCreditTotal)}
-            {renderEntryForm(editEntries, "DEBIT", true, editDebitTotal)}
-            {!isBalanced(editEntries) && editDebitTotal > 0 && editCreditTotal > 0 && (
-              <p className="text-sm text-destructive text-center">
-                {t("transactions.notBalanced", { debits: formatCurrency(editDebitTotal, selectedLedger?.attributes.currency || "BRL"), credits: formatCurrency(editCreditTotal, selectedLedger?.attributes.currency || "BRL") })}
-              </p>
-            )}
-          </div>
-          <DialogFooter>
-            <Button
-              type="submit"
-              onClick={handleUpdate}
-              disabled={!isFormValid(editEntries, editDate, editDescription) || updateTransactionMutation.isPending}
-            >
-              {updateTransactionMutation.isPending ? t("transactions.saving") : t("common.save")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <TransactionFormDialog
+        mode="edit"
+        open={isEditDialogOpen}
+        onOpenChange={(open) => {
+          setIsEditDialogOpen(open)
+          if (!open) setEditingTransaction(null)
+        }}
+        form={editForm}
+        accounts={accounts}
+        instruments={instruments}
+        envelopes={envelopes}
+        templates={transactionTemplates}
+        onSubmit={handleUpdate}
+        isPending={updateTransactionMutation.isPending}
+      />
 
-      {ledgers.length > 0 && (
-        <div className="flex gap-2 flex-wrap">
-          {ledgers.map((ledger) => (
-            <Button
-              key={ledger.id}
-              variant={selectedLedgerSlug === ledger.attributes.slug ? "default" : "outline"}
-              size="sm"
-              onClick={() => { setSelectedLedgerSlug(ledger.attributes.slug); setCurrentPage(0) }}
-            >
-              {ledger.attributes.name}
-            </Button>
-          ))}
-        </div>
-      )}
+      <LedgerSelector
+        ledgers={ledgers}
+        selectedSlug={selectedLedgerSlug}
+        onSelect={(slug) => {
+          setSelectedLedgerSlug(slug)
+          setCurrentPage(0)
+        }}
+      />
 
       <Card>
         <CardHeader>
@@ -980,7 +329,7 @@ export function Transactions() {
                     className="pl-9"
                   />
                 </div>
-                <Button type="submit" variant="secondary" size="icon">
+                <Button type="submit" variant="secondary" size="icon" aria-label={t("common.search")}>
                   <Search className="h-4 w-4" />
                 </Button>
                 {activeSearch && (
@@ -988,6 +337,7 @@ export function Transactions() {
                     type="button"
                     variant="ghost"
                     size="icon"
+                    aria-label={t("common.clear")}
                     onClick={() => {
                       setSearchDescription("")
                       setActiveSearch("")
@@ -1003,22 +353,18 @@ export function Transactions() {
         </CardHeader>
         <CardContent>
           {isLoading ? (
-            <div className="space-y-3">
-              <Skeleton className="h-12 w-full" />
-              <Skeleton className="h-12 w-full" />
-              <Skeleton className="h-12 w-full" />
-            </div>
+            <TableSkeleton />
           ) : !selectedLedgerSlug ? (
-            <div className="flex flex-col items-center justify-center py-12">
-              <ArrowLeftRight className="h-12 w-12 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold">{t("transactions.noLedgerSelected")}</h3>
-              <p className="text-sm text-muted-foreground mb-4">
-                {t("transactions.selectLedgerDescription")}
-              </p>
-              <Link to="/ledgers">
-                <Button variant="outline">{t("transactions.goToLedgers")}</Button>
-              </Link>
-            </div>
+            <EmptyState
+              icon={ArrowLeftRight}
+              title={t("transactions.noLedgerSelected")}
+              description={t("transactions.selectLedgerDescription")}
+              action={
+                <Link to="/ledgers">
+                  <Button variant="outline">{t("transactions.goToLedgers")}</Button>
+                </Link>
+              }
+            />
           ) : transactions.length > 0 ? (
             <>
             {isMobile ? (
@@ -1044,7 +390,7 @@ export function Transactions() {
                       </span>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                          <Button variant="ghost" size="icon" className="h-8 w-8" aria-label={t("common.actions")}>
                             <MoreHorizontal className="h-4 w-4" />
                           </Button>
                         </DropdownMenuTrigger>
@@ -1121,7 +467,7 @@ export function Transactions() {
                     <TableCell>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon">
+                          <Button variant="ghost" size="icon" aria-label={t("common.actions")}>
                             <MoreHorizontal className="h-4 w-4" />
                           </Button>
                         </DropdownMenuTrigger>
@@ -1145,55 +491,27 @@ export function Transactions() {
               </TableBody>
             </Table>
             )}
-            {totalPages > 1 && (
-              <div className="flex items-center justify-between pt-4">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <span>{t("transactions.totalTransactions", { count: totalElements })}</span>
-                  <span className="text-muted-foreground/50">·</span>
-                  <Select value={String(pageSize)} onValueChange={(value) => { setPageSize(Number(value)); setCurrentPage(0) }}>
-                    <SelectTrigger className="h-8 w-[70px]">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="10">10</SelectItem>
-                      <SelectItem value="20">20</SelectItem>
-                      <SelectItem value="50">50</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <span>{t("transactions.perPage")}</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <span className="text-sm text-muted-foreground mr-2">
-                    {t("transactions.page", { current: currentPage + 1, total: totalPages })}
-                  </span>
-                  <Button variant="outline" size="icon" className="h-8 w-8" disabled={currentPage === 0} onClick={() => setCurrentPage(0)}>
-                    <ChevronsLeft className="h-4 w-4" />
-                  </Button>
-                  <Button variant="outline" size="icon" className="h-8 w-8" disabled={currentPage === 0} onClick={() => setCurrentPage(currentPage - 1)}>
-                    <ChevronLeft className="h-4 w-4" />
-                  </Button>
-                  <Button variant="outline" size="icon" className="h-8 w-8" disabled={currentPage >= totalPages - 1} onClick={() => setCurrentPage(currentPage + 1)}>
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
-                  <Button variant="outline" size="icon" className="h-8 w-8" disabled={currentPage >= totalPages - 1} onClick={() => setCurrentPage(totalPages - 1)}>
-                    <ChevronsRight className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            )}
+            <TablePagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              totalElements={totalElements}
+              pageSize={pageSize}
+              onPageChange={setCurrentPage}
+              onPageSizeChange={setPageSize}
+            />
             </>
           ) : (
-            <div className="flex flex-col items-center justify-center py-12">
-              <ArrowLeftRight className="h-12 w-12 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold">{t("transactions.noTransactions")}</h3>
-              <p className="text-sm text-muted-foreground mb-4">
-                {t("transactions.noTransactionsDescription")}
-              </p>
-              <Button onClick={() => setIsCreateDialogOpen(true)} disabled={accounts.length === 0}>
-                <Plus className="mr-2 h-4 w-4" />
-                {t("transactions.createTransaction")}
-              </Button>
-            </div>
+            <EmptyState
+              icon={ArrowLeftRight}
+              title={t("transactions.noTransactions")}
+              description={t("transactions.noTransactionsDescription")}
+              action={
+                <Button onClick={() => setIsCreateDialogOpen(true)} disabled={accounts.length === 0}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  {t("transactions.createTransaction")}
+                </Button>
+              }
+            />
           )}
         </CardContent>
       </Card>
