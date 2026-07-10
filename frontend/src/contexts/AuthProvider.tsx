@@ -1,30 +1,11 @@
-import { createContext, useContext, useState, type ReactNode } from "react"
+import { useState, type ReactNode } from "react"
 import { AuthProvider as OidcAuthProvider, useAuth as useOidcAuth } from "react-oidc-context"
 import { User } from "oidc-client-ts"
 import { apiClient } from "@/api/client"
 import { isNativePlatform } from "@/lib/capacitor"
 import { userManager, oidcClient } from "@/lib/oidc"
 import { useNativeAuthCallback } from "@/hooks/use-native-auth-callback"
-
-export interface AuthUser {
-  id: string
-  username: string
-  email: string
-  name: string
-  roles: string[]
-}
-
-export interface AuthContextType {
-  user: AuthUser | null
-  accessToken: string | null
-  isAuthenticated: boolean
-  isLoading: boolean
-  loginError: string | null
-  logout: () => void
-  startLogin: () => void
-}
-
-const AuthContext = createContext<AuthContextType | undefined>(undefined)
+import { AuthContext, type AuthContextType, type AuthUser } from "./AuthContext"
 
 interface AuthProviderProps {
   children: ReactNode
@@ -119,12 +100,4 @@ export function AuthProvider({ children }: AuthProviderProps) {
       <AuthProviderWrapper>{children}</AuthProviderWrapper>
     </OidcAuthProvider>
   )
-}
-
-export function useAuth(): AuthContextType {
-  const context = useContext(AuthContext)
-  if (context === undefined) {
-    throw new Error("useAuth must be used within an AuthProvider")
-  }
-  return context
 }
