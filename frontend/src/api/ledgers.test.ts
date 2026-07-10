@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest"
+import { describe, it, expect, vi } from "vitest"
 import { getLedgers, getLedger, createLedger, updateLedger, deleteLedger } from "./ledgers"
 import { apiClient } from "./client"
 import type { JsonApiListResponse, JsonApiResponse, LedgerResource } from "./types"
@@ -27,10 +27,6 @@ const mockLedger: LedgerResource = {
 }
 
 describe("getLedgers", () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
   it("fetches ledgers without pagination params", async () => {
     const mockResponse: JsonApiListResponse<LedgerResource> = {
       data: [mockLedger],
@@ -60,10 +56,6 @@ describe("getLedgers", () => {
 })
 
 describe("getLedger", () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
   it("fetches a single ledger by id", async () => {
     const mockResponse: JsonApiResponse<LedgerResource> = {
       data: mockLedger,
@@ -78,10 +70,6 @@ describe("getLedger", () => {
 })
 
 describe("createLedger", () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
   it("creates a ledger with required fields", async () => {
     const mockResponse: JsonApiResponse<LedgerResource> = {
       data: mockLedger,
@@ -121,10 +109,6 @@ describe("createLedger", () => {
 })
 
 describe("updateLedger", () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
   it("updates a ledger", async () => {
     const mockResponse: JsonApiResponse<LedgerResource> = {
       data: mockLedger,
@@ -143,10 +127,6 @@ describe("updateLedger", () => {
 })
 
 describe("deleteLedger", () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
   it("deletes a ledger", async () => {
     vi.mocked(apiClient.delete).mockResolvedValueOnce(undefined)
 

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest"
+import { describe, it, expect, vi } from "vitest"
 import { getAccounts, getAccount, createAccount, updateAccount, deleteAccount } from "./accounts"
 import { apiClient } from "./client"
 import type { JsonApiListResponse, JsonApiResponse, AccountResource } from "./types"
@@ -30,10 +30,6 @@ const mockAccount: AccountResource = {
 }
 
 describe("getAccounts", () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
   it("fetches accounts for a ledger", async () => {
     const mockResponse: JsonApiListResponse<AccountResource> = {
       data: [mockAccount],
@@ -63,10 +59,6 @@ describe("getAccounts", () => {
 })
 
 describe("getAccount", () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
   it("fetches a single account by id", async () => {
     const mockResponse: JsonApiResponse<AccountResource> = {
       data: mockAccount,
@@ -81,10 +73,6 @@ describe("getAccount", () => {
 })
 
 describe("createAccount", () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
   it("creates an account with required fields", async () => {
     const mockResponse: JsonApiResponse<AccountResource> = {
       data: mockAccount,
@@ -171,10 +159,6 @@ describe("createAccount", () => {
 })
 
 describe("updateAccount", () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
   it("updates an account", async () => {
     const mockResponse: JsonApiResponse<AccountResource> = {
       data: mockAccount,
@@ -199,10 +183,6 @@ describe("updateAccount", () => {
 })
 
 describe("deleteAccount", () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
   it("deletes an account", async () => {
     vi.mocked(apiClient.delete).mockResolvedValueOnce(undefined)
 

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest"
+import { describe, it, expect, vi } from "vitest"
 import {
   getTransactions,
   getTransaction,
@@ -50,10 +50,6 @@ const mockTransaction: TransactionResource = {
 }
 
 describe("getTransactions", () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
   it("fetches transactions without filters", async () => {
     const mockResponse: JsonApiListResponse<TransactionResource> = { data: [mockTransaction] }
     vi.mocked(apiClient.get).mockResolvedValueOnce(mockResponse)
@@ -79,10 +75,6 @@ describe("getTransactions", () => {
 })
 
 describe("getTransaction", () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
   it("fetches a single transaction", async () => {
     const mockResponse: JsonApiResponse<TransactionResource> = { data: mockTransaction }
     vi.mocked(apiClient.get).mockResolvedValueOnce(mockResponse)
@@ -95,10 +87,6 @@ describe("getTransaction", () => {
 })
 
 describe("createTransaction", () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
   it("creates a transaction", async () => {
     const mockResponse: JsonApiResponse<TransactionResource> = { data: mockTransaction }
     vi.mocked(apiClient.post).mockResolvedValueOnce(mockResponse)
@@ -120,10 +108,6 @@ describe("createTransaction", () => {
 })
 
 describe("updateTransaction", () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
   it("updates a transaction", async () => {
     const mockResponse: JsonApiResponse<TransactionResource> = { data: mockTransaction }
     vi.mocked(apiClient.put).mockResolvedValueOnce(mockResponse)
@@ -144,10 +128,6 @@ describe("updateTransaction", () => {
 })
 
 describe("deleteTransaction", () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
   it("deletes a transaction", async () => {
     vi.mocked(apiClient.delete).mockResolvedValueOnce(undefined)
 
@@ -158,10 +138,6 @@ describe("deleteTransaction", () => {
 })
 
 describe("getTransactionDescriptions", () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
   it("fetches distinct descriptions", async () => {
     vi.mocked(apiClient.get).mockResolvedValueOnce(["Groceries", "Rent"])
 
@@ -173,10 +149,6 @@ describe("getTransactionDescriptions", () => {
 })
 
 describe("getTransactionTemplates", () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
   it("fetches transaction templates", async () => {
     const mockResponse: JsonApiListResponse<TransactionResource> = { data: [mockTransaction] }
     vi.mocked(apiClient.get).mockResolvedValueOnce(mockResponse)

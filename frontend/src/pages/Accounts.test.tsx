@@ -79,10 +79,6 @@ function renderAccounts() {
 }
 
 describe("Accounts", () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
   describe("when not authenticated", () => {
     beforeEach(() => {
       vi.mocked(useAuth).mockReturnValue({
