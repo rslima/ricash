@@ -1,4 +1,6 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query"
+import { accountKeys } from "./accounts.hooks"
+import { envelopeKeys } from "./envelopes.hooks"
 import {
   getTransactions,
   getCategoryTransactions,
@@ -41,8 +43,8 @@ export const transactionKeys = {
 // invalidate those resources for the ledger in addition to transactions/reports.
 function invalidateTransactionEffects(queryClient: QueryClient, ledgerSlug: string) {
   queryClient.invalidateQueries({ queryKey: transactionKeys.ledger(ledgerSlug) })
-  queryClient.invalidateQueries({ queryKey: ["accounts", ledgerSlug] })
-  queryClient.invalidateQueries({ queryKey: ["envelopes", ledgerSlug] })
+  queryClient.invalidateQueries({ queryKey: accountKeys.ledger(ledgerSlug) })
+  queryClient.invalidateQueries({ queryKey: envelopeKeys.ledger(ledgerSlug) })
 }
 
 export function useTransactions(ledgerSlug: string, filters?: TransactionFilters, enabled = true) {
