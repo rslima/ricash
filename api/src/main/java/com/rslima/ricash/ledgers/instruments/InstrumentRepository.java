@@ -47,6 +47,15 @@ public interface InstrumentRepository {
     List<Instrument> findAllByLedgerId(String ledgerId);
 
     /**
+     * Finds every ACTIVE instrument with a non-blank ISIN across ALL ledgers.
+     * Deliberately not ledger-scoped: only for the scheduled price refresh,
+     * which runs in a system context. Never expose through caller-facing paths.
+     *
+     * @return active instruments with an ISIN, across every ledger
+     */
+    List<Instrument> findAllActiveWithIsinSystemWide();
+
+    /**
      * Saves a new instrument.
      *
      * @param instrument the instrument to save

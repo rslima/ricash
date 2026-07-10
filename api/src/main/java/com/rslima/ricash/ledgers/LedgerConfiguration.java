@@ -29,12 +29,14 @@ import com.rslima.ricash.ledgers.instruments.PortfolioJdbcRepository;
 import com.rslima.ricash.ledgers.instruments.PortfolioRepository;
 import com.rslima.ricash.ledgers.instruments.PortfolioService;
 import com.rslima.ricash.ledgers.instruments.PortfolioServiceBean;
+import com.rslima.ricash.ledgers.instruments.YahooFinancePriceService;
 import com.rslima.ricash.ledgers.transactions.TransactionJdbcRepository;
 import com.rslima.ricash.ledgers.transactions.TransactionRepository;
 import com.rslima.ricash.ledgers.transactions.TransactionService;
 import com.rslima.ricash.ledgers.transactions.TransactionServiceBean;
 import com.rslima.ricash.users.UserRepository;
 import com.rslima.ricash.configuration.ExchangeRateProviderProperties;
+import com.rslima.ricash.configuration.InstrumentPriceProviderProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -58,7 +60,7 @@ public class LedgerConfiguration {
             RestClient.Builder restClientBuilder,
             ExchangeRateProviderProperties exchangeRateProviderProperties
     ) {
-        // Timeouts come from the auto-configured builder (spring.http.client.*).
+        // Timeouts come from the auto-configured builder (spring.http.clients.*).
         return new ExternalExchangeRateService(restClientBuilder.build(), exchangeRateProviderProperties);
     }
 
@@ -74,12 +76,24 @@ public class LedgerConfiguration {
     }
 
     @Bean
+    public YahooFinancePriceService yahooFinancePriceService(
+            RestClient.Builder restClientBuilder,
+            InstrumentPriceProviderProperties instrumentPriceProviderProperties
+    ) {
+        // Timeouts come from the auto-configured builder (spring.http.clients.*).
+        return new YahooFinancePriceService(restClientBuilder.build(), instrumentPriceProviderProperties);
+    }
+
+    @Bean
     public InstrumentPriceService instrumentPriceService(
             InstrumentPriceRepository instrumentPriceRepository,
             InstrumentRepository instrumentRepository,
-            LedgerAccess ledgerAccess
+            LedgerAccess ledgerAccess,
+            YahooFinancePriceService yahooFinancePriceService,
+            InstrumentPriceProviderProperties instrumentPriceProviderProperties
     ) {
-        return new InstrumentPriceServiceBean(instrumentPriceRepository, instrumentRepository, ledgerAccess);
+        return new InstrumentPriceServiceBean(instrumentPriceRepository, instrumentRepository, ledgerAccess,
+                yahooFinancePriceService, instrumentPriceProviderProperties);
     }
 
     @Bean

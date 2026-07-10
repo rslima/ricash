@@ -31,10 +31,10 @@ The backend follows a domain-driven structure organized by business concepts:
   - Accounts support different types (ASSET, LIABILITY, INCOME, EXPENSE, ...) and currencies
   - Transactions use double-entry bookkeeping with transaction entries; balance is enforced per original currency in `TransactionServiceBean`
   - Balances and monthly summaries are trigger-maintained rollup tables (`account_balance_summary` from V12, `monthly_account_summary`/`envelope_monthly_summary` from V13); read queries aggregate them with a recursive account-tree CTE (shared fragments in `ledgers/accounts/AccountTreeSql`)
-  - Subdomains: accounts/, transactions/, envelopes/ (budget envelopes + allocations), exchangerates/ (with external providers), instruments/ (holdings, prices, portfolio positions)
+  - Subdomains: accounts/, transactions/, envelopes/ (budget envelopes + allocations), exchangerates/ (with external providers), instruments/ (holdings, prices, portfolio positions; external price fetch by ISIN via `YahooFinancePriceService` — on-demand `POST .../instrument-prices/fetch` plus a daily scheduled refresh; only listings whose chart `meta.currency` exactly matches the instrument currency are accepted, so GBp/pence listings are rejected, never converted)
   - All monetary amounts are numeric(20, 2) with explicit currency fields
 
-- **configuration/**: SecurityConfiguration (OAuth2 resource server + CORS), property records (`JwtClaimProperties`, `CorsProperties`, `ExchangeRateProviderProperties`) bound via `@ConfigurationPropertiesScan`
+- **configuration/**: SecurityConfiguration (OAuth2 resource server + CORS), property records (`JwtClaimProperties`, `CorsProperties`, `ExchangeRateProviderProperties`, `InstrumentPriceProviderProperties`) bound via `@ConfigurationPropertiesScan`, and `SchedulingConfiguration` — the app's only `@EnableScheduling`, gated by `ricash.instrument-prices.refresh-enabled` (default on; forced off for all tests in `api/src/test/resources/application.properties`). HTTP client timeouts bind under `spring.http.clients.*` (Boot 4 renamed the prefix; the old `spring.http.client.*` is silently dead config).
 
 - **web/**: Cross-cutting web helpers — `GlobalExceptionHandler` (the single error contract), `PagedModels` (JSON:API pagination links), `AuthenticatedUser` (user id from the JWT)
 

@@ -1,5 +1,6 @@
 package com.rslima.ricash.ledgers.instruments;
 
+import com.rslima.ricash.configuration.InstrumentPriceProviderProperties;
 import com.rslima.ricash.ledgers.Ledger;
 import com.rslima.ricash.ledgers.LedgerAccess;
 import com.rslima.ricash.ledgers.LedgerRepository;
@@ -21,7 +22,9 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -36,18 +39,23 @@ class InstrumentPriceServiceBeanTest {
     @Mock
     private LedgerRepository ledgerRepository;
 
+    @Mock
+    private YahooFinancePriceService yahooFinancePriceService;
+
     private InstrumentPriceServiceBean priceService;
 
     private static final String USER_ID = "test-user";
     private static final String LEDGER_ID = "ledger-id";
     private static final String LEDGER_SLUG = "test-ledger";
     private static final String INSTRUMENT_ID = "instrument-id";
+    private static final String ISIN = "BRPETRACNPR6";
     private static final LocalDate DATE = LocalDate.of(2026, 1, 15);
 
     @BeforeEach
     void setUp() {
         priceService = new InstrumentPriceServiceBean(
-                instrumentPriceRepository, instrumentRepository, new LedgerAccess(ledgerRepository));
+                instrumentPriceRepository, instrumentRepository, new LedgerAccess(ledgerRepository),
+                yahooFinancePriceService, new InstrumentPriceProviderProperties(null, null, null, 0L));
     }
 
     private void givenLedgerExists() {
@@ -55,10 +63,18 @@ class InstrumentPriceServiceBeanTest {
     }
 
     private void givenInstrumentInLedger() {
+        givenInstrumentInLedger(null);
+    }
+
+    private void givenInstrumentInLedger(String isin) {
         givenLedgerExists();
-        var instrument = new Instrument(INSTRUMENT_ID, LEDGER_ID, "PETR4", "Petrobras", InstrumentType.STOCK,
-                "BRL", "B3", null, InstrumentStatus.ACTIVE, Instant.now());
-        when(instrumentRepository.findById(LEDGER_ID, INSTRUMENT_ID)).thenReturn(Optional.of(instrument));
+        when(instrumentRepository.findById(LEDGER_ID, INSTRUMENT_ID))
+                .thenReturn(Optional.of(instrumentWithIsin(INSTRUMENT_ID, isin)));
+    }
+
+    private Instrument instrumentWithIsin(String id, String isin) {
+        return new Instrument(id, LEDGER_ID, "PETR4", "Petrobras", InstrumentType.STOCK,
+                "BRL", "B3", isin, InstrumentStatus.ACTIVE, Instant.now());
     }
 
     @Test
@@ -135,6 +151,149 @@ class InstrumentPriceServiceBeanTest {
         var result = priceService.listByLedger(USER_ID, LEDGER_SLUG, pageable);
 
         assertThat(result.getContent()).hasSize(1);
+    }
+
+    @Test
+    void fetchPrices_savesQuotesAndReturnsLatest() {
+        givenInstrumentInLedger(ISIN);
+        when(yahooFinancePriceService.fetchQuotes(ISIN, "BRL", null)).thenReturn(List.of(
+                new YahooFinancePriceService.Quote(DATE.minusDays(1), new BigDecimal("24.80")),
+                new YahooFinancePriceService.Quote(DATE, new BigDecimal("25.50"))));
+        when(instrumentPriceRepository.save(any(InstrumentPrice.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        var latest = priceService.fetchPrices(USER_ID, LEDGER_SLUG, INSTRUMENT_ID, null);
+
+        assertThat(latest.effectiveDate()).isEqualTo(DATE);
+        assertThat(latest.price()).isEqualByComparingTo(new BigDecimal("25.500000"));
+        assertThat(latest.source()).isEqualTo("YAHOO");
+
+        var captor = ArgumentCaptor.forClass(InstrumentPrice.class);
+        verify(instrumentPriceRepository, times(2)).save(captor.capture());
+        assertThat(captor.getAllValues()).extracting(InstrumentPrice::effectiveDate)
+                .containsExactly(DATE.minusDays(1), DATE);
+    }
+
+    @Test
+    void fetchPrices_passesBackfillDateToProvider() {
+        givenInstrumentInLedger(ISIN);
+        var from = DATE.minusMonths(1);
+        when(yahooFinancePriceService.fetchQuotes(ISIN, "BRL", from)).thenReturn(List.of(
+                new YahooFinancePriceService.Quote(DATE, new BigDecimal("25.50"))));
+        when(instrumentPriceRepository.save(any(InstrumentPrice.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        priceService.fetchPrices(USER_ID, LEDGER_SLUG, INSTRUMENT_ID, from);
+
+        verify(yahooFinancePriceService).fetchQuotes(ISIN, "BRL", from);
+    }
+
+    @Test
+    void fetchPrices_withoutIsin_throws() {
+        givenInstrumentInLedger();
+
+        assertThatThrownBy(() -> priceService.fetchPrices(USER_ID, LEDGER_SLUG, INSTRUMENT_ID, null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("ISIN");
+        verifyNoInteractions(yahooFinancePriceService);
+    }
+
+    @Test
+    void fetchPrices_futureFromDate_throws() {
+        givenInstrumentInLedger(ISIN);
+
+        assertThatThrownBy(() -> priceService.fetchPrices(USER_ID, LEDGER_SLUG, INSTRUMENT_ID,
+                LocalDate.now().plusDays(1)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("future");
+        verifyNoInteractions(yahooFinancePriceService);
+    }
+
+    @Test
+    void fetchPrices_providerHasNothing_throwsNotAvailable() {
+        givenInstrumentInLedger(ISIN);
+        when(yahooFinancePriceService.fetchQuotes(ISIN, "BRL", null)).thenReturn(List.of());
+
+        assertThatThrownBy(() -> priceService.fetchPrices(USER_ID, LEDGER_SLUG, INSTRUMENT_ID, null))
+                .isInstanceOf(InstrumentPriceNotAvailableException.class);
+    }
+
+    @Test
+    void fetchPrices_foreignInstrument_throwsNotFound() {
+        givenLedgerExists();
+        when(instrumentRepository.findById(LEDGER_ID, INSTRUMENT_ID)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> priceService.fetchPrices(USER_ID, LEDGER_SLUG, INSTRUMENT_ID, null))
+                .isInstanceOf(InstrumentNotFoundException.class);
+        verifyNoInteractions(yahooFinancePriceService);
+    }
+
+    @Test
+    void fetchPrices_filtersNonPositiveQuotes() {
+        givenInstrumentInLedger(ISIN);
+        when(yahooFinancePriceService.fetchQuotes(ISIN, "BRL", null)).thenReturn(List.of(
+                new YahooFinancePriceService.Quote(DATE.minusDays(1), BigDecimal.ZERO),
+                new YahooFinancePriceService.Quote(DATE, new BigDecimal("25.50"))));
+        when(instrumentPriceRepository.save(any(InstrumentPrice.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        var latest = priceService.fetchPrices(USER_ID, LEDGER_SLUG, INSTRUMENT_ID, null);
+
+        assertThat(latest.effectiveDate()).isEqualTo(DATE);
+        verify(instrumentPriceRepository, times(1)).save(any(InstrumentPrice.class));
+    }
+
+    @Test
+    void refreshAllActivePrices_continuesAfterSingleInstrumentFailure() {
+        var failing = instrumentWithIsin("instr-1", "ISIN000000A1");
+        var working = instrumentWithIsin("instr-2", "ISIN000000B2");
+        when(instrumentRepository.findAllActiveWithIsinSystemWide()).thenReturn(List.of(failing, working));
+        when(yahooFinancePriceService.fetchQuotes("ISIN000000A1", "BRL", null))
+                .thenThrow(new IllegalStateException("boom"));
+        when(yahooFinancePriceService.fetchQuotes("ISIN000000B2", "BRL", null)).thenReturn(List.of(
+                new YahooFinancePriceService.Quote(DATE, new BigDecimal("25.50"))));
+        when(instrumentPriceRepository.save(any(InstrumentPrice.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        assertThat(priceService.refreshAllActivePrices()).isEqualTo(1);
+    }
+
+    @Test
+    void fetchPrices_fromBeforeEpoch_throws() {
+        givenInstrumentInLedger(ISIN);
+
+        assertThatThrownBy(() -> priceService.fetchPrices(USER_ID, LEDGER_SLUG, INSTRUMENT_ID,
+                LocalDate.of(1969, 12, 31)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("1970");
+        verifyNoInteractions(yahooFinancePriceService);
+    }
+
+    @Test
+    void refreshAllActivePrices_interrupted_abortsSweepAndRestoresFlag() {
+        var throttled = new InstrumentPriceServiceBean(
+                instrumentPriceRepository, instrumentRepository, new LedgerAccess(ledgerRepository),
+                yahooFinancePriceService, new InstrumentPriceProviderProperties(null, null, null, 5L));
+        when(instrumentRepository.findAllActiveWithIsinSystemWide()).thenReturn(List.of(
+                instrumentWithIsin("instr-1", "ISIN000000A1"),
+                instrumentWithIsin("instr-2", "ISIN000000B2")));
+        when(yahooFinancePriceService.fetchQuotes("ISIN000000A1", "BRL", null)).thenReturn(List.of(
+                new YahooFinancePriceService.Quote(DATE, new BigDecimal("25.50"))));
+        when(instrumentPriceRepository.save(any(InstrumentPrice.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        Thread.currentThread().interrupt();
+        try {
+            // The throttle before instrument 2 hits the interrupt and aborts.
+            assertThat(throttled.refreshAllActivePrices()).isEqualTo(1);
+            assertThat(Thread.currentThread().isInterrupted()).isTrue();
+        } finally {
+            Thread.interrupted();
+        }
+        verify(yahooFinancePriceService, times(1)).fetchQuotes(any(), any(), any());
+    }
+
+    @Test
+    void refreshAllActivePrices_noEligibleInstruments_returnsZero() {
+        when(instrumentRepository.findAllActiveWithIsinSystemWide()).thenReturn(List.of());
+
+        assertThat(priceService.refreshAllActivePrices()).isZero();
+        verifyNoInteractions(yahooFinancePriceService);
     }
 
     @Test

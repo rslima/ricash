@@ -18,6 +18,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.is;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -105,6 +106,18 @@ class InstrumentOwnershipTest {
         var count = jdbcClient.sql("SELECT COUNT(*) FROM instrument_prices WHERE id = 'price-a'")
                 .query(Long.class).single();
         assertThat(count).isEqualTo(1);
+    }
+
+    @Test
+    void otherUser_cannotFetchExternalPricesForForeignInstrument() throws Exception {
+        // Ownership fails before any provider lookup; the fixture instrument also
+        // has no ISIN, so no external HTTP could happen even past that check.
+        mockMvc.perform(post("/v1/ledgers/b-main/instrument-prices/fetch")
+                        .with(jwtFor(ATTACKER))
+                        .contentType("application/json")
+                        .accept(JSON_API_VALUE)
+                        .content("{\"instrumentId\":\"instr-a\"}"))
+                .andExpect(status().isNotFound());
     }
 
     @Test

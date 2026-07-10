@@ -86,6 +86,27 @@ public class InstrumentPriceController {
         return toEntityModel(created, instrument, ledgerSlug, principal);
     }
 
+    @PostMapping("/fetch")
+    @ResponseStatus(HttpStatus.CREATED)
+    public EntityModel<InstrumentPriceResource> fetchPrices(
+            @PathVariable String ledgerSlug,
+            JwtAuthenticationToken principal,
+            @Valid @RequestBody FetchInstrumentPricesRequest request) {
+
+        final var userId = userId(principal);
+
+        Instrument instrument = instrumentService.find(userId, ledgerSlug, request.instrumentId())
+                .orElseThrow(() -> new InstrumentNotFoundException(request.instrumentId()));
+
+        log.info("Fetching external prices for instrument {} (ISIN {}) from {}",
+                instrument.symbol(), instrument.isin(), request.from());
+
+        InstrumentPrice latest = instrumentPriceService.fetchPrices(
+                userId, ledgerSlug, request.instrumentId(), request.from());
+
+        return toEntityModel(latest, instrument, ledgerSlug, principal);
+    }
+
     @DeleteMapping("/{priceId}")
     public ResponseEntity<Void> deletePrice(
             @PathVariable String ledgerSlug,
