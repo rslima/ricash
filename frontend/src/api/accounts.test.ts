@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest"
 import { getAccounts, getAccount, createAccount, updateAccount, deleteAccount } from "./accounts"
 import { apiClient } from "./client"
 import type { JsonApiListResponse, JsonApiResponse, AccountResource } from "./types"
+import { makeAccount } from "@/test/fixtures"
 
 vi.mock("./client", () => ({
   apiClient: {
@@ -13,21 +14,7 @@ vi.mock("./client", () => ({
   },
 }))
 
-const mockAccount: AccountResource = {
-  type: "accounts",
-  id: "account-1",
-  attributes: {
-    slug: "checking-account",
-    name: "Checking Account",
-    type: "ASSET",
-    currency: "USD",
-    balance: 1000,
-    description: "Main checking account",
-    parentAccountId: null,
-    createdAt: "2024-01-01T00:00:00Z",
-    updatedAt: "2024-01-01T00:00:00Z",
-  },
-}
+const mockAccount = makeAccount()
 
 describe("getAccounts", () => {
   it("fetches accounts for a ledger", async () => {

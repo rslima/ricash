@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest"
 import { getLedgers, getLedger, createLedger, updateLedger, deleteLedger } from "./ledgers"
 import { apiClient } from "./client"
 import type { JsonApiListResponse, JsonApiResponse, LedgerResource } from "./types"
+import { makeLedger } from "@/test/fixtures"
 
 vi.mock("./client", () => ({
   apiClient: {
@@ -13,18 +14,7 @@ vi.mock("./client", () => ({
   },
 }))
 
-const mockLedger: LedgerResource = {
-  type: "ledgers",
-  id: "ledger-1",
-  attributes: {
-    slug: "personal-finance",
-    name: "Personal Finance",
-    description: "My personal ledger",
-    currency: "USD",
-    createdAt: "2024-01-01T00:00:00Z",
-    updatedAt: "2024-01-01T00:00:00Z",
-  },
-}
+const mockLedger = makeLedger()
 
 describe("getLedgers", () => {
   it("fetches ledgers without pagination params", async () => {

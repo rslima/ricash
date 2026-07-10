@@ -1,12 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { render, screen, waitFor } from "@testing-library/react"
+import { screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { BrowserRouter } from "react-router-dom"
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { Accounts } from "./Accounts"
 import * as accountsApi from "@/api/accounts"
 import * as ledgersApi from "@/api/ledgers"
 import type { AccountResource, LedgerResource } from "@/api/types"
+import { renderWithProviders, mockUseAuth, mockAuthenticatedUser } from "@/test/test-utils"
+import { makeLedger, makeAccount } from "@/test/fixtures"
 
 // Mock the auth context
 vi.mock("@/contexts/AuthContext", () => ({
@@ -34,62 +34,17 @@ vi.mock("@/api/envelopes", () => ({
 
 import { useAuth } from "@/contexts/AuthContext"
 
-const mockLedger: LedgerResource = {
-  type: "ledgers",
-  id: "ledger-1",
-  attributes: {
-    slug: "personal-finance",
-    name: "Personal Finance",
-    description: "My personal ledger",
-    currency: "USD",
-    createdAt: "2024-01-01T00:00:00Z",
-    updatedAt: "2024-01-01T00:00:00Z",
-  },
-}
+const mockLedger = makeLedger()
 
-const mockAccount: AccountResource = {
-  type: "accounts",
-  id: "account-1",
-  attributes: {
-    slug: "checking-account",
-    name: "Checking Account",
-    type: "ASSET",
-    currency: "USD",
-    balance: 1000.5,
-    description: "Main checking account",
-    parentAccountId: null,
-    createdAt: "2024-01-01T00:00:00Z",
-    updatedAt: "2024-01-01T00:00:00Z",
-  },
-}
+// Non-round balance kept explicit: the display test asserts its pt-BR formatting.
+const mockAccount = makeAccount({ attributes: { balance: 1000.5 } })
 
-function renderAccounts() {
-  // Fresh client per render so cache never bleeds between tests; retries off
-  // so a failing query surfaces immediately instead of after backoff.
-  const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
-  })
-  return render(
-    <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <Accounts />
-      </BrowserRouter>
-    </QueryClientProvider>
-  )
-}
+const renderAccounts = () => renderWithProviders(<Accounts />)
 
 describe("Accounts", () => {
   describe("when not authenticated", () => {
     beforeEach(() => {
-      vi.mocked(useAuth).mockReturnValue({
-        isAuthenticated: false,
-        user: null,
-        accessToken: null,
-        isLoading: false,
-        logout: vi.fn(),
-        startLogin: vi.fn(),
-        exchangeCodeForToken: vi.fn(),
-      })
+      vi.mocked(useAuth).mockReturnValue(mockUseAuth())
     })
 
     it("shows sign in required message", () => {
@@ -102,15 +57,9 @@ describe("Accounts", () => {
 
   describe("when authenticated", () => {
     beforeEach(() => {
-      vi.mocked(useAuth).mockReturnValue({
-        isAuthenticated: true,
-        user: { id: "user-1", username: "testuser", email: "test@example.com", name: "Test User", roles: [] },
-        accessToken: "test-token",
-        isLoading: false,
-        logout: vi.fn(),
-        startLogin: vi.fn(),
-        exchangeCodeForToken: vi.fn(),
-      })
+      vi.mocked(useAuth).mockReturnValue(
+        mockUseAuth({ isAuthenticated: true, user: mockAuthenticatedUser, accessToken: "test-token" })
+      )
     })
 
     it("shows page title", async () => {
@@ -282,18 +231,10 @@ describe("Accounts", () => {
 
     it("switches between ledgers", async () => {
       const user = userEvent.setup()
-      const ledger2: LedgerResource = {
-        type: "ledgers",
+      const ledger2: LedgerResource = makeLedger({
         id: "ledger-2",
-        attributes: {
-          slug: "business",
-          name: "Business",
-          description: null,
-          currency: "EUR",
-          createdAt: "2024-01-01T00:00:00Z",
-          updatedAt: "2024-01-01T00:00:00Z",
-        },
-      }
+        attributes: { slug: "business", name: "Business", description: null, currency: "EUR" },
+      })
 
       const account2: AccountResource = {
         ...mockAccount,

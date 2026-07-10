@@ -5,7 +5,7 @@ import { apiClient } from "@/api/client"
 import { isNativePlatform } from "@/lib/capacitor"
 import { NativeStorage } from "@/lib/native-storage"
 
-interface AuthUser {
+export interface AuthUser {
   id: string
   username: string
   email: string
@@ -13,7 +13,7 @@ interface AuthUser {
   roles: string[]
 }
 
-interface AuthContextType {
+export interface AuthContextType {
   user: AuthUser | null
   accessToken: string | null
   isAuthenticated: boolean
