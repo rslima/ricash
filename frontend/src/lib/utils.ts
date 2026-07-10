@@ -10,7 +10,10 @@ export function slugify(input: string): string {
   return slugifyLib(input, { lower: true, strict: true })
 }
 
-export function formatCurrency(amount: number, currency: string = "BRL"): string {
+// Fallback currency when a ledger/account currency isn't available yet.
+export const DEFAULT_CURRENCY = "BRL"
+
+export function formatCurrency(amount: number, currency: string = DEFAULT_CURRENCY): string {
   return new Intl.NumberFormat("pt-BR", {
     style: "currency",
     currency,
