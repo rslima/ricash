@@ -29,11 +29,18 @@
     "all": "Todos",
     "none": "Nenhum"
   },
+  "app": {
+    "tagline": "Gerenciador de Finanças Pessoais"
+  },
   "auth": {
     "signIn": "Entrar",
     "signOut": "Sair",
     "signInRequired": "Login Necessário",
-    "pleaseSignIn": "Por favor, faça login para visualizar seus {{resource}}"
+    "pleaseSignIn": "Por favor, faça login para visualizar seus {{resource}}",
+    "authFailed": "Falha na Autenticação",
+    "returnHome": "Voltar ao início",
+    "signingIn": "Entrando...",
+    "signingInDescription": "Aguarde enquanto concluímos a autenticação"
   },
   "nav": {
     "dashboard": "Painel",

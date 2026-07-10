@@ -113,7 +113,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
         <div className="border-t border-sidebar-border p-4">
           {!collapsed && (
             <p className="text-xs text-muted-foreground">
-              Personal Finance Manager
+              {t("app.tagline")}
             </p>
           )}
         </div>

@@ -29,11 +29,18 @@
     "all": "All",
     "none": "None"
   },
+  "app": {
+    "tagline": "Personal Finance Manager"
+  },
   "auth": {
     "signIn": "Sign In",
     "signOut": "Sign Out",
     "signInRequired": "Sign in Required",
-    "pleaseSignIn": "Please sign in to view your {{resource}}"
+    "pleaseSignIn": "Please sign in to view your {{resource}}",
+    "authFailed": "Authentication Failed",
+    "returnHome": "Return to home",
+    "signingIn": "Signing you in...",
+    "signingInDescription": "Please wait while we complete authentication"
   },
   "nav": {
     "dashboard": "Dashboard",
