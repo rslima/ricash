@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query"
+import { createLedgerScopedKeys } from "./queryKeys"
 import { accountKeys } from "./accounts.hooks"
 import { envelopeKeys } from "./envelopes.hooks"
 import {
@@ -23,10 +24,7 @@ import {
  * invalidation refreshes lists and reports together.
  */
 export const transactionKeys = {
-  all: ["transactions"] as const,
-  ledger: (ledgerSlug: string) => ["transactions", ledgerSlug] as const,
-  list: (ledgerSlug: string, filters?: TransactionFilters) =>
-    ["transactions", ledgerSlug, "list", filters ?? {}] as const,
+  ...createLedgerScopedKeys<"transactions", TransactionFilters>("transactions"),
   category: (ledgerSlug: string, accountId: string, year: number, month: number) =>
     ["transactions", ledgerSlug, "category", accountId, year, month] as const,
   monthlyReport: (ledgerSlug: string, year: number, month: number) =>

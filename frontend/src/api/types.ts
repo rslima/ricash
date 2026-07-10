@@ -191,31 +191,6 @@ export interface EnvelopeAllocationAttributes {
 
 export type EnvelopeAllocationResource = JsonApiResource<"envelope-allocations", EnvelopeAllocationAttributes>
 
-// Plain JSON types for budget (not JSON:API)
-export interface EnvelopeBalance {
-  envelopeId: string
-  periodYear: number
-  periodMonth: number
-  rollover: number
-  allocated: number
-  spent: number
-  available: number
-}
-
-export interface BudgetSummary {
-  id: string
-  periodYear: number
-  periodMonth: number
-  toBeBudgeted: number
-  envelopeBalances: EnvelopeBalance[]
-}
-
-// Plain JSON types for account reports (not JSON:API)
-export interface BalanceSummary {
-  id: string
-  balanceByCurrency: Record<string, number>
-}
-
 // Pagination params (type alias, not interface: aliases are assignable to
 // the client's QueryParams index signature without casts)
 export type PaginationParams = {
