@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useParams, Link, useNavigate } from "react-router-dom"
 import { useTranslation } from "react-i18next"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -24,11 +24,12 @@ import { useAccounts } from "@/api/accounts.hooks"
 import { useTransactions } from "@/api/transactions.hooks"
 import type { AccountResource } from "@/api/types"
 import { formatCurrency, formatDate } from "@/lib/utils"
-import { ArrowLeft, ArrowLeftRight, ChevronRight, Plus, ChevronDown } from "lucide-react"
+import { ArrowLeft, ArrowLeftRight, ChevronRight, Plus, ChevronDown, Download } from "lucide-react"
 import { SignInRequired } from "@/components/SignInRequired"
 import { EmptyState } from "@/components/EmptyState"
 import { TableSkeleton } from "@/components/ui/table-skeleton"
 import { TablePagination } from "@/components/TablePagination"
+import { ExportTransactionsDialog } from "@/components/ExportTransactionsDialog"
 import { usePagination } from "@/hooks/use-pagination"
 import { combineQueries, useQueryErrorToast } from "@/hooks/use-query-error-toast"
 
@@ -60,11 +61,12 @@ export function AccountTransactions() {
   const { isAuthenticated } = useAuth()
   const navigate = useNavigate()
   const { currentPage, setCurrentPage, pageSize, setPageSize, resetPage } = usePagination(20)
+  const [isExportDialogOpen, setIsExportDialogOpen] = useState(false)
 
   // Server state: TanStack Query owns fetching, caching, and loading flags.
   // Gate every query on auth + route params so nothing fires until they exist.
   const enabled = isAuthenticated && !!ledgerSlug && !!accountId
-  const accountsQuery = useAccounts(ledgerSlug ?? "", undefined, enabled)
+  const accountsQuery = useAccounts(ledgerSlug ?? "", { "page[size]": 200 }, enabled)
   const ledgersQuery = useLedgers(enabled)
   const txQuery = useTransactions(
     ledgerSlug ?? "",
@@ -148,25 +150,42 @@ export function AccountTransactions() {
           </div>
         </div>
         {account && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                {t("transactions.newTransaction")}
-                <ChevronDown className="ml-2 h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => handleCreateTransaction("DEBIT")}>
-                {t("accountTransactions.newDebit")}
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleCreateTransaction("CREDIT")}>
-                {t("accountTransactions.newCredit")}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => setIsExportDialogOpen(true)}>
+              <Download className="mr-2 h-4 w-4" />
+              {t("transactions.export.export")}
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button>
+                  <Plus className="mr-2 h-4 w-4" />
+                  {t("transactions.newTransaction")}
+                  <ChevronDown className="ml-2 h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => handleCreateTransaction("DEBIT")}>
+                  {t("accountTransactions.newDebit")}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleCreateTransaction("CREDIT")}>
+                  {t("accountTransactions.newCredit")}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         )}
       </div>
+
+      {/* Export Dialog */}
+      {ledgerSlug && accountId && (
+        <ExportTransactionsDialog
+          ledgerSlug={ledgerSlug}
+          accounts={accounts}
+          fixedAccountId={accountId}
+          open={isExportDialogOpen}
+          onOpenChange={setIsExportDialogOpen}
+        />
+      )}
 
       <Card>
         <CardHeader>

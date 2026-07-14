@@ -221,7 +221,23 @@
     "nextPage": "Próxima página",
     "lastPage": "Última página",
     "searchByDescription": "Buscar por descrição...",
-    "removeEntry": "Remover lançamento"
+    "removeEntry": "Remover lançamento",
+    "export": {
+      "export": "Exportar",
+      "title": "Exportar transações",
+      "description": "Baixe as transações como um arquivo CSV ou OFX, com filtros opcionais de conta e período.",
+      "format": "Formato",
+      "formatCsv": "CSV",
+      "formatOfx": "OFX (extrato bancário)",
+      "account": "Conta",
+      "allAccounts": "Todas as contas",
+      "fromDate": "De",
+      "toDate": "Até",
+      "includeSubAccounts": "Incluir subcontas",
+      "exporting": "Exportando...",
+      "invalidRange": "A data inicial não pode ser posterior à data final",
+      "ofxAccountHint": "Extratos OFX são gerados para contas de ativo e passivo"
+    }
   },
   "accountTransactions": {
     "title": "Transações de {{name}}",
@@ -437,6 +453,7 @@
     "createFailed": "Falha ao criar. Por favor, tente novamente.",
     "updateFailed": "Falha ao salvar alterações. Por favor, tente novamente.",
     "deleteFailed": "Falha ao excluir. Por favor, tente novamente.",
-    "fetchRateFailed": "Não foi possível buscar uma taxa para este par de moedas e data. O provedor pode não tê-la."
+    "fetchRateFailed": "Não foi possível buscar uma taxa para este par de moedas e data. O provedor pode não tê-la.",
+    "exportFailed": "Falha ao exportar transações"
   }
 }

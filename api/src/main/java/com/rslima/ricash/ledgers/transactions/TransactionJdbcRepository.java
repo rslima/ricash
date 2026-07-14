@@ -16,6 +16,7 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -26,6 +27,7 @@ import java.util.LinkedHashMap;
 import static com.rslima.ricash.ledgers.DateRanges.monthEnd;
 import static com.rslima.ricash.ledgers.DateRanges.monthStart;
 import static java.util.stream.Collectors.groupingBy;
+import static java.util.stream.Collectors.toMap;
 
 @RequiredArgsConstructor
 @Slf4j
@@ -488,6 +490,107 @@ public class TransactionJdbcRepository implements TransactionRepository {
                 entry.instrumentSymbol(),
                 entry.envelopeId()
         );
+    }
+
+    @Override
+    public List<TransactionExportRow> listEntriesForExport(String ledgerId, Collection<String> accountIds,
+                                                           LocalDate from, LocalDate toExclusive) {
+        // Predicates are appended (and their params bound) only when present:
+        // JdbcClient rejects bound params that do not appear in the SQL.
+        final var accountFilter = accountIds != null && !accountIds.isEmpty()
+                ? " AND te.account_id IN (:accountIds)" : "";
+        final var fromFilter = from != null ? " AND t.date >= :from" : "";
+        final var toFilter = toExclusive != null ? " AND t.date < :toExclusive" : "";
+
+        final var spec = jdbcClient.sql(SELECT_TRANSACTION_WITH_ENTRIES + """
+                        FROM
+                            (SELECT DISTINCT t.* FROM transactions t
+                             INNER JOIN transaction_entries te ON t.id = te.transaction_id
+                             WHERE t.ledger_id = :ledgerId"""
+                        + accountFilter + fromFilter + toFilter + """
+                            ) t
+                        """ + JOIN_TRANSACTION_ENTRY_DETAILS + """
+                        ORDER BY t.date ASC, t.created_at ASC, t.id ASC, te.id ASC
+                        """)
+                .param("ledgerId", ledgerId);
+        if (!accountFilter.isEmpty()) {
+            spec.param("accountIds", List.copyOf(accountIds));
+        }
+        if (from != null) {
+            spec.param("from", Date.valueOf(from));
+        }
+        if (toExclusive != null) {
+            spec.param("toExclusive", Date.valueOf(toExclusive));
+        }
+
+        return spec.query(DBTransactionWithEntry.class)
+                .list()
+                .stream()
+                // The LEFT JOIN yields one null-entry row for entry-less transactions.
+                .filter(row -> row.entryId() != null)
+                .map(this::toExportRow)
+                .toList();
+    }
+
+    private TransactionExportRow toExportRow(DBTransactionWithEntry row) {
+        return new TransactionExportRow(
+                row.transactionId(),
+                row.date(),
+                row.createdAt(),
+                row.description(),
+                row.entryId(),
+                row.accountId(),
+                row.accountName(),
+                TransactionEntryType.valueOf(row.type()),
+                row.amount(),
+                row.currency(),
+                row.toAmount(),
+                row.toCurrency(),
+                row.instrumentId(),
+                row.quantity(),
+                row.instrumentSymbol(),
+                row.envelopeId());
+    }
+
+    record DBAccountBalanceRow(String accountId, BigDecimal balance) {}
+
+    @Override
+    public Map<String, BigDecimal> getAccountBalancesAsOf(String ledgerId, Collection<String> accountIds,
+                                                          LocalDate toExclusive) {
+        if (accountIds == null || accountIds.isEmpty()) {
+            return Map.of();
+        }
+
+        final var dateFilter = toExclusive != null ? " AND t.date < :toExclusive" : "";
+        final var spec = jdbcClient.sql("""
+                        SELECT
+                            te.account_id,
+                            SUM(
+                                (CASE WHEN te.type = 'DEBIT' THEN 1 ELSE -1 END) *
+                                (CASE
+                                    WHEN te.to_currency = a.currency THEN te.to_amount
+                                    WHEN te.currency = a.currency THEN te.amount
+                                    ELSE 0
+                                END)
+                            ) AS balance
+                        FROM transactions t
+                        INNER JOIN transaction_entries te ON t.id = te.transaction_id
+                        INNER JOIN accounts a ON te.account_id = a.id
+                        WHERE t.ledger_id = :ledgerId
+                          AND te.account_id IN (:accountIds)""" + dateFilter + """
+
+                        GROUP BY te.account_id
+                        """)
+                .param("ledgerId", ledgerId)
+                .param("accountIds", List.copyOf(accountIds));
+        if (toExclusive != null) {
+            spec.param("toExclusive", Date.valueOf(toExclusive));
+        }
+
+        return spec.query(DBAccountBalanceRow.class)
+                .list()
+                .stream()
+                .collect(toMap(DBAccountBalanceRow::accountId, DBAccountBalanceRow::balance));
     }
 
     @Override

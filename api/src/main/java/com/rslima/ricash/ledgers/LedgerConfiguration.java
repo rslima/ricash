@@ -34,6 +34,8 @@ import com.rslima.ricash.ledgers.transactions.TransactionJdbcRepository;
 import com.rslima.ricash.ledgers.transactions.TransactionRepository;
 import com.rslima.ricash.ledgers.transactions.TransactionService;
 import com.rslima.ricash.ledgers.transactions.TransactionServiceBean;
+import com.rslima.ricash.ledgers.transactions.export.TransactionExportService;
+import com.rslima.ricash.ledgers.transactions.export.TransactionExportServiceBean;
 import com.rslima.ricash.users.UserRepository;
 import com.rslima.ricash.configuration.ExchangeRateProviderProperties;
 import com.rslima.ricash.configuration.InstrumentPriceProviderProperties;
@@ -149,6 +151,14 @@ public class LedgerConfiguration {
     @Bean
     public TransactionRepository transactionRepository(JdbcClient jdbcClient) {
         return new TransactionJdbcRepository(jdbcClient);
+    }
+
+    @Bean
+    public TransactionExportService transactionExportService(
+            TransactionRepository transactionRepository,
+            LedgerAccess ledgerAccess
+    ) {
+        return new TransactionExportServiceBean(transactionRepository, ledgerAccess);
     }
 
     @Bean

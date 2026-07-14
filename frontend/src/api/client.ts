@@ -3,7 +3,7 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "https://ricash.app/ap
 // Query-param bag accepted by every GET. Domain param types (PaginationParams,
 // TransactionFilters, ...) must stay type aliases — aliases are assignable to
 // this index signature without casts, interfaces are not.
-export type QueryParams = Record<string, string | number | undefined>
+export type QueryParams = Record<string, string | number | boolean | undefined>
 
 interface RequestOptions extends RequestInit {
   params?: QueryParams
@@ -67,6 +67,33 @@ class ApiClient {
 
   async get<T>(endpoint: string, params?: QueryParams): Promise<T> {
     return this.request<T>(endpoint, { method: "GET", params })
+  }
+
+  /**
+   * GET a binary response (file download). Unlike request(), no JSON:API
+   * headers are sent and the body is returned as a Blob together with the
+   * filename from the Content-Disposition header, when present.
+   */
+  async getBlob(
+    endpoint: string,
+    params?: QueryParams
+  ): Promise<{ blob: Blob; filename: string | null }> {
+    const headers: Record<string, string> = { Accept: "*/*" }
+    if (this.accessToken) {
+      headers["Authorization"] = `Bearer ${this.accessToken}`
+    }
+
+    const response = await fetch(this.buildUrl(endpoint, params), { method: "GET", headers })
+
+    if (!response.ok) {
+      // Errors arrive as JSON:API error documents ({ errors: [{ detail }] }).
+      const body = await response.json().catch(() => null)
+      throw new ApiError(response.status, body?.errors?.[0]?.detail ?? body?.message ?? "Request failed", body)
+    }
+
+    const disposition = response.headers.get("content-disposition")
+    const filename = disposition?.match(/filename="?([^";]+)"?/i)?.[1] ?? null
+    return { blob: await response.blob(), filename }
   }
 
   async post<T>(endpoint: string, data?: unknown): Promise<T> {

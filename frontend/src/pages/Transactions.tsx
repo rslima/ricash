@@ -11,6 +11,7 @@ import { TableSkeleton } from "@/components/ui/table-skeleton"
 import { LedgerSelector } from "@/components/LedgerSelector"
 import { TablePagination } from "@/components/TablePagination"
 import { TransactionFormDialog } from "@/components/transactions/TransactionFormDialog"
+import { ExportTransactionsDialog } from "@/components/ExportTransactionsDialog"
 import {
   Table,
   TableBody,
@@ -46,7 +47,7 @@ import { useLedgerSelection } from "@/hooks/use-ledger-selection"
 import { usePagination } from "@/hooks/use-pagination"
 import { useTransactionForm } from "@/hooks/use-transaction-form"
 import { combineQueries, useQueryErrorToast } from "@/hooks/use-query-error-toast"
-import { Plus, Trash2, ArrowLeftRight, MoreHorizontal, X, Pencil, Search } from "lucide-react"
+import { Plus, Trash2, ArrowLeftRight, MoreHorizontal, X, Pencil, Search, Download } from "lucide-react"
 
 interface PrefilledEntry {
   accountId: string
@@ -94,6 +95,7 @@ export function Transactions() {
   const [searchDescription, setSearchDescription] = useState("")
   const [activeSearch, setActiveSearch] = useState("")
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
+  const [isExportDialogOpen, setIsExportDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [editingTransaction, setEditingTransaction] = useState<TransactionResource | null>(null)
 
@@ -249,15 +251,35 @@ export function Transactions() {
             {t("transactions.subtitle")}
           </p>
         </div>
-        <Button
-          size={isMobile ? "sm" : "default"}
-          disabled={!selectedLedgerSlug || accounts.length === 0}
-          onClick={() => setIsCreateDialogOpen(true)}
-        >
-          <Plus className="mr-1 md:mr-2 h-4 w-4" />
-          {isMobile ? t("common.create") : t("transactions.newTransaction")}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size={isMobile ? "sm" : "default"}
+            disabled={!selectedLedgerSlug}
+            onClick={() => setIsExportDialogOpen(true)}
+          >
+            <Download className="mr-1 md:mr-2 h-4 w-4" />
+            {!isMobile && t("transactions.export.export")}
+          </Button>
+          <Button
+            size={isMobile ? "sm" : "default"}
+            disabled={!selectedLedgerSlug || accounts.length === 0}
+            onClick={() => setIsCreateDialogOpen(true)}
+          >
+            <Plus className="mr-1 md:mr-2 h-4 w-4" />
+            {isMobile ? t("common.create") : t("transactions.newTransaction")}
+          </Button>
+        </div>
       </div>
+
+      {selectedLedgerSlug && (
+        <ExportTransactionsDialog
+          ledgerSlug={selectedLedgerSlug}
+          accounts={accounts}
+          open={isExportDialogOpen}
+          onOpenChange={setIsExportDialogOpen}
+        />
+      )}
 
       <TransactionFormDialog
         mode="create"

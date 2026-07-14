@@ -221,7 +221,23 @@
     "nextPage": "Next page",
     "lastPage": "Last page",
     "searchByDescription": "Search by description...",
-    "removeEntry": "Remove entry"
+    "removeEntry": "Remove entry",
+    "export": {
+      "export": "Export",
+      "title": "Export transactions",
+      "description": "Download transactions as a CSV or OFX file, optionally filtered by account and date range.",
+      "format": "Format",
+      "formatCsv": "CSV",
+      "formatOfx": "OFX (bank statement)",
+      "account": "Account",
+      "allAccounts": "All accounts",
+      "fromDate": "From",
+      "toDate": "To",
+      "includeSubAccounts": "Include sub-accounts",
+      "exporting": "Exporting...",
+      "invalidRange": "The start date must not be after the end date",
+      "ofxAccountHint": "OFX statements are generated for asset and liability accounts"
+    }
   },
   "accountTransactions": {
     "title": "Transactions for {{name}}",
@@ -437,6 +453,7 @@
     "createFailed": "Failed to create. Please try again.",
     "updateFailed": "Failed to save changes. Please try again.",
     "deleteFailed": "Failed to delete. Please try again.",
-    "fetchRateFailed": "Could not fetch a rate for this currency pair and date. The provider may not have it."
+    "fetchRateFailed": "Could not fetch a rate for this currency pair and date. The provider may not have it.",
+    "exportFailed": "Failed to export transactions"
   }
 }
