@@ -11,8 +11,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 
 @RequiredArgsConstructor
@@ -21,6 +23,7 @@ public class ExchangeRateServiceBean implements ExchangeRateService {
 
     private final ExchangeRateRepository exchangeRateRepository;
     private final ExternalExchangeRateService externalExchangeRateService;
+    private final Clock clock;
 
     private static final int RATE_SCALE = 6;
     private static final int AMOUNT_SCALE = 2;
@@ -139,6 +142,44 @@ public class ExchangeRateServiceBean implements ExchangeRateService {
         ExchangeRate saved = saveRate(from, to, externalRate.get(), date, "EXTERNAL_API");
         log.info("Saved refreshed external rate: {} {} -> {} = {}", from, to, saved.rate(), date);
         return Optional.of(saved);
+    }
+
+    // Deliberately NOT @Transactional: the sweep performs one external HTTP
+    // call per pair and must not hold a pooled DB connection while doing so.
+    // Each upsert is a single atomic statement and the operation is
+    // idempotent, so an interrupted sweep simply completes on the next run.
+    @Override
+    public int refreshAllKnownRates() {
+        final LocalDate today = LocalDate.now(clock);
+        List<CurrencyPair> pairs = exchangeRateRepository.findDistinctExternalPairs();
+        log.info("Refreshing exchange rates for {} known currency pair(s)", pairs.size());
+
+        int refreshed = 0;
+        for (CurrencyPair pair : pairs) {
+            try {
+                if (hasManualRateForToday(pair, today)) {
+                    log.info("Skipping {} -> {}: today's rate was entered manually",
+                        pair.fromCurrency(), pair.toCurrency());
+                    continue;
+                }
+                // refreshRate already warns when the provider has no rate.
+                if (refreshRate(pair.fromCurrency(), pair.toCurrency(), today).isPresent()) {
+                    refreshed++;
+                }
+            } catch (RuntimeException e) {
+                log.warn("Failed to refresh rate {} -> {}: {}",
+                    pair.fromCurrency(), pair.toCurrency(), e.getMessage());
+            }
+        }
+        return refreshed;
+    }
+
+    /** A rate the user entered for today must win over the scheduled fetch. */
+    private boolean hasManualRateForToday(CurrencyPair pair, LocalDate today) {
+        return exchangeRateRepository.findRate(pair.fromCurrency(), pair.toCurrency(), today)
+            .filter(rate -> today.equals(rate.effectiveDate()))
+            .filter(rate -> "MANUAL".equals(rate.source()))
+            .isPresent();
     }
 
     @Override

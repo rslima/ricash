@@ -3,10 +3,11 @@ package com.rslima.ricash.configuration;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
- * External instrument-price provider endpoints (Yahoo Finance's unofficial API).
- * Defaults point at the free query1.finance.yahoo.com endpoints; override in
- * configuration to swap hosts or point tests at a stub. Yahoo rejects default
- * Java user agents, so requests must be sent with a browser-like one.
+ * External instrument-price provider settings (EODHD, eodhd.com). The base URL
+ * defaults to the public API host; override in configuration to point tests at
+ * a stub. The API token has no default — application.yml binds it to the
+ * {@code EODHD_API_TOKEN} environment variable, and fetches are skipped (with
+ * a warning) while it is blank.
  *
  * <p>Two plain properties under the same prefix are read elsewhere:
  * {@code ricash.instrument-prices.refresh-enabled} gates the scheduled daily
@@ -15,21 +16,17 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  */
 @ConfigurationProperties("ricash.instrument-prices")
 public record InstrumentPriceProviderProperties(
-        String searchBaseUrl,
-        String chartBaseUrl,
-        String userAgent,
+        String baseUrl,
+        String apiToken,
         Long refreshThrottleMillis
 ) {
 
     public InstrumentPriceProviderProperties {
-        if (searchBaseUrl == null || searchBaseUrl.isBlank()) {
-            searchBaseUrl = "https://query1.finance.yahoo.com/v1/finance/search";
+        if (baseUrl == null || baseUrl.isBlank()) {
+            baseUrl = "https://eodhd.com/api";
         }
-        if (chartBaseUrl == null || chartBaseUrl.isBlank()) {
-            chartBaseUrl = "https://query1.finance.yahoo.com/v8/finance/chart";
-        }
-        if (userAgent == null || userAgent.isBlank()) {
-            userAgent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
+        if (apiToken == null) {
+            apiToken = "";
         }
         if (refreshThrottleMillis == null) {
             refreshThrottleMillis = 500L;

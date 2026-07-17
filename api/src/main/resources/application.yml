@@ -31,3 +31,5 @@ ricash:
       audience: ""
     cors:
       allowed-origins: http://localhost:5173,http://localhost:3000
+  instrument-prices:
+    api-token: ${EODHD_API_TOKEN:}

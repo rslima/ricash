@@ -50,8 +50,8 @@ class InstrumentPriceJdbcRepositoryTest {
 
     @Test
     void save_sameInstrumentAndDate_updatesInPlaceAndReturnsOriginalId() {
-        var first = repository.save(price("price-1", "102.200000", "YAHOO"));
-        var second = repository.save(price("price-2", "103.300000", "YAHOO"));
+        var first = repository.save(price("price-1", "102.200000", "EODHD"));
+        var second = repository.save(price("price-2", "103.300000", "EODHD"));
 
         // The conflict path keeps the existing row: same id, updated price.
         assertThat(first.id()).isEqualTo("price-1");
@@ -70,9 +70,9 @@ class InstrumentPriceJdbcRepositoryTest {
     @Test
     void save_overwritesSourceOnConflict() {
         repository.save(price("price-1", "100.000000", "MANUAL"));
-        var refreshed = repository.save(price("price-2", "101.000000", "YAHOO"));
+        var refreshed = repository.save(price("price-2", "101.000000", "EODHD"));
 
         assertThat(refreshed.id()).isEqualTo("price-1");
-        assertThat(refreshed.source()).isEqualTo("YAHOO");
+        assertThat(refreshed.source()).isEqualTo("EODHD");
     }
 }

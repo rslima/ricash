@@ -29,7 +29,6 @@ public interface ExchangeRateService {
      * Converts a monetary amount from one currency to another using the rate for the given date.
      *
      * @param amount the amount to convert
-     * @param fromCurrency source currency code
      * @param toCurrency target currency code
      * @param date the date for which to use the exchange rate
      * @return the converted amount, or empty if no rate is available
@@ -71,4 +70,13 @@ public interface ExchangeRateService {
      * @return the saved rate, or empty if the external provider had no rate
      */
     Optional<ExchangeRate> refreshRate(String fromCurrency, String toCurrency, LocalDate date);
+
+    /**
+     * Refreshes today's external rate for every distinct currency pair already
+     * stored in exchange_rates, continuing past per-pair failures. Used by the
+     * scheduled daily refresh.
+     *
+     * @return the number of pairs successfully refreshed
+     */
+    int refreshAllKnownRates();
 }

@@ -5,6 +5,7 @@ import org.springframework.data.domain.Pageable;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -45,4 +46,12 @@ public interface ExchangeRateRepository {
      * @param id the exchange rate ID
      */
     void deleteById(String id);
+
+    /**
+     * Lists every distinct directed currency pair with at least one
+     * externally fetched rate (source EXTERNAL_API) — the pairs the provider
+     * has served so far. Pairs with only MANUAL rows stay user-managed and
+     * are not returned.
+     */
+    List<CurrencyPair> findDistinctExternalPairs();
 }

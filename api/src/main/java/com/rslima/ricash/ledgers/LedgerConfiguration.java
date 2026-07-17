@@ -29,7 +29,7 @@ import com.rslima.ricash.ledgers.instruments.PortfolioJdbcRepository;
 import com.rslima.ricash.ledgers.instruments.PortfolioRepository;
 import com.rslima.ricash.ledgers.instruments.PortfolioService;
 import com.rslima.ricash.ledgers.instruments.PortfolioServiceBean;
-import com.rslima.ricash.ledgers.instruments.YahooFinancePriceService;
+import com.rslima.ricash.ledgers.instruments.EodhdPriceService;
 import com.rslima.ricash.ledgers.transactions.TransactionJdbcRepository;
 import com.rslima.ricash.ledgers.transactions.TransactionRepository;
 import com.rslima.ricash.ledgers.transactions.TransactionService;
@@ -43,6 +43,9 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.web.client.RestClient;
+
+import java.time.Clock;
+import java.time.ZoneId;
 
 @Configuration
 public class LedgerConfiguration {
@@ -78,12 +81,13 @@ public class LedgerConfiguration {
     }
 
     @Bean
-    public YahooFinancePriceService yahooFinancePriceService(
+    public EodhdPriceService eodhdPriceService(
             RestClient.Builder restClientBuilder,
             InstrumentPriceProviderProperties instrumentPriceProviderProperties
     ) {
         // Timeouts come from the auto-configured builder (spring.http.clients.*).
-        return new YahooFinancePriceService(restClientBuilder.build(), instrumentPriceProviderProperties);
+        return new EodhdPriceService(restClientBuilder.build(), instrumentPriceProviderProperties,
+                Clock.systemDefaultZone());
     }
 
     @Bean
@@ -91,11 +95,11 @@ public class LedgerConfiguration {
             InstrumentPriceRepository instrumentPriceRepository,
             InstrumentRepository instrumentRepository,
             LedgerAccess ledgerAccess,
-            YahooFinancePriceService yahooFinancePriceService,
+            EodhdPriceService eodhdPriceService,
             InstrumentPriceProviderProperties instrumentPriceProviderProperties
     ) {
         return new InstrumentPriceServiceBean(instrumentPriceRepository, instrumentRepository, ledgerAccess,
-                yahooFinancePriceService, instrumentPriceProviderProperties);
+                eodhdPriceService, instrumentPriceProviderProperties);
     }
 
     @Bean
@@ -166,7 +170,11 @@ public class LedgerConfiguration {
             ExchangeRateRepository exchangeRateRepository,
             ExternalExchangeRateService externalExchangeRateService
     ) {
-        return new ExchangeRateServiceBean(exchangeRateRepository, externalExchangeRateService);
+        // The rate sweep stamps rows with "today" in the zone its cron fires
+        // in (see ExchangeRateRefreshScheduler) so PTAX quotes land on the
+        // right calendar date whatever the server timezone is.
+        return new ExchangeRateServiceBean(exchangeRateRepository, externalExchangeRateService,
+                Clock.system(ZoneId.of("America/Sao_Paulo")));
     }
 
     @Bean

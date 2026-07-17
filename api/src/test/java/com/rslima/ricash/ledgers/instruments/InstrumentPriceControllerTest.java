@@ -52,7 +52,7 @@ class InstrumentPriceControllerTest {
 
     private InstrumentPrice testPrice() {
         return new InstrumentPrice("price-1", INSTRUMENT_ID, new BigDecimal("103.300000"),
-                LocalDate.of(2026, 7, 9), "YAHOO", Instant.now());
+                LocalDate.of(2026, 7, 9), "EODHD", Instant.now());
     }
 
     @Test
@@ -68,7 +68,7 @@ class InstrumentPriceControllerTest {
                         .content("{\"instrumentId\":\"instr-1\",\"from\":\"2026-06-01\"}"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.data.id", is("price-1")))
-                .andExpect(jsonPath("$.data.attributes.source", is("YAHOO")))
+                .andExpect(jsonPath("$.data.attributes.source", is("EODHD")))
                 .andExpect(jsonPath("$.data.attributes.instrumentSymbol", is("IWDA")))
                 .andExpect(jsonPath("$.data.attributes.effectiveDate", is("2026-07-09")));
 

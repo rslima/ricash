@@ -117,4 +117,18 @@ public class ExchangeRateJdbcRepository implements ExchangeRateRepository {
             .param("id", id)
             .update();
     }
+
+    @Override
+    public List<CurrencyPair> findDistinctExternalPairs() {
+        return jdbcClient.sql("""
+                SELECT DISTINCT from_currency, to_currency
+                FROM exchange_rates
+                WHERE source = 'EXTERNAL_API'
+                ORDER BY from_currency, to_currency
+                """)
+            .query((rs, rowNum) -> new CurrencyPair(
+                rs.getString("from_currency"),
+                rs.getString("to_currency")))
+            .list();
+    }
 }

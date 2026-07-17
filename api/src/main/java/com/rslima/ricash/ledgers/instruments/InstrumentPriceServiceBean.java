@@ -23,13 +23,13 @@ public class InstrumentPriceServiceBean implements InstrumentPriceService {
     private final InstrumentPriceRepository instrumentPriceRepository;
     private final InstrumentRepository instrumentRepository;
     private final LedgerAccess ledgerAccess;
-    private final YahooFinancePriceService yahooFinancePriceService;
+    private final EodhdPriceService eodhdPriceService;
     private final InstrumentPriceProviderProperties properties;
 
     private static final int PRICE_SCALE = 6;
-    private static final String SOURCE_YAHOO = "YAHOO";
+    private static final String SOURCE_EODHD = "EODHD";
 
-    /** Provider chart requests encode dates as epoch seconds; also bounds the backfill upsert loop. */
+    /** Sanity floor for backfill requests; no provider serves prices before this anyway. */
     private static final LocalDate EPOCH_FLOOR = LocalDate.of(1970, 1, 1);
 
     @Override
@@ -125,7 +125,7 @@ public class InstrumentPriceServiceBean implements InstrumentPriceService {
     }
 
     private List<InstrumentPrice> refreshFromProvider(Instrument instrument, LocalDate from) {
-        List<InstrumentPrice> saved = yahooFinancePriceService
+        List<InstrumentPrice> saved = eodhdPriceService
             .fetchQuotes(instrument.isin(), instrument.currency(), from)
             .stream()
             .filter(quote -> quote.price().compareTo(BigDecimal.ZERO) > 0)
@@ -134,13 +134,13 @@ public class InstrumentPriceServiceBean implements InstrumentPriceService {
                 instrument.id(),
                 quote.price().setScale(PRICE_SCALE, RoundingMode.HALF_UP),
                 quote.date(),
-                SOURCE_YAHOO,
+                SOURCE_EODHD,
                 Instant.now()
             )))
             .toList();
 
         log.info("Upserted {} price(s) for instrument {} from {}",
-            saved.size(), instrument.symbol(), SOURCE_YAHOO);
+            saved.size(), instrument.symbol(), SOURCE_EODHD);
         return saved;
     }
 

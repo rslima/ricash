@@ -11,8 +11,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -33,9 +36,19 @@ class ExchangeRateServiceBeanTest {
 
     private static final LocalDate DATE = LocalDate.of(2026, 1, 15);
 
+    /**
+     * Frozen clock: "today" for the scheduled sweep is 2026-09-16 — a date
+     * deliberately distinct from any plausible test-run date, so a regression
+     * to LocalDate.now() cannot silently pass.
+     */
+    private static final LocalDate TODAY = LocalDate.of(2026, 9, 16);
+    private static final Clock FIXED_CLOCK =
+            Clock.fixed(Instant.parse("2026-09-16T12:00:00Z"), ZoneOffset.UTC);
+
     @BeforeEach
     void setUp() {
-        exchangeRateService = new ExchangeRateServiceBean(exchangeRateRepository, externalExchangeRateService);
+        exchangeRateService = new ExchangeRateServiceBean(exchangeRateRepository, externalExchangeRateService,
+                FIXED_CLOCK);
     }
 
     // --- getRate tests ---
@@ -214,6 +227,88 @@ class ExchangeRateServiceBeanTest {
         assertThatThrownBy(() -> exchangeRateService.refreshRate("USD", "USD", DATE))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("same currency");
+        verifyNoInteractions(externalExchangeRateService);
+    }
+
+    // --- refreshAllKnownRates tests ---
+    // Unstubbed findRate calls return Optional.empty(), i.e. "no rate stored
+    // for today yet" — the common case for the manual-rate guard.
+
+    @Test
+    void refreshAllKnownRates_refreshesEachExternalPairForToday() {
+        when(exchangeRateRepository.findDistinctExternalPairs()).thenReturn(List.of(
+                new CurrencyPair("USD", "BRL"),
+                new CurrencyPair("EUR", "BRL")));
+        when(externalExchangeRateService.fetchRate("USD", "BRL", TODAY)).thenReturn(Optional.of(new BigDecimal("5.75")));
+        when(externalExchangeRateService.fetchRate("EUR", "BRL", TODAY)).thenReturn(Optional.of(new BigDecimal("6.10")));
+        when(exchangeRateRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        assertThat(exchangeRateService.refreshAllKnownRates()).isEqualTo(2);
+
+        var captor = ArgumentCaptor.forClass(ExchangeRate.class);
+        verify(exchangeRateRepository, times(2)).save(captor.capture());
+        assertThat(captor.getAllValues()).allSatisfy(saved -> {
+            assertThat(saved.effectiveDate()).isEqualTo(TODAY);
+            assertThat(saved.source()).isEqualTo("EXTERNAL_API");
+        });
+    }
+
+    @Test
+    void refreshAllKnownRates_skipsPairWhoseTodayRateIsManual() {
+        when(exchangeRateRepository.findDistinctExternalPairs()).thenReturn(List.of(
+                new CurrencyPair("USD", "BRL")));
+        when(exchangeRateRepository.findRate("USD", "BRL", TODAY)).thenReturn(Optional.of(
+                new ExchangeRate("id", "USD", "BRL", new BigDecimal("5.60"), TODAY, "MANUAL", Instant.now())));
+
+        assertThat(exchangeRateService.refreshAllKnownRates()).isZero();
+
+        // The user's rate for today must survive the sweep untouched.
+        verifyNoInteractions(externalExchangeRateService);
+        verify(exchangeRateRepository, never()).save(any());
+    }
+
+    @Test
+    void refreshAllKnownRates_staleManualRate_doesNotBlockRefresh() {
+        // Only a manual rate FOR TODAY wins; an older manual row means the
+        // pair still needs today's external value.
+        when(exchangeRateRepository.findDistinctExternalPairs()).thenReturn(List.of(
+                new CurrencyPair("USD", "BRL")));
+        when(exchangeRateRepository.findRate("USD", "BRL", TODAY)).thenReturn(Optional.of(
+                new ExchangeRate("id", "USD", "BRL", new BigDecimal("5.60"), TODAY.minusDays(3), "MANUAL", Instant.now())));
+        when(externalExchangeRateService.fetchRate("USD", "BRL", TODAY)).thenReturn(Optional.of(new BigDecimal("5.75")));
+        when(exchangeRateRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        assertThat(exchangeRateService.refreshAllKnownRates()).isEqualTo(1);
+    }
+
+    @Test
+    void refreshAllKnownRates_continuesAfterSinglePairFailure() {
+        when(exchangeRateRepository.findDistinctExternalPairs()).thenReturn(List.of(
+                new CurrencyPair("USD", "BRL"),
+                new CurrencyPair("EUR", "BRL")));
+        when(externalExchangeRateService.fetchRate("USD", "BRL", TODAY))
+                .thenThrow(new IllegalStateException("boom"));
+        when(externalExchangeRateService.fetchRate("EUR", "BRL", TODAY)).thenReturn(Optional.of(new BigDecimal("6.10")));
+        when(exchangeRateRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        assertThat(exchangeRateService.refreshAllKnownRates()).isEqualTo(1);
+    }
+
+    @Test
+    void refreshAllKnownRates_pairWithoutExternalRate_isNotCounted() {
+        when(exchangeRateRepository.findDistinctExternalPairs()).thenReturn(List.of(
+                new CurrencyPair("USD", "XXX")));
+        when(externalExchangeRateService.fetchRate("USD", "XXX", TODAY)).thenReturn(Optional.empty());
+
+        assertThat(exchangeRateService.refreshAllKnownRates()).isZero();
+        verify(exchangeRateRepository, never()).save(any());
+    }
+
+    @Test
+    void refreshAllKnownRates_noStoredPairs_returnsZeroWithoutFetching() {
+        when(exchangeRateRepository.findDistinctExternalPairs()).thenReturn(List.of());
+
+        assertThat(exchangeRateService.refreshAllKnownRates()).isZero();
         verifyNoInteractions(externalExchangeRateService);
     }
 }
