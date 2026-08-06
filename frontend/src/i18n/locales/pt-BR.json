@@ -200,6 +200,7 @@
     "creditEntries": "Lançamentos a Crédito",
     "addDebit": "Adicionar Débito",
     "addCredit": "Adicionar Crédito",
+    "derivedCreditAmount": "Calculado a partir dos lançamentos a débito; adicione um segundo crédito para informar os valores manualmente",
     "total": "Total",
     "notBalanced": "Transação não está balanceada. Débitos ({{debits}}) devem ser iguais aos créditos ({{credits}}).",
     "selectAccount": "Selecione uma conta...",

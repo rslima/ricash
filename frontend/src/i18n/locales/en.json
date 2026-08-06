@@ -200,6 +200,7 @@
     "creditEntries": "Credit Entries",
     "addDebit": "Add Debit",
     "addCredit": "Add Credit",
+    "derivedCreditAmount": "Calculated from the debit entries; add a second credit to enter amounts manually",
     "total": "Total",
     "notBalanced": "Transaction is not balanced. Debits ({{debits}}) must equal credits ({{credits}}).",
     "selectAccount": "Select account...",

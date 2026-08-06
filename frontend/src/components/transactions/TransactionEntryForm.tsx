@@ -37,6 +37,8 @@ export function TransactionEntryForm({
 }: TransactionEntryFormProps) {
   const { t } = useTranslation()
   const total = type === "DEBIT" ? form.debitTotal : form.creditTotal
+  // A lone credit amount mirrors the debits, so it is shown read-only.
+  const amountDerived = type === "CREDIT" && form.creditAmountDerived
 
   const getAccountCurrency = (accountId: string) => {
     const account = accounts.find(a => a.id === accountId)
@@ -83,7 +85,9 @@ export function TransactionEntryForm({
                   onChange={(e) => form.updateEntry(index, "amount", e.target.value)}
                   onBlur={() => form.handleAmountBlur()}
                   placeholder="0.00"
-                  className="w-28"
+                  disabled={amountDerived}
+                  title={amountDerived ? t("transactions.derivedCreditAmount") : undefined}
+                  className={amountDerived ? "w-28 bg-muted" : "w-28"}
                 />
                 <Input
                   type="text"

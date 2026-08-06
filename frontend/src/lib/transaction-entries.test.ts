@@ -5,8 +5,10 @@ import {
   isAmountEmpty,
   calculateTotal,
   autoBalanceEntries,
+  hasDerivedCreditAmount,
   isBalanced,
   isFormValid,
+  syncDerivedCreditAmount,
 } from "./transaction-entries"
 
 function entry(overrides: Partial<TransactionEntry> = {}): TransactionEntry {
@@ -18,6 +20,9 @@ function entry(overrides: Partial<TransactionEntry> = {}): TransactionEntry {
     ...overrides,
   }
 }
+
+/** Account-currency lookup where every account is in the entry factory's BRL. */
+const brl = () => "BRL"
 
 describe("parseAmount", () => {
   it("parses numeric strings", () => {
@@ -182,5 +187,117 @@ describe("isFormValid", () => {
   it("requires the entries to balance", () => {
     const entries = [entry({ type: "DEBIT", amount: "100" }), entry({ type: "CREDIT", amount: "90" })]
     expect(isFormValid(entries, "2026-01-15", "x")).toBe(false)
+  })
+})
+
+describe("hasDerivedCreditAmount", () => {
+  it("is true for one credit against same-currency debits", () => {
+    expect(hasDerivedCreditAmount([entry({ type: "DEBIT" }), entry({ type: "CREDIT" })], brl)).toBe(true)
+    expect(
+      hasDerivedCreditAmount(
+        [entry({ type: "DEBIT" }), entry({ type: "DEBIT" }), entry({ type: "CREDIT" })],
+        brl
+      )
+    ).toBe(true)
+  })
+
+  it("is true before any account is selected", () => {
+    expect(
+      hasDerivedCreditAmount(
+        [entry({ type: "DEBIT", accountId: "" }), entry({ type: "CREDIT", accountId: "" })],
+        () => undefined
+      )
+    ).toBe(true)
+  })
+
+  it("is false with several credit entries", () => {
+    expect(hasDerivedCreditAmount([entry({ type: "CREDIT" }), entry({ type: "CREDIT" })], brl)).toBe(false)
+  })
+
+  it("is false when any entry carries an instrument (buy/sell)", () => {
+    expect(
+      hasDerivedCreditAmount(
+        [entry({ type: "DEBIT", instrumentId: "inst-1", quantity: "10" }), entry({ type: "CREDIT" })],
+        brl
+      )
+    ).toBe(false)
+  })
+
+  it("is false when the entries mix currencies (conversion)", () => {
+    expect(
+      hasDerivedCreditAmount(
+        [entry({ type: "DEBIT", currency: "USD" }), entry({ type: "CREDIT", currency: "BRL" })],
+        brl
+      )
+    ).toBe(false)
+  })
+
+  it("is false when an account's currency differs from its entry currency", () => {
+    // Credit drawn on a BRL account, debit landing in a USD account.
+    const byAccount = (id: string) => (id === "usd-acc" ? "USD" : "BRL")
+    expect(
+      hasDerivedCreditAmount(
+        [entry({ type: "DEBIT", accountId: "usd-acc" }), entry({ type: "CREDIT" })],
+        byAccount
+      )
+    ).toBe(false)
+  })
+})
+
+describe("syncDerivedCreditAmount", () => {
+  it("sets the lone credit amount to the sum of the debits", () => {
+    const result = syncDerivedCreditAmount(
+      [
+        entry({ type: "DEBIT", amount: "30" }),
+        entry({ type: "DEBIT", amount: "12.5" }),
+        entry({ type: "CREDIT", amount: "" }),
+      ],
+      brl
+    )
+    expect(result[2]?.amount).toBe("42.50")
+  })
+
+  it("overwrites a stale credit amount", () => {
+    const result = syncDerivedCreditAmount(
+      [entry({ type: "DEBIT", amount: "30" }), entry({ type: "CREDIT", amount: "100" })],
+      brl
+    )
+    expect(result[1]?.amount).toBe("30.00")
+  })
+
+  it("clears the credit amount when no debit amount is typed yet", () => {
+    const result = syncDerivedCreditAmount(
+      [entry({ type: "DEBIT", amount: "" }), entry({ type: "CREDIT", amount: "50" })],
+      brl
+    )
+    expect(result[1]?.amount).toBe("")
+  })
+
+  it("leaves multi-credit entries alone", () => {
+    const entries = [
+      entry({ type: "DEBIT", amount: "100" }),
+      entry({ type: "CREDIT", amount: "40" }),
+      entry({ type: "CREDIT", amount: "60" }),
+    ]
+    expect(syncDerivedCreditAmount(entries, brl)).toBe(entries)
+  })
+
+  it("leaves instrument and conversion entries alone", () => {
+    const instrument = [
+      entry({ type: "DEBIT", amount: "100", instrumentId: "inst-1" }),
+      entry({ type: "CREDIT", amount: "95" }),
+    ]
+    expect(syncDerivedCreditAmount(instrument, brl)).toBe(instrument)
+
+    const conversion = [
+      entry({ type: "DEBIT", amount: "100", currency: "USD" }),
+      entry({ type: "CREDIT", amount: "500", currency: "BRL" }),
+    ]
+    expect(syncDerivedCreditAmount(conversion, brl)).toBe(conversion)
+  })
+
+  it("returns the same reference when already in sync", () => {
+    const entries = [entry({ type: "DEBIT", amount: "10.00" }), entry({ type: "CREDIT", amount: "10.00" })]
+    expect(syncDerivedCreditAmount(entries, brl)).toBe(entries)
   })
 })

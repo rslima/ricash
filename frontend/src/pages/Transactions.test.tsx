@@ -230,13 +230,13 @@ describe("Transactions", () => {
         await user.type(input, "USD")
       }
 
-      // Credit amount; blurring auto-balances the debit entry to 50.00
+      // The lone credit amount is read-only; typing the debit derives it.
       const amountInputs = within(dialog).getAllByPlaceholderText("0.00")
-      await user.type(amountInputs[0], "50")
-      await user.click(within(dialog).getByLabelText("Date"))
+      expect(amountInputs[0]).toBeDisabled()
+      await user.type(amountInputs[1], "50")
 
       await waitFor(() => {
-        expect(within(dialog).getAllByPlaceholderText("0.00")[1]).toHaveValue(50)
+        expect(within(dialog).getAllByPlaceholderText("0.00")[0]).toHaveValue(50)
       })
 
       // Description via the autocomplete popover

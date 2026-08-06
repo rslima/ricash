@@ -89,6 +89,61 @@ export function autoBalanceEntries(entries: readonly TransactionEntry[]): readon
   return modified ? newEntries : entries
 }
 
+/** Resolves an account id to its currency; unknown/unselected accounts give undefined. */
+export type AccountCurrencyLookup = (accountId: string) => string | undefined
+
+/**
+ * The overwhelmingly common transaction shape is one or more debits against a
+ * single credit in one currency, so that lone credit amount is never typed: it
+ * is derived from the debits it funds. Anything with a rate or a price in it —
+ * several credits, an instrument leg (buy/sell), or more than one currency
+ * across the entries and their accounts (a conversion) — falls back to manual
+ * entry, since the two sides of those are not the same number.
+ */
+export function hasDerivedCreditAmount(
+  entries: readonly TransactionEntry[],
+  accountCurrency: AccountCurrencyLookup
+): boolean {
+  if (entries.filter((e) => e.type === "CREDIT").length !== 1) return false
+  if (entries.some((e) => e.instrumentId)) return false
+
+  const currencies = new Set<string>()
+  for (const entry of entries) {
+    if (entry.currency) currencies.add(entry.currency)
+    const accounted = accountCurrency(entry.accountId)
+    if (accounted) currencies.add(accounted)
+  }
+  return currencies.size === 1
+}
+
+/**
+ * Keep a lone credit entry's amount equal to the sum of the debits. Only runs
+ * when `hasDerivedCreditAmount` holds, so every entry shares one currency and
+ * the sum needs no conversion. Returns the input array unchanged (same
+ * reference) when the amount is already in sync.
+ */
+export function syncDerivedCreditAmount(
+  entries: readonly TransactionEntry[],
+  accountCurrency: AccountCurrencyLookup
+): readonly TransactionEntry[] {
+  if (!hasDerivedCreditAmount(entries, accountCurrency)) return entries
+
+  const index = entries.findIndex((e) => e.type === "CREDIT")
+  const credit = entries[index]
+  if (!credit) return entries
+
+  const debitTotal = entries
+    .filter((e) => e.type === "DEBIT")
+    .reduce((sum, e) => sum + parseAmount(e.amount), 0)
+
+  const amount = debitTotal > 0 ? debitTotal.toFixed(2) : ""
+  if (credit.amount === amount) return entries
+
+  const next = [...entries]
+  next[index] = { ...credit, amount }
+  return next
+}
+
 /** Every currency group must have debits ≈ credits (0.01 tolerance). */
 export function isBalanced(entries: readonly TransactionEntry[]): boolean {
   if (!entries || entries.length === 0) return false

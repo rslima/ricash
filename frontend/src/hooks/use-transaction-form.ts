@@ -4,8 +4,10 @@ import {
   type TransactionEntry,
   autoBalanceEntries,
   calculateTotal,
+  hasDerivedCreditAmount,
   isBalanced,
   isFormValid,
+  syncDerivedCreditAmount,
 } from "@/lib/transaction-entries"
 import { todayISO } from "@/lib/dates"
 
@@ -22,7 +24,11 @@ interface UseTransactionFormOptions {
  * entry-editing behaviors the Transactions page previously duplicated across
  * its create and edit branches: toCurrency sync with the selected account's
  * currency, envelope auto-fill from account mappings, and blur-time
- * auto-balancing. Derived validity/totals come from @/lib/transaction-entries.
+ * auto-balancing. In the plain single-credit, single-currency shape the credit
+ * amount is derived from the debits on every edit rather than typed; instrument
+ * legs and currency conversions keep it manual (see
+ * `hasDerivedCreditAmount`). Derived validity/totals come from
+ * @/lib/transaction-entries.
  */
 export function useTransactionForm({
   defaultCurrency,
@@ -38,13 +44,19 @@ export function useTransactionForm({
   const [description, setDescription] = useState("")
   const [entries, setEntries] = useState<readonly TransactionEntry[]>(seedEntries)
 
+  const accountCurrency = (accountId: string) =>
+    accounts.find((a) => a.id === accountId)?.attributes.currency
+
+  const syncCredit = (next: readonly TransactionEntry[]) =>
+    syncDerivedCreditAmount(next, accountCurrency)
+
   const addEntry = (type: "DEBIT" | "CREDIT") => {
-    setEntries([...entries, { accountId: "", amount: "", currency: defaultCurrency, type }])
+    setEntries(syncCredit([...entries, { accountId: "", amount: "", currency: defaultCurrency, type }]))
   }
 
   const removeEntry = (index: number) => {
     if (entries.length > 2) {
-      setEntries(entries.filter((_, i) => i !== index))
+      setEntries(syncCredit(entries.filter((_, i) => i !== index)))
     }
   }
 
@@ -83,13 +95,13 @@ export function useTransactionForm({
       }
     }
 
-    setEntries(entries.map((entry, i) => (i === index ? updated : entry)))
+    setEntries(syncCredit(entries.map((entry, i) => (i === index ? updated : entry))))
   }
 
   // Trigger auto-balance when the user finishes editing an amount field.
   // autoBalanceEntries returns the same reference when nothing was filled.
   const handleAmountBlur = () => {
-    const next = autoBalanceEntries(entries)
+    const next = syncCredit(autoBalanceEntries(entries))
     if (next !== entries) {
       setEntries(next)
     }
@@ -155,6 +167,8 @@ export function useTransactionForm({
     loadFromTemplate,
     reset,
     ledgerCurrency: defaultCurrency,
+    /** True while the lone credit amount is derived from the debits (not typed). */
+    creditAmountDerived: hasDerivedCreditAmount(entries, accountCurrency),
     isValid: isFormValid(entries, date, description),
     debitTotal: calculateTotal("DEBIT", entries),
     creditTotal: calculateTotal("CREDIT", entries),
