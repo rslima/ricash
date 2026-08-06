@@ -1,6 +1,6 @@
 import type { ReactElement } from "react"
 import { render } from "@testing-library/react"
-import { BrowserRouter } from "react-router-dom"
+import { BrowserRouter } from "react-router"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { vi } from "vitest"
 import type { AuthContextType, AuthUser } from "@/contexts/AuthContext"

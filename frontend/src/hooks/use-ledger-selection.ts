@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react"
-import { useParams } from "react-router-dom"
+import { useParams } from "react-router"
 import { useAuth } from "@/contexts/AuthContext"
 import { useLedgers } from "@/api/ledgers.hooks"
 import { DEFAULT_CURRENCY } from "@/lib/utils"
