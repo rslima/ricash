@@ -62,8 +62,13 @@ function AuthProviderWrapper({ children }: AuthProviderProps) {
     setLoginError(null)
     try {
       if (isNativePlatform()) {
-        // On native, generate the authorization URL and open it in an in-app browser
-        const signinRequest = await oidcClient.createSigninRequest({})
+        // On native, generate the authorization URL and open it in an in-app
+        // browser. The return path rides along as state exactly as on web:
+        // createSigninRequest persists it to the shared localStorage state
+        // store, where userManager.signinRedirectCallback reads it back.
+        const signinRequest = await oidcClient.createSigninRequest({
+          state: { returnTo: captureReturnTo() },
+        })
         const { Browser } = await import("@capacitor/browser")
         await Browser.open({ url: signinRequest.url })
       } else {

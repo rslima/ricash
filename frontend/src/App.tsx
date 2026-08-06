@@ -7,6 +7,7 @@ import { AuthProvider } from "@/contexts/AuthProvider"
 import { ThemeProvider } from "@/contexts/ThemeProvider"
 import { Toaster } from "@/components/ui/sonner"
 import { Layout } from "@/components/layout/Layout"
+import { NativeAuthReturn } from "@/components/NativeAuthReturn"
 import { TableSkeleton } from "@/components/ui/table-skeleton"
 // The OIDC callback stays eager: it must not depend on a lazy chunk mid-login.
 import { Callback } from "@/pages/Callback"
@@ -50,6 +51,8 @@ function App() {
     <ThemeProvider>
     <AuthProvider>
       <BrowserRouter>
+        {/* Native-only: navigates after a deep-link sign-in. Inert on web. */}
+        <NativeAuthReturn />
         <Suspense fallback={<TableSkeleton />}>
           <Routes>
             <Route path="/callback" element={<Callback />} />

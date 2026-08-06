@@ -1,6 +1,8 @@
 import { useEffect, useRef } from "react"
 import { isNativePlatform } from "@/lib/capacitor"
 import { userManager, NATIVE_REDIRECT_URI } from "@/lib/oidc"
+import { resolveReturnTo } from "@/lib/auth-return"
+import { publishReturnTo } from "@/lib/native-auth-return"
 
 /**
  * On native platforms, listens for the OIDC deep-link redirect
@@ -31,7 +33,11 @@ export function useNativeAuthCallback(onError: (message: string) => void) {
 
           // Let oidc-client-ts handle the callback by processing the response
           try {
-            await userManager.signinRedirectCallback(url)
+            const user = await userManager.signinRedirectCallback(url)
+            // Usually a no-op: the webview never left the page, so this
+            // resolves to where the user already is. It matters when the app
+            // was reloaded or cold-started while the browser was open.
+            publishReturnTo(resolveReturnTo(user.state))
           } catch (error) {
             console.error("Sign-in callback error:", error)
             onErrorRef.current(error instanceof Error ? error.message : "Authentication callback failed")
