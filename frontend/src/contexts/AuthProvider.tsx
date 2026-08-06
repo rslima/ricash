@@ -4,6 +4,7 @@ import { User } from "oidc-client-ts"
 import { apiClient } from "@/api/client"
 import { isNativePlatform } from "@/lib/capacitor"
 import { userManager, oidcClient } from "@/lib/oidc"
+import { captureReturnTo } from "@/lib/auth-return"
 import { useNativeAuthCallback } from "@/hooks/use-native-auth-callback"
 import { AuthContext, type AuthContextType, type AuthUser } from "./AuthContext"
 
@@ -66,7 +67,9 @@ function AuthProviderWrapper({ children }: AuthProviderProps) {
         const { Browser } = await import("@capacitor/browser")
         await Browser.open({ url: signinRequest.url })
       } else {
-        await auth.signinRedirect()
+        // Remember the current page so /callback can return the user to it
+        // instead of dropping them on the dashboard.
+        await auth.signinRedirect({ state: { returnTo: captureReturnTo() } })
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Login failed"
