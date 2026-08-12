@@ -9,10 +9,14 @@ import { publishReturnTo } from "@/lib/native-auth-return"
  * (com.ricash.app://callback?code=...), closes the in-app browser, and hands
  * the URL to oidc-client-ts. No-op on web.
  *
- * Covers both ways a deep link arrives: appUrlOpen for a running app, and
- * getLaunchUrl for one the link started. The listener registers in an effect,
- * so a link that launched the app can fire before it exists — without the
- * getLaunchUrl check, signing in after the OS killed the app would be dropped.
+ * Reads the link from both channels: appUrlOpen, and getLaunchUrl for one that
+ * started the app. Belt and braces rather than a fix for an observed bug — on
+ * Capacitor 8 / Android 15 appUrlOpen alone already catches a cold start, even
+ * though the listener registers in an effect (verified on device). getLaunchUrl
+ * covers platforms that might only deliver the link that way; iOS is untested.
+ *
+ * Both channels firing is the normal case there, not an edge case, so the
+ * dedupe below is what keeps that from double-processing.
  */
 export function useNativeAuthCallback(onError: (message: string) => void) {
   // Ref keeps the listener registered once while always calling the latest handler.
@@ -25,9 +29,10 @@ export function useNativeAuthCallback(onError: (message: string) => void) {
     let cancelled = false
     let cleanup: (() => void) | undefined
 
-    // A launch link can be delivered by both channels. The OIDC state behind
-    // it is single-use, so a second pass would fail and report a bogus error
-    // over a sign-in that actually succeeded — handle each URL once.
+    // A launch link is delivered by both channels (observed on Android 15).
+    // The OIDC state behind it is single-use, so a second pass fails and
+    // reports a bogus error over a sign-in that actually succeeded — handle
+    // each URL once.
     const handled = new Set<string>()
 
     const handleRedirect = async (url: string) => {
