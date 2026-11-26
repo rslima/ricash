@@ -2,11 +2,11 @@ package com.rslima.ricash.ledgers.transactions;
 
 import com.rslima.ricash.ledgers.DateRanges;
 import com.rslima.ricash.web.PagedModels;
+import com.rslima.ricash.web.Pages;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.hateoas.EntityModel;
 import org.springframework.hateoas.PagedModel;
 import org.springframework.http.MediaType;
@@ -47,7 +47,7 @@ public class TransactionController {
             @RequestParam(name = "year", required = false) Integer year,
             @RequestParam(name = "month", required = false) Integer month) {
 
-        final var pageable = PageRequest.of(page, size);
+        final var pageable = Pages.of(page, size);
         Page<EntityModel<TransactionResource>> transactionResources;
 
         if (accountId != null && !accountId.isBlank() && year != null && month != null) {
@@ -68,7 +68,7 @@ public class TransactionController {
 
         return PagedModels.toPagedModel(transactionResources,
                 p -> methodOn(TransactionController.class)
-                        .listTransactions(ledgerSlug, principal, p, size, accountId, description, year, month));
+                        .listTransactions(ledgerSlug, principal, p, pageable.getPageSize(), accountId, description, year, month));
     }
 
     @GetMapping("/descriptions")
@@ -152,13 +152,13 @@ public class TransactionController {
             @RequestParam(name = "page[number]", required = false, defaultValue = "0") int page,
             @RequestParam(name = "page[size]", required = false, defaultValue = "200") int size) {
 
-        final var pageable = PageRequest.of(page, size);
+        final var pageable = Pages.of(page, size);
         Page<EntityModel<CategoryTransactionResource>> resources = transactionService
                 .listCategoryTransactionAmounts(userId(principal), ledgerSlug, accountId, year, month, pageable)
                 .map(transaction -> EntityModel.of(toCategoryResource(transaction)));
 
         return PagedModels.toPagedModel(resources,
-                p -> methodOn(TransactionController.class).listCategoryTransactionAmounts(ledgerSlug, principal, accountId, year, month, p, size));
+                p -> methodOn(TransactionController.class).listCategoryTransactionAmounts(ledgerSlug, principal, accountId, year, month, p, pageable.getPageSize()));
     }
 
     @GetMapping("/{transactionId}")

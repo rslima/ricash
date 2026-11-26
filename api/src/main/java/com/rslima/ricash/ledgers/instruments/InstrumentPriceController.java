@@ -1,11 +1,11 @@
 package com.rslima.ricash.ledgers.instruments;
 
 import com.rslima.ricash.web.PagedModels;
+import com.rslima.ricash.web.Pages;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.hateoas.EntityModel;
 import org.springframework.hateoas.PagedModel;
 import org.springframework.http.HttpStatus;
@@ -42,7 +42,7 @@ public class InstrumentPriceController {
             @RequestParam(name = "instrumentId", required = false) String instrumentId) {
 
         final var userId = userId(principal);
-        final var pageable = PageRequest.of(page, size);
+        final var pageable = Pages.of(page, size);
 
         // Load instruments for symbol lookup
         Map<String, Instrument> instrumentMap = instrumentService.listAllByLedger(userId, ledgerSlug).stream()
@@ -59,7 +59,7 @@ public class InstrumentPriceController {
         }
 
         return PagedModels.toPagedModel(priceResources,
-                p -> methodOn(InstrumentPriceController.class).listPrices(ledgerSlug, principal, p, size, instrumentId));
+                p -> methodOn(InstrumentPriceController.class).listPrices(ledgerSlug, principal, p, pageable.getPageSize(), instrumentId));
     }
 
     @PostMapping

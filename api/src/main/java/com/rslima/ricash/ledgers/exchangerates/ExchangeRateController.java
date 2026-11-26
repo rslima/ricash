@@ -1,10 +1,10 @@
 package com.rslima.ricash.ledgers.exchangerates;
 
 import com.rslima.ricash.web.PagedModels;
+import com.rslima.ricash.web.Pages;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.hateoas.EntityModel;
 import org.springframework.hateoas.PagedModel;
 import org.springframework.http.HttpStatus;
@@ -65,13 +65,13 @@ public class ExchangeRateController {
             @RequestParam(name = "page[number]", required = false, defaultValue = "0") int page,
             @RequestParam(name = "page[size]", required = false, defaultValue = "20") int size) {
 
-        final var pageable = PageRequest.of(page, size);
+        final var pageable = Pages.of(page, size);
         var exchangeRates = exchangeRateService.listRates(pageable)
                 .map(exchangeRateMapper::toResource)
                 .map(this::toEntityModel);
 
         return PagedModels.toPagedModel(exchangeRates,
-                p -> methodOn(ExchangeRateController.class).listExchangeRates(principal, p, size));
+                p -> methodOn(ExchangeRateController.class).listExchangeRates(principal, p, pageable.getPageSize()));
     }
 
     private EntityModel<ExchangeRateResource> toEntityModel(ExchangeRateResource resource) {
