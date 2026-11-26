@@ -8,6 +8,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataAccessException;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
 import java.math.BigDecimal;
@@ -80,6 +81,23 @@ class TransactionJdbcRepositoryTest {
         assertThat(transactionService.find(USER, LEDGER_SLUG, created.id())).isEmpty();
         assertThat(entryCount()).isZero();
         assertThat(checkingDebitTotal()).isEqualByComparingTo("0.00");
+    }
+
+    @Test
+    void searchByDescription_treatsWildcardsLiterally() {
+        fixtures.insertTransaction("t-percent", "ledger-1", "100% Arabica", LocalDate.of(2026, 1, 5));
+        fixtures.insertTransaction("t-digits", "ledger-1", "1000 grams", LocalDate.of(2026, 1, 6));
+        fixtures.insertTransaction("t-underscore", "ledger-1", "a_b refund", LocalDate.of(2026, 1, 7));
+        fixtures.insertTransaction("t-any", "ledger-1", "axb refund", LocalDate.of(2026, 1, 8));
+
+        var percent = transactionService.searchByDescription(USER, LEDGER_SLUG, "100%", PageRequest.of(0, 20));
+        var underscore = transactionService.searchByDescription(USER, LEDGER_SLUG, "a_b", PageRequest.of(0, 20));
+        var plain = transactionService.searchByDescription(USER, LEDGER_SLUG, "REFUND", PageRequest.of(0, 20));
+
+        assertThat(percent.getContent()).extracting(Transaction::id).containsExactly("t-percent");
+        assertThat(percent.getTotalElements()).isEqualTo(1);
+        assertThat(underscore.getContent()).extracting(Transaction::id).containsExactly("t-underscore");
+        assertThat(plain.getContent()).extracting(Transaction::id).containsExactly("t-any", "t-underscore");
     }
 
     @Test

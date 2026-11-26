@@ -9,6 +9,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
 import java.sql.Date;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
@@ -131,7 +133,7 @@ public class InstrumentPriceJdbcRepository implements InstrumentPriceRepository 
             .update();
     }
 
-    private InstrumentPrice mapRow(java.sql.ResultSet rs, int rowNum) throws java.sql.SQLException {
+    private InstrumentPrice mapRow(ResultSet rs, int rowNum) throws SQLException {
         return new InstrumentPrice(
             rs.getString("id"),
             rs.getString("instrument_id"),

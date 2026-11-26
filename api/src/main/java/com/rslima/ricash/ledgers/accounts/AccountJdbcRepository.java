@@ -9,6 +9,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 
 import java.math.BigDecimal;
 import java.sql.Timestamp;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -96,7 +97,7 @@ public class AccountJdbcRepository implements AccountRepository {
     }
 
     @Override
-    public List<AccountRef> findRefsByIds(String ledgerId, java.util.Collection<String> accountIds) {
+    public List<AccountRef> findRefsByIds(String ledgerId, Collection<String> accountIds) {
         if (accountIds.isEmpty()) {
             return List.of();
         }

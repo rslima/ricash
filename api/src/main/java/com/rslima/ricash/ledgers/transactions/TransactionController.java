@@ -1,5 +1,6 @@
 package com.rslima.ricash.ledgers.transactions;
 
+import java.util.List;
 import com.rslima.ricash.ledgers.DateRanges;
 import com.rslima.ricash.web.PagedModels;
 import com.rslima.ricash.web.Pages;
@@ -7,6 +8,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
+import org.springframework.hateoas.CollectionModel;
 import org.springframework.hateoas.EntityModel;
 import org.springframework.hateoas.PagedModel;
 import org.springframework.http.MediaType;
@@ -72,22 +74,22 @@ public class TransactionController {
     }
 
     @GetMapping("/descriptions")
-    public java.util.List<String> getDistinctDescriptions(
+    public List<String> getDistinctDescriptions(
             @PathVariable String ledgerSlug,
             JwtAuthenticationToken principal) {
         return transactionService.getDistinctDescriptions(userId(principal), ledgerSlug);
     }
 
     @GetMapping("/templates")
-    public org.springframework.hateoas.CollectionModel<EntityModel<TransactionResource>> getTransactionTemplates(
+    public CollectionModel<EntityModel<TransactionResource>> getTransactionTemplates(
             @PathVariable String ledgerSlug,
             JwtAuthenticationToken principal) {
-        java.util.List<EntityModel<TransactionResource>> resources = transactionService
+        List<EntityModel<TransactionResource>> resources = transactionService
                 .getTransactionTemplates(userId(principal), ledgerSlug)
                 .stream()
                 .map(transaction -> toEntityModel(transaction, ledgerSlug, principal))
                 .toList();
-        return org.springframework.hateoas.CollectionModel.of(resources);
+        return CollectionModel.of(resources);
     }
 
     @GetMapping(value = "/monthly-report", produces = { MediaType.APPLICATION_JSON_VALUE, JSON_API_VALUE })

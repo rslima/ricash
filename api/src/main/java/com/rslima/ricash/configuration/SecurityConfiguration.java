@@ -12,12 +12,12 @@ import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
 import org.springframework.security.oauth2.core.OAuth2TokenValidator;
 import org.springframework.security.oauth2.jwt.*;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
-import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import java.util.Collection;
 import java.util.List;
 
 import static org.springframework.http.HttpMethod.GET;
@@ -70,13 +70,11 @@ public class SecurityConfiguration {
 
     @Bean
     public Converter<Jwt, AbstractAuthenticationToken> jwtConverter() {
-        final var grantedAuthoritiesConverter = new JwtGrantedAuthoritiesConverter();
-        grantedAuthoritiesConverter.setAuthoritiesClaimName(jwtClaimProperties.authoritiesClaimName());
-        grantedAuthoritiesConverter.setAuthorityPrefix(jwtClaimProperties.authorityPrefix());
-
         JwtAuthenticationConverter jwtAuthenticationConverter = new JwtAuthenticationConverter();
         jwtAuthenticationConverter.setPrincipalClaimName(jwtClaimProperties.principalClaimName());
-        jwtAuthenticationConverter.setJwtGrantedAuthoritiesConverter(grantedAuthoritiesConverter);
+        // No role-based access control (roles were dropped in V10): every
+        // authenticated user has the same rights, so no authorities are mapped.
+        jwtAuthenticationConverter.setJwtGrantedAuthoritiesConverter(jwt -> List.of());
 
         return jwtAuthenticationConverter;
     }
@@ -91,7 +89,7 @@ public class SecurityConfiguration {
         if (audience != null && !audience.isBlank()) {
             OAuth2TokenValidator<Jwt> audienceValidator = new JwtClaimValidator<>(
                     "aud",
-                    aud -> aud != null && ((java.util.Collection<?>) aud).contains(audience)
+                    aud -> aud != null && ((Collection<?>) aud).contains(audience)
             );
             OAuth2TokenValidator<Jwt> defaultValidator = JwtValidators.createDefaultWithIssuer(issuerUri);
             decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(defaultValidator, audienceValidator));
