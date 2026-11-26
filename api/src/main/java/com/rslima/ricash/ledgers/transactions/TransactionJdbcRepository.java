@@ -170,7 +170,7 @@ public class TransactionJdbcRepository implements TransactionRepository {
                             SELECT id FROM accounts
                             WHERE id = :accountId AND ledger_id = :ledgerId
 
-                            UNION ALL
+                            UNION
 
                             SELECT a.id FROM accounts a
                             INNER JOIN account_tree at ON a.parent_account_id = at.id
@@ -203,7 +203,7 @@ public class TransactionJdbcRepository implements TransactionRepository {
                             SELECT id FROM accounts
                             WHERE id = :accountId AND ledger_id = :ledgerId
 
-                            UNION ALL
+                            UNION
 
                             SELECT a.id FROM accounts a
                             INNER JOIN account_tree at ON a.parent_account_id = at.id
@@ -258,7 +258,7 @@ public class TransactionJdbcRepository implements TransactionRepository {
                             SELECT id, currency FROM accounts
                             WHERE id = :accountId AND ledger_id = :ledgerId
 
-                            UNION ALL
+                            UNION
 
                             SELECT a.id, a.currency FROM accounts a
                             INNER JOIN account_tree at ON a.parent_account_id = at.id
@@ -306,7 +306,7 @@ public class TransactionJdbcRepository implements TransactionRepository {
                             SELECT id FROM accounts
                             WHERE id = :accountId AND ledger_id = :ledgerId
 
-                            UNION ALL
+                            UNION
 
                             SELECT a.id FROM accounts a
                             INNER JOIN account_tree at ON a.parent_account_id = at.id
@@ -388,9 +388,7 @@ public class TransactionJdbcRepository implements TransactionRepository {
                 .update();
 
         // Delete existing entries
-        jdbcClient.sql("DELETE FROM transaction_entries WHERE transaction_id = :transactionId")
-                .param("transactionId", transaction.id())
-                .update();
+        deleteEntries(ledgerId, transaction.id());
 
         // Insert new entries
         insertEntries(transaction);
@@ -427,13 +425,28 @@ public class TransactionJdbcRepository implements TransactionRepository {
     @Override
     public void delete(String ledgerId, String transactionId) {
         // First delete entries
-        jdbcClient.sql("DELETE FROM transaction_entries WHERE transaction_id = :transactionId")
-                .param("transactionId", transactionId)
-                .update();
+        deleteEntries(ledgerId, transactionId);
 
         // Then delete transaction
         jdbcClient.sql("DELETE FROM transactions WHERE id = :id AND ledger_id = :ledgerId")
                 .param("id", transactionId)
+                .param("ledgerId", ledgerId)
+                .update();
+    }
+
+    /**
+     * Deletes a transaction's entries, scoped through the parent transaction's
+     * ledger so an id from another ledger can never touch its entries.
+     */
+    private void deleteEntries(String ledgerId, String transactionId) {
+        jdbcClient.sql("""
+                        DELETE FROM transaction_entries te
+                        USING transactions t
+                        WHERE te.transaction_id = t.id
+                          AND t.id = :transactionId
+                          AND t.ledger_id = :ledgerId
+                        """)
+                .param("transactionId", transactionId)
                 .param("ledgerId", ledgerId)
                 .update();
     }
@@ -687,7 +700,7 @@ public class TransactionJdbcRepository implements TransactionRepository {
                             FROM accounts
                             WHERE ledger_id = :ledgerId
 
-                            UNION ALL
+                            UNION
 
                             SELECT a.id, at.root_id
                             FROM accounts a
@@ -734,7 +747,7 @@ public class TransactionJdbcRepository implements TransactionRepository {
                             FROM accounts
                             WHERE ledger_id = :ledgerId
 
-                            UNION ALL
+                            UNION
 
                             SELECT a.id, at.root_id
                             FROM accounts a

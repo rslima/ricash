@@ -147,9 +147,12 @@ public class LedgerConfiguration {
             TransactionRepository transactionRepository,
             LedgerAccess ledgerAccess,
             AccountRepository accountRepository,
-            ExchangeRateService exchangeRateService
+            ExchangeRateService exchangeRateService,
+            EnvelopeRepository envelopeRepository,
+            InstrumentRepository instrumentRepository
     ) {
-        return new TransactionServiceBean(transactionRepository, ledgerAccess, accountRepository, exchangeRateService);
+        return new TransactionServiceBean(transactionRepository, ledgerAccess, accountRepository, exchangeRateService,
+                envelopeRepository, instrumentRepository);
     }
 
     @Bean
@@ -188,9 +191,11 @@ public class LedgerConfiguration {
             EnvelopeRepository envelopeRepository,
             EnvelopeAllocationRepository allocationRepository,
             EnvelopeAccountMappingRepository mappingRepository,
-            LedgerAccess ledgerAccess
+            LedgerAccess ledgerAccess,
+            AccountRepository accountRepository
     ) {
-        return new EnvelopeServiceBean(envelopeRepository, allocationRepository, mappingRepository, ledgerAccess);
+        return new EnvelopeServiceBean(envelopeRepository, allocationRepository, mappingRepository, ledgerAccess,
+                accountRepository);
     }
 
     @Bean

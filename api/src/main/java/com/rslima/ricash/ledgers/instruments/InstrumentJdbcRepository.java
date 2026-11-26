@@ -10,8 +10,10 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 @RequiredArgsConstructor
 @Slf4j
@@ -32,6 +34,21 @@ public class InstrumentJdbcRepository implements InstrumentRepository {
             .param("ledgerId", ledgerId)
             .query(this::mapRow)
             .optional();
+    }
+
+    @Override
+    public Set<String> findIdsIn(String ledgerId, Collection<String> ids) {
+        if (ids.isEmpty()) {
+            return Set.of();
+        }
+        return Set.copyOf(jdbcClient.sql("""
+                SELECT id FROM instruments
+                WHERE ledger_id = :ledgerId AND id IN (:ids)
+                """)
+            .param("ledgerId", ledgerId)
+            .param("ids", List.copyOf(ids))
+            .query(String.class)
+            .list());
     }
 
     @Override

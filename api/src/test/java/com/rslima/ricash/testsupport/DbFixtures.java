@@ -165,6 +165,17 @@ public class DbFixtures {
                 .update();
     }
 
+    public void insertEnvelopeAccountMapping(String envelopeId, String accountId) {
+        jdbcClient.sql("""
+                        INSERT INTO envelope_account_mappings (id, envelope_id, account_id)
+                        VALUES (:id, :envelopeId, :accountId)
+                        """)
+                .param("id", UUID.randomUUID().toString())
+                .param("envelopeId", envelopeId)
+                .param("accountId", accountId)
+                .update();
+    }
+
     public void insertInstrument(String id, String ledgerId, String symbol, String name, String type, String currency) {
         insertInstrument(id, ledgerId, symbol, name, type, currency, null, "ACTIVE");
     }

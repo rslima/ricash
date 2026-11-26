@@ -10,8 +10,10 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 @RequiredArgsConstructor
 @Slf4j
@@ -114,6 +116,21 @@ public class EnvelopeJdbcRepository implements EnvelopeRepository {
                 .query(DBEnvelope.class)
                 .optional()
                 .map(this::toEnvelope);
+    }
+
+    @Override
+    public Set<String> findIdsIn(String ledgerId, Collection<String> envelopeIds) {
+        if (envelopeIds.isEmpty()) {
+            return Set.of();
+        }
+        return Set.copyOf(jdbcClient.sql("""
+                        SELECT id FROM envelopes
+                        WHERE ledger_id = :ledgerId AND id IN (:envelopeIds)
+                        """)
+                .param("ledgerId", ledgerId)
+                .param("envelopeIds", List.copyOf(envelopeIds))
+                .query(String.class)
+                .list());
     }
 
     @Override

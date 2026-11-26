@@ -17,6 +17,12 @@ public final class AccountTreeSql {
     /**
      * Recursive CTE linking every account of a ledger (param {@code :ledgerId})
      * to itself and all of its descendants via {@code root_id}.
+     *
+     * <p>Every account-tree CTE in the codebase uses {@code UNION}, not
+     * {@code UNION ALL}: on a valid tree both return the same rows, but
+     * {@code UNION} discards repeats, so a parent cycle (which the services
+     * and V15 reject, but older data could hold) terminates instead of
+     * recursing forever.
      */
     public static final String LEDGER_ACCOUNT_TREE_CTE = """
             WITH RECURSIVE account_tree AS (
@@ -25,7 +31,7 @@ public final class AccountTreeSql {
                 FROM accounts
                 WHERE ledger_id = :ledgerId
 
-                UNION ALL
+                UNION
 
                 -- Recursive case: find children and link them to the same root
                 SELECT a.id, at.root_id

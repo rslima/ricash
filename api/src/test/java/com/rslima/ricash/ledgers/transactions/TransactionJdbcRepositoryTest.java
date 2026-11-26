@@ -84,10 +84,11 @@ class TransactionJdbcRepositoryTest {
 
     @Test
     void create_failingEntryInsert_leavesNoOrphanTransaction() {
-        // The ghost envelope passes service validation (envelopes are not checked
-        // there) but violates the FK on the entry INSERT, after the header INSERT.
+        // A balanced 10^18 amount passes the service (the @Digits limit lives on
+        // the web request) but overflows numeric(20,2) on the entry INSERT,
+        // after the header INSERT.
         assertThatThrownBy(() ->
-                transactionService.create(USER, LEDGER_SLUG, createRequest("Broken", "100.00", "ghost-envelope")))
+                transactionService.create(USER, LEDGER_SLUG, createRequest("Broken", OVERFLOWING_AMOUNT, null)))
                 .isInstanceOf(DataAccessException.class);
 
         assertThat(transactionCount()).as("orphan transaction header must be rolled back").isZero();
@@ -99,10 +100,10 @@ class TransactionJdbcRepositoryTest {
     void update_failingEntryInsert_preservesOriginalEntriesAndBalances() {
         var created = transactionService.create(USER, LEDGER_SLUG, createRequest("Salary", "100.00", null));
 
-        // update = UPDATE header + DELETE all entries + re-INSERT; the ghost
-        // envelope makes the re-INSERT fail after the delete already ran.
+        // update = UPDATE header + DELETE all entries + re-INSERT; the
+        // overflowing amount makes the re-INSERT fail after the delete already ran.
         assertThatThrownBy(() ->
-                transactionService.update(USER, LEDGER_SLUG, created.id(), updateRequest("Broken", "250.00", "ghost-envelope")))
+                transactionService.update(USER, LEDGER_SLUG, created.id(), updateRequest("Broken", OVERFLOWING_AMOUNT, null)))
                 .isInstanceOf(DataAccessException.class);
 
         var found = transactionService.find(USER, LEDGER_SLUG, created.id()).orElseThrow();
@@ -114,6 +115,9 @@ class TransactionJdbcRepositoryTest {
                 .as("trigger-maintained balance summary must be unchanged")
                 .isEqualByComparingTo("100.00");
     }
+
+    /** 19 integer digits: one more than numeric(20,2) holds. */
+    private static final String OVERFLOWING_AMOUNT = "1000000000000000000.00";
 
     private CreateTransactionRequest createRequest(String description, String amount, String envelopeId) {
         return new CreateTransactionRequest(LocalDate.of(2026, 1, 10), description, List.of(

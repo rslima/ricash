@@ -23,6 +23,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -138,6 +139,83 @@ class AccountServiceBeanTest {
 
         assertThatThrownBy(() -> accountService.update(USER_ID, LEDGER_SLUG, ACCOUNT_ID, request))
                 .isInstanceOf(AccountNotFoundException.class);
+    }
+
+    @Test
+    void create_parentInLedger_isAccepted() {
+        var request = new CreateAccountRequest("Groceries", null, "USD", AccountType.EXPENSE, "parent-id");
+
+        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
+        when(accountRepository.findRefsByIds(LEDGER_ID, List.of("parent-id")))
+                .thenReturn(List.of(new AccountRef("parent-id", "Food", "USD")));
+        when(slugService.slugify("Groceries")).thenReturn("groceries");
+        when(accountRepository.create(eq(LEDGER_ID), any(Account.class))).thenAnswer(inv -> inv.getArgument(1));
+
+        var result = accountService.create(USER_ID, LEDGER_SLUG, request);
+
+        assertThat(result.parentAccountId()).isEqualTo("parent-id");
+    }
+
+    @Test
+    void create_parentOutsideLedger_throwsWithoutWriting() {
+        var request = new CreateAccountRequest("Groceries", null, "USD", AccountType.EXPENSE, "foreign-id");
+
+        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
+        when(accountRepository.findRefsByIds(LEDGER_ID, List.of("foreign-id"))).thenReturn(List.of());
+
+        assertThatThrownBy(() -> accountService.create(USER_ID, LEDGER_SLUG, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Parent account not found: foreign-id");
+        verify(accountRepository, never()).create(any(), any());
+    }
+
+    @Test
+    void update_selfAsParent_throwsWithoutWriting() {
+        var request = new UpdateAccountRequest("Checking", null, AccountType.ASSET, "USD", ACCOUNT_ID);
+
+        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
+        when(accountRepository.findById(LEDGER_ID, ACCOUNT_ID)).thenReturn(Optional.of(createTestAccount()));
+        when(accountRepository.findRefsByIds(LEDGER_ID, List.of(ACCOUNT_ID)))
+                .thenReturn(List.of(new AccountRef(ACCOUNT_ID, "Checking", "USD")));
+        when(accountRepository.findChildAccountIds(LEDGER_ID, ACCOUNT_ID)).thenReturn(List.of());
+
+        assertThatThrownBy(() -> accountService.update(USER_ID, LEDGER_SLUG, ACCOUNT_ID, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("cannot be its own parent");
+        verify(accountRepository, never()).update(any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void update_descendantAsParent_throwsWithoutWriting() {
+        var request = new UpdateAccountRequest("Checking", null, AccountType.ASSET, "USD", "grandchild-id");
+
+        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
+        when(accountRepository.findById(LEDGER_ID, ACCOUNT_ID)).thenReturn(Optional.of(createTestAccount()));
+        when(accountRepository.findRefsByIds(LEDGER_ID, List.of("grandchild-id")))
+                .thenReturn(List.of(new AccountRef("grandchild-id", "Leaf", "USD")));
+        when(accountRepository.findChildAccountIds(LEDGER_ID, ACCOUNT_ID)).thenReturn(List.of("child-id"));
+        when(accountRepository.findChildAccountIds(LEDGER_ID, "child-id")).thenReturn(List.of("grandchild-id"));
+        when(accountRepository.findChildAccountIds(LEDGER_ID, "grandchild-id")).thenReturn(List.of());
+
+        assertThatThrownBy(() -> accountService.update(USER_ID, LEDGER_SLUG, ACCOUNT_ID, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("descendants");
+        verify(accountRepository, never()).update(any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void delete_storedCycle_terminates() {
+        // Data written before V15 / the parent checks could hold a cycle; the
+        // subtree walk must still finish instead of recursing forever.
+        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
+        when(accountRepository.findById(LEDGER_ID, ACCOUNT_ID)).thenReturn(Optional.of(createTestAccount()));
+        when(accountRepository.findChildAccountIds(LEDGER_ID, ACCOUNT_ID)).thenReturn(List.of("child-id"));
+        when(accountRepository.findChildAccountIds(LEDGER_ID, "child-id")).thenReturn(List.of(ACCOUNT_ID));
+
+        accountService.delete(USER_ID, LEDGER_SLUG, ACCOUNT_ID);
+
+        verify(accountRepository).delete(LEDGER_ID, "child-id");
+        verify(accountRepository).delete(LEDGER_ID, ACCOUNT_ID);
     }
 
     @Test

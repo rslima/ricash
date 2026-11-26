@@ -33,7 +33,7 @@ public class LedgerJdbcRepository implements LedgerRepository {
                                SELECT id, id as root_id, ledger_id
                                FROM accounts
 
-                               UNION ALL
+                               UNION
 
                                -- Recursive case: find children and link them to the same root
                                SELECT a.id, at.root_id, a.ledger_id

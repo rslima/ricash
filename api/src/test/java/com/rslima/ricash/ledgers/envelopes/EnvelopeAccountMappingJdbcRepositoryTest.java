@@ -57,10 +57,11 @@ class EnvelopeAccountMappingJdbcRepositoryTest {
     void setEnvelopeAccounts_failingInsert_preservesExistingMappings() {
         envelopeService.setEnvelopeAccounts(USER, LEDGER_SLUG, "food", List.of("acct-1"));
 
-        // "ghost-acct" violates the account FK after the existing mappings were
-        // already deleted and acct-2 already inserted.
+        // The repeated "acct-2" passes the ownership check but violates
+        // unique(account_id) on its second INSERT, after the existing mappings
+        // were already deleted and the first acct-2 row already inserted.
         assertThatThrownBy(() ->
-                envelopeService.setEnvelopeAccounts(USER, LEDGER_SLUG, "food", List.of("acct-2", "ghost-acct")))
+                envelopeService.setEnvelopeAccounts(USER, LEDGER_SLUG, "food", List.of("acct-2", "acct-2")))
                 .isInstanceOf(DataAccessException.class);
 
         assertThat(envelopeService.getEnvelopeAccounts(USER, LEDGER_SLUG, "food"))
