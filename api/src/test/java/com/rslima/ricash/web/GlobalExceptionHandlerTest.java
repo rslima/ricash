@@ -19,6 +19,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -27,12 +29,15 @@ import static com.toedter.spring.hateoas.jsonapi.MediaTypes.JSON_API_VALUE;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.not;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -138,5 +143,77 @@ class GlobalExceptionHandlerTest {
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.errors[0].status", is("500")))
                 .andExpect(jsonPath("$.errors[0].detail", is("An unexpected error occurred")));
+    }
+
+    @Test
+    void duplicateKey_returns409WithoutLeakingSql() throws Exception {
+        // e.g. two concurrent creates racing past SlugService.uniqueSlug's probe
+        when(accountService.create(any(), any(), any())).thenThrow(new DuplicateKeyException(
+                "PreparedStatementCallback; ERROR: duplicate key value violates unique constraint \"uk_accounts_slug\""));
+
+        mockMvc.perform(post("/v1/ledgers/main/accounts")
+                        .with(jwtFor(USER))
+                        .contentType("application/json")
+                        .accept(JSON_API_VALUE)
+                        .content("{\"name\":\"Cash\",\"currency\":\"USD\",\"type\":\"ASSET\"}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.errors[0].status", is("409")))
+                .andExpect(jsonPath("$.errors[0].detail", not(containsString("constraint"))));
+    }
+
+    @Test
+    void otherIntegrityViolation_returns409WithoutLeakingSql() throws Exception {
+        doThrow(new DataIntegrityViolationException(
+                "ERROR: update or delete on table \"accounts\" violates foreign key constraint"))
+                .when(accountService).delete(any(), any(), any());
+
+        mockMvc.perform(delete("/v1/ledgers/main/accounts/acct-1").with(jwtFor(USER)).accept(JSON_API_VALUE))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.errors[0].status", is("409")))
+                .andExpect(jsonPath("$.errors[0].detail", not(containsString("foreign key"))));
+    }
+
+    @Test
+    void malformedJson_returns400JsonApiError() throws Exception {
+        mockMvc.perform(post("/v1/ledgers/main/accounts")
+                        .with(jwtFor(USER))
+                        .contentType("application/json")
+                        .accept(JSON_API_VALUE)
+                        .content("{\"name\":"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].status", is("400")))
+                .andExpect(jsonPath("$.errors[0].title", is("Bad Request")));
+    }
+
+    @Test
+    void missingRequiredParam_returns400JsonApiError() throws Exception {
+        mockMvc.perform(get("/v1/ledgers/main/transactions/monthly-report")
+                        .param("month", "1")
+                        .with(jwtFor(USER)).accept(JSON_API_VALUE))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].status", is("400")))
+                .andExpect(jsonPath("$.errors[0].detail", containsString("year")));
+    }
+
+    @Test
+    void paramTypeMismatch_returns400JsonApiError() throws Exception {
+        mockMvc.perform(get("/v1/ledgers/main/transactions/monthly-report")
+                        .param("year", "abc").param("month", "1")
+                        .with(jwtFor(USER)).accept(JSON_API_VALUE))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].status", is("400")))
+                .andExpect(jsonPath("$.errors[0].detail", containsString("year")));
+    }
+
+    @Test
+    void unsupportedMethod_returns405JsonApiErrorAndKeepsAllowHeader() throws Exception {
+        mockMvc.perform(patch("/v1/ledgers/main/accounts/acct-1")
+                        .with(jwtFor(USER))
+                        .contentType("application/json")
+                        .accept(JSON_API_VALUE)
+                        .content("{}"))
+                .andExpect(status().isMethodNotAllowed())
+                .andExpect(header().exists("Allow"))
+                .andExpect(jsonPath("$.errors[0].status", is("405")));
     }
 }
