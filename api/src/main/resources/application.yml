@@ -13,6 +13,12 @@ spring:
       connect-timeout: 5s
       read-timeout: 10s
 
+  jdbc:
+    template:
+      # Backstop for runaway queries (e.g. a recursive CTE gone wrong): the
+      # driver cancels any statement issued through JdbcClient after 30s.
+      query-timeout: 30s
+
   datasource:
     url: jdbc:postgresql://localhost:5432/ricash
     username: ricash
