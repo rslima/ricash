@@ -22,6 +22,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -39,6 +41,9 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class TransactionServiceBeanTest {
+
+    private static final Instant FIXED_NOW = Instant.parse("2026-01-15T12:00:00Z");
+    private static final Clock CLOCK = Clock.fixed(FIXED_NOW, ZoneOffset.UTC);
 
     @Mock
     private TransactionRepository transactionRepository;
@@ -69,7 +74,7 @@ class TransactionServiceBeanTest {
     @BeforeEach
     void setUp() {
         transactionService = new TransactionServiceBean(transactionRepository, new LedgerAccess(ledgerRepository), accountRepository,
-                exchangeRateService, envelopeRepository, instrumentRepository);
+                exchangeRateService, envelopeRepository, instrumentRepository, CLOCK);
     }
 
     @Test

@@ -11,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Collection;
@@ -27,6 +28,7 @@ public class TransactionExportServiceBean implements TransactionExportService {
 
     private final TransactionRepository transactionRepository;
     private final LedgerAccess ledgerAccess;
+    private final Clock clock;
 
     // REPEATABLE_READ (Postgres snapshot isolation) makes the entry list and
     // the OFX balance query read the same committed state, so an exported
@@ -95,7 +97,7 @@ public class TransactionExportServiceBean implements TransactionExportService {
                 ledger.id(), statementAccounts.stream().map(Account::id).toList(), toExclusive);
 
         return OfxTransactionExporter.generate(
-                statementAccounts, rowsByAccountId, request.from(), request.to(), balances, Instant.now());
+                statementAccounts, rowsByAccountId, request.from(), request.to(), balances, Instant.now(clock));
     }
 
     /**

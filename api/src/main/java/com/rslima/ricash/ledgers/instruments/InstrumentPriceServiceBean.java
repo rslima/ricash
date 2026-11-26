@@ -10,6 +10,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
@@ -25,6 +26,7 @@ public class InstrumentPriceServiceBean implements InstrumentPriceService {
     private final LedgerAccess ledgerAccess;
     private final EodhdPriceService eodhdPriceService;
     private final InstrumentPriceProviderProperties properties;
+    private final Clock clock;
 
     private static final int PRICE_SCALE = 6;
     private static final String SOURCE_EODHD = "EODHD";
@@ -66,7 +68,7 @@ public class InstrumentPriceServiceBean implements InstrumentPriceService {
             price.setScale(PRICE_SCALE, RoundingMode.HALF_UP),
             effectiveDate,
             source,
-            Instant.now()
+            Instant.now(clock)
         );
 
         return instrumentPriceRepository.save(instrumentPrice);
@@ -84,7 +86,7 @@ public class InstrumentPriceServiceBean implements InstrumentPriceService {
             throw new IllegalArgumentException(
                 "Instrument %s has no ISIN; set one before fetching prices".formatted(instrument.symbol()));
         }
-        if (from != null && from.isAfter(LocalDate.now())) {
+        if (from != null && from.isAfter(LocalDate.now(clock))) {
             throw new IllegalArgumentException("Cannot backfill prices from a future date: " + from);
         }
         if (from != null && from.isBefore(EPOCH_FLOOR)) {
@@ -135,7 +137,7 @@ public class InstrumentPriceServiceBean implements InstrumentPriceService {
                 quote.price().setScale(PRICE_SCALE, RoundingMode.HALF_UP),
                 quote.date(),
                 SOURCE_EODHD,
-                Instant.now()
+                Instant.now(clock)
             )))
             .toList();
 

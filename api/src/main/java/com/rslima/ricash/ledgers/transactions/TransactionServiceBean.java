@@ -16,6 +16,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.*;
@@ -31,6 +32,7 @@ public class TransactionServiceBean implements TransactionService {
     private final ExchangeRateService exchangeRateService;
     private final EnvelopeRepository envelopeRepository;
     private final InstrumentRepository instrumentRepository;
+    private final Clock clock;
 
     @Override
     public Page<Transaction> listLedgerTransactions(String userId, String ledgerSlug, Pageable pageRequest) {
@@ -91,7 +93,7 @@ public class TransactionServiceBean implements TransactionService {
         final var transaction = new Transaction(
                 UuidCreator.getTimeOrderedEpoch().toString(),
                 request.date(),
-                Instant.now(),
+                Instant.now(clock),
                 request.description(),
                 creditEntries,
                 debitEntries

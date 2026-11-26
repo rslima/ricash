@@ -9,6 +9,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -19,6 +20,7 @@ public class InstrumentServiceBean implements InstrumentService {
 
     private final InstrumentRepository instrumentRepository;
     private final LedgerAccess ledgerAccess;
+    private final Clock clock;
 
     @Override
     public Optional<Instrument> find(String userId, String ledgerSlug, String instrumentId) {
@@ -61,7 +63,7 @@ public class InstrumentServiceBean implements InstrumentService {
             market,
             isin,
             InstrumentStatus.ACTIVE,
-            Instant.now()
+            Instant.now(clock)
         );
 
         return instrumentRepository.save(instrument);

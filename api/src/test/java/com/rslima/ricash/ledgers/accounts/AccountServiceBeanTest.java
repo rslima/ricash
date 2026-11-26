@@ -14,6 +14,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
@@ -29,6 +31,9 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class AccountServiceBeanTest {
+
+    private static final Instant FIXED_NOW = Instant.parse("2026-01-15T12:00:00Z");
+    private static final Clock CLOCK = Clock.fixed(FIXED_NOW, ZoneOffset.UTC);
 
     @Mock
     private AccountRepository accountRepository;
@@ -48,7 +53,7 @@ class AccountServiceBeanTest {
 
     @BeforeEach
     void setUp() {
-        accountService = new AccountServiceBean(accountRepository, new LedgerAccess(ledgerRepository), slugService);
+        accountService = new AccountServiceBean(accountRepository, new LedgerAccess(ledgerRepository), slugService, CLOCK);
     }
 
     @Test
@@ -96,6 +101,7 @@ class AccountServiceBeanTest {
         assertThat(captured.name()).isEqualTo("Checking");
         assertThat(captured.status()).isEqualTo(AccountStatus.ACTIVE);
         assertThat(captured.balance()).isEqualByComparingTo(BigDecimal.ZERO);
+        assertThat(captured.createdAt()).isEqualTo(FIXED_NOW);
     }
 
     @Test

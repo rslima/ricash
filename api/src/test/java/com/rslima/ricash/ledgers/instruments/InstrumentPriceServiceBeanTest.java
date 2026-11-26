@@ -13,6 +13,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -29,6 +31,9 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class InstrumentPriceServiceBeanTest {
+
+    private static final Instant FIXED_NOW = Instant.parse("2026-01-15T12:00:00Z");
+    private static final Clock CLOCK = Clock.fixed(FIXED_NOW, ZoneOffset.UTC);
 
     @Mock
     private InstrumentPriceRepository instrumentPriceRepository;
@@ -55,7 +60,7 @@ class InstrumentPriceServiceBeanTest {
     void setUp() {
         priceService = new InstrumentPriceServiceBean(
                 instrumentPriceRepository, instrumentRepository, new LedgerAccess(ledgerRepository),
-                eodhdPriceService, new InstrumentPriceProviderProperties(null, null, 0L));
+                eodhdPriceService, new InstrumentPriceProviderProperties(null, null, 0L), CLOCK);
     }
 
     private void givenLedgerExists() {
@@ -201,7 +206,7 @@ class InstrumentPriceServiceBeanTest {
         givenInstrumentInLedger(ISIN);
 
         assertThatThrownBy(() -> priceService.fetchPrices(USER_ID, LEDGER_SLUG, INSTRUMENT_ID,
-                LocalDate.now().plusDays(1)))
+                LocalDate.now(CLOCK).plusDays(1)))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("future");
         verifyNoInteractions(eodhdPriceService);
@@ -269,7 +274,7 @@ class InstrumentPriceServiceBeanTest {
     void refreshAllActivePrices_interrupted_abortsSweepAndRestoresFlag() {
         var throttled = new InstrumentPriceServiceBean(
                 instrumentPriceRepository, instrumentRepository, new LedgerAccess(ledgerRepository),
-                eodhdPriceService, new InstrumentPriceProviderProperties(null, null, 5L));
+                eodhdPriceService, new InstrumentPriceProviderProperties(null, null, 5L), CLOCK);
         when(instrumentRepository.findAllActiveWithIsinSystemWide()).thenReturn(List.of(
                 instrumentWithIsin("instr-1", "ISIN000000A1"),
                 instrumentWithIsin("instr-2", "ISIN000000B2")));

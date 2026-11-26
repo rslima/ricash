@@ -112,7 +112,7 @@ public class ExchangeRateServiceBean implements ExchangeRateService {
             rate.setScale(RATE_SCALE, RoundingMode.HALF_UP),
             effectiveDate,
             source,
-            Instant.now()
+            Instant.now(clock)
         );
 
         return exchangeRateRepository.save(exchangeRate);

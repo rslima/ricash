@@ -11,6 +11,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -23,6 +25,9 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class InstrumentServiceBeanTest {
+
+    private static final Instant FIXED_NOW = Instant.parse("2026-01-15T12:00:00Z");
+    private static final Clock CLOCK = Clock.fixed(FIXED_NOW, ZoneOffset.UTC);
 
     @Mock
     private InstrumentRepository instrumentRepository;
@@ -39,7 +44,7 @@ class InstrumentServiceBeanTest {
 
     @BeforeEach
     void setUp() {
-        instrumentService = new InstrumentServiceBean(instrumentRepository, new LedgerAccess(ledgerRepository));
+        instrumentService = new InstrumentServiceBean(instrumentRepository, new LedgerAccess(ledgerRepository), CLOCK);
     }
 
     private void givenLedgerExists() {
