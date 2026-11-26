@@ -14,6 +14,7 @@ Ricash is a personal finance management application with a Spring Boot backend A
 - **Security**: OAuth2 Resource Server with JWT authentication (Keycloak in dev, Auth0 in prod)
 - **API Format**: JSON:API standard using spring-hateoas-jsonapi
 - **Build Tool**: Maven with Maven Wrapper (./mvnw)
+- **Runtime**: virtual threads (`spring.threads.virtual.enabled`) for request handling and `@Scheduled` tasks; prod logs one ECS JSON object per line (`application-prod.yml`)
 
 ### Frontend (frontend/)
 - **Framework**: React 19 with TypeScript 5.9, TanStack Query for server state
@@ -109,7 +110,7 @@ Services start automatically with `spring-boot:run` via spring-boot-docker-compo
 - Atomicity/ownership tests intentionally omit `@Transactional` on the test class so rollback behavior is observable
 
 ## Security & Authentication
-- All endpoints except GET /index.html and GET /actuator/health require authentication
+- All endpoints except GET /index.html, GET /actuator/health and the GET /actuator/health/liveness|readiness probes require authentication. Liveness ignores the database; `infra/app.tf` still health-checks `/actuator/health`, which includes it
 - Dev JWTs issued by Keycloak (issuer: http://localhost:9180/realms/Ricash); prod uses Auth0 with audience validation (`application-prod.yml`)
 - Stateless session management (no server-side sessions)
 - Controllers obtain the user id via `web/AuthenticatedUser.userId(principal)` (JWT principal claim `preferred_username`)

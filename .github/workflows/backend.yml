@@ -25,13 +25,10 @@ jobs:
           cache: 'maven'
           cache-dependency-path: 'api/pom.xml'
 
-      - name: Run tests
+      # verify already runs the full test suite and packages the jar.
+      - name: Build and test
         working-directory: api
         run: ./mvnw verify
-
-      - name: Build
-        working-directory: api
-        run: ./mvnw clean package -DskipTests
 
   deploy:
     needs: build

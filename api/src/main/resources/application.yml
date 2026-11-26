@@ -3,8 +3,21 @@ management:
     web:
       exposure:
         include: health
+  endpoint:
+    health:
+      # /actuator/health/liveness and /readiness. Liveness ignores the
+      # database, so a platform health check pointed at it restarts the app
+      # only when the app itself is broken, not during a DB outage.
+      probes:
+        enabled: true
 
 spring:
+  # Java 25: request handling and @Scheduled tasks run on virtual threads;
+  # blocking JDBC and RestClient calls no longer tie up platform threads.
+  threads:
+    virtual:
+      enabled: true
+
   flyway:
     enabled: on
 

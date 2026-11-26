@@ -42,7 +42,8 @@ public class SecurityConfiguration {
                 .authorizeHttpRequests(authorizeRequests ->
                         authorizeRequests
                                 .requestMatchers(GET, "/index.html").permitAll()
-                                .requestMatchers(GET, "/actuator/health").permitAll()
+                                .requestMatchers(GET, "/actuator/health",
+                                        "/actuator/health/liveness", "/actuator/health/readiness").permitAll()
                                 .anyRequest().authenticated())
                 .oauth2ResourceServer(rs -> rs.jwt(
                         jwt -> jwt.jwtAuthenticationConverter(jwtConverter())
