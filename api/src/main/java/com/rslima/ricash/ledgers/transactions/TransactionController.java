@@ -67,7 +67,8 @@ public class TransactionController {
         }
 
         return PagedModels.toPagedModel(transactionResources,
-                p -> methodOn(TransactionController.class).listTransactions(ledgerSlug, principal, p, size, null, null, null, null));
+                p -> methodOn(TransactionController.class)
+                        .listTransactions(ledgerSlug, principal, p, size, accountId, description, year, month));
     }
 
     @GetMapping("/descriptions")

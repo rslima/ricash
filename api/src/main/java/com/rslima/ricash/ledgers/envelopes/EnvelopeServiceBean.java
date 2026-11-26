@@ -1,6 +1,8 @@
 package com.rslima.ricash.ledgers.envelopes;
 
 import com.rslima.ricash.ledgers.LedgerAccess;
+import com.rslima.ricash.ledgers.accounts.AccountRef;
+import com.rslima.ricash.ledgers.accounts.AccountRepository;
 import com.rslima.ricash.ledgers.envelopes.EnvelopeAllocationRepository.MonthlyActivity;
 
 import com.github.f4b6a3.uuid.UuidCreator;
@@ -13,9 +15,13 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.SequencedSet;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @RequiredArgsConstructor
@@ -25,6 +31,7 @@ public class EnvelopeServiceBean implements EnvelopeService {
     private final EnvelopeAllocationRepository allocationRepository;
     private final EnvelopeAccountMappingRepository mappingRepository;
     private final LedgerAccess ledgerAccess;
+    private final AccountRepository accountRepository;
 
     @Override
     public Page<Envelope> listLedgerEnvelopes(String userId, String ledgerSlug, Pageable pageRequest) {
@@ -42,6 +49,7 @@ public class EnvelopeServiceBean implements EnvelopeService {
     @Transactional
     public Envelope create(String userId, String ledgerSlug, CreateEnvelopeRequest request) {
         final var ledger = ledgerAccess.requireLedger(userId, ledgerSlug);
+        validateParent(ledger.id(), null, request.parentEnvelopeId());
 
         final var envelope = new Envelope(
                 UuidCreator.getTimeOrderedEpoch().toString(),
@@ -65,6 +73,7 @@ public class EnvelopeServiceBean implements EnvelopeService {
 
         envelopeRepository.findById(ledger.id(), envelopeId)
                 .orElseThrow(() -> new EnvelopeNotFoundException(envelopeId));
+        validateParent(ledger.id(), envelopeId, request.parentEnvelopeId());
 
         return envelopeRepository.update(
                 ledger.id(),
@@ -87,8 +96,7 @@ public class EnvelopeServiceBean implements EnvelopeService {
                 .orElseThrow(() -> new EnvelopeNotFoundException(envelopeId));
 
         // Collect all envelope IDs to delete (envelope + all descendants)
-        List<String> envelopeIdsToDelete = new ArrayList<>();
-        collectEnvelopeIdsRecursively(ledger.id(), envelopeId, envelopeIdsToDelete);
+        List<String> envelopeIdsToDelete = new ArrayList<>(collectSubtreeIds(ledger.id(), envelopeId));
 
         // Check if any of the envelopes have transaction entries
         for (String id : envelopeIdsToDelete) {
@@ -98,7 +106,7 @@ public class EnvelopeServiceBean implements EnvelopeService {
         }
 
         // Delete in reverse order (children first)
-        java.util.Collections.reverse(envelopeIdsToDelete);
+        Collections.reverse(envelopeIdsToDelete);
         for (String id : envelopeIdsToDelete) {
             // Delete allocations first
             allocationRepository.deleteByEnvelopeId(id);
@@ -176,6 +184,17 @@ public class EnvelopeServiceBean implements EnvelopeService {
         envelopeRepository.findById(ledger.id(), envelopeId)
                 .orElseThrow(() -> new EnvelopeNotFoundException(envelopeId));
 
+        // The mapping rewrite deletes existing mappings by account id, so a
+        // foreign account id must be rejected before anything is touched.
+        Set<String> owned = accountRepository.findRefsByIds(ledger.id(), accountIds).stream()
+                .map(AccountRef::id)
+                .collect(Collectors.toSet());
+        for (String accountId : accountIds) {
+            if (!owned.contains(accountId)) {
+                throw new IllegalArgumentException("Account not found: " + accountId);
+            }
+        }
+
         mappingRepository.setMappingsForEnvelope(envelopeId, accountIds);
     }
 
@@ -246,11 +265,42 @@ public class EnvelopeServiceBean implements EnvelopeService {
         return year * 12 + (month - 1);
     }
 
-    private void collectEnvelopeIdsRecursively(String ledgerId, String envelopeId, List<String> envelopeIds) {
-        envelopeIds.add(envelopeId);
-        List<String> childIds = envelopeRepository.findChildEnvelopeIds(ledgerId, envelopeId);
-        for (String childId : childIds) {
-            collectEnvelopeIdsRecursively(ledgerId, childId, envelopeIds);
+    /**
+     * A parent must be another envelope of the same ledger, and (on update)
+     * not the envelope itself or one of its descendants: a parent cycle would
+     * make the subtree walk below never finish.
+     *
+     * @param envelopeId the envelope being updated, or null on create
+     */
+    private void validateParent(String ledgerId, String envelopeId, String parentEnvelopeId) {
+        if (parentEnvelopeId == null) {
+            return;
+        }
+        if (envelopeRepository.findIdsIn(ledgerId, List.of(parentEnvelopeId)).isEmpty()) {
+            throw new IllegalArgumentException("Parent envelope not found: " + parentEnvelopeId);
+        }
+        if (envelopeId != null && collectSubtreeIds(ledgerId, envelopeId).contains(parentEnvelopeId)) {
+            throw new IllegalArgumentException(
+                    "An envelope cannot be its own parent or be moved under one of its descendants");
+        }
+    }
+
+    /**
+     * The envelope and all of its descendants, parents before children. The
+     * visited set makes the walk terminate even if stored data holds a cycle.
+     */
+    private SequencedSet<String> collectSubtreeIds(String ledgerId, String envelopeId) {
+        SequencedSet<String> visited = new LinkedHashSet<>();
+        collectSubtreeIds(ledgerId, envelopeId, visited);
+        return visited;
+    }
+
+    private void collectSubtreeIds(String ledgerId, String envelopeId, SequencedSet<String> visited) {
+        if (!visited.add(envelopeId)) {
+            return;
+        }
+        for (String childId : envelopeRepository.findChildEnvelopeIds(ledgerId, envelopeId)) {
+            collectSubtreeIds(ledgerId, childId, visited);
         }
     }
 

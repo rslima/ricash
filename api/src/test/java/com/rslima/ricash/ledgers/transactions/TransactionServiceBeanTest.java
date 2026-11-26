@@ -10,7 +10,9 @@ import com.rslima.ricash.ledgers.accounts.AccountRef;
 import com.rslima.ricash.ledgers.accounts.AccountStatus;
 import com.rslima.ricash.ledgers.accounts.AccountType;
 import com.rslima.ricash.ledgers.accounts.AccountRepository;
+import com.rslima.ricash.ledgers.envelopes.EnvelopeRepository;
 import com.rslima.ricash.ledgers.exchangerates.ExchangeRateService;
+import com.rslima.ricash.ledgers.instruments.InstrumentRepository;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -25,6 +27,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -49,6 +52,12 @@ class TransactionServiceBeanTest {
     @Mock
     private ExchangeRateService exchangeRateService;
 
+    @Mock
+    private EnvelopeRepository envelopeRepository;
+
+    @Mock
+    private InstrumentRepository instrumentRepository;
+
     private TransactionServiceBean transactionService;
 
     private static final String USER_ID = "test-user";
@@ -59,7 +68,8 @@ class TransactionServiceBeanTest {
 
     @BeforeEach
     void setUp() {
-        transactionService = new TransactionServiceBean(transactionRepository, new LedgerAccess(ledgerRepository), accountRepository, exchangeRateService);
+        transactionService = new TransactionServiceBean(transactionRepository, new LedgerAccess(ledgerRepository), accountRepository,
+                exchangeRateService, envelopeRepository, instrumentRepository);
     }
 
     @Test
@@ -109,10 +119,21 @@ class TransactionServiceBeanTest {
     @Test
     void delete_delegatesToRepository() {
         when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
+        when(transactionRepository.findById(LEDGER_ID, TRANSACTION_ID)).thenReturn(Optional.of(createTestTransaction()));
 
         transactionService.delete(USER_ID, LEDGER_SLUG, TRANSACTION_ID);
 
         verify(transactionRepository).delete(LEDGER_ID, TRANSACTION_ID);
+    }
+
+    @Test
+    void delete_transactionNotInLedger_throwsWithoutDeleting() {
+        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
+        when(transactionRepository.findById(LEDGER_ID, TRANSACTION_ID)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> transactionService.delete(USER_ID, LEDGER_SLUG, TRANSACTION_ID))
+                .isInstanceOf(TransactionNotFoundException.class);
+        verify(transactionRepository, never()).delete(any(), any());
     }
 
     @Test
@@ -249,6 +270,61 @@ class TransactionServiceBeanTest {
         assertThatThrownBy(() -> transactionService.create(USER_ID, LEDGER_SLUG, request))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("must match account currency");
+    }
+
+    @Test
+    void create_envelopeOutsideLedger_throwsWithoutWriting() {
+        var account = createTestAccount("acc-1", "Checking", "USD");
+        var request = new CreateTransactionRequest(DATE, "Groceries", List.of(
+                new TransactionEntryRequest("acc-1", BigDecimal.TEN, "USD", null, null, TransactionEntryType.DEBIT, null, null, "foreign-env"),
+                new TransactionEntryRequest("acc-1", BigDecimal.TEN, "USD", null, null, TransactionEntryType.CREDIT, null, null, null)
+        ));
+
+        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
+        when(accountRepository.findRefsByIds(eq(LEDGER_ID), any())).thenReturn(List.of(ref(account)));
+        when(envelopeRepository.findIdsIn(LEDGER_ID, Set.of("foreign-env"))).thenReturn(Set.of());
+
+        assertThatThrownBy(() -> transactionService.create(USER_ID, LEDGER_SLUG, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Envelope not found: foreign-env");
+        verify(transactionRepository, never()).create(any(), any());
+    }
+
+    @Test
+    void create_instrumentOutsideLedger_throwsWithoutWriting() {
+        var account = createTestAccount("acc-1", "Brokerage", "USD");
+        var request = new CreateTransactionRequest(DATE, "Buy", List.of(
+                new TransactionEntryRequest("acc-1", BigDecimal.TEN, "USD", null, null, TransactionEntryType.DEBIT, "foreign-instr", BigDecimal.ONE, null),
+                new TransactionEntryRequest("acc-1", BigDecimal.TEN, "USD", null, null, TransactionEntryType.CREDIT, null, null, null)
+        ));
+
+        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
+        when(accountRepository.findRefsByIds(eq(LEDGER_ID), any())).thenReturn(List.of(ref(account)));
+        when(instrumentRepository.findIdsIn(LEDGER_ID, Set.of("foreign-instr"))).thenReturn(Set.of());
+
+        assertThatThrownBy(() -> transactionService.create(USER_ID, LEDGER_SLUG, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Instrument not found: foreign-instr");
+        verify(transactionRepository, never()).create(any(), any());
+    }
+
+    @Test
+    void create_ownEnvelopeAndInstrument_isAccepted() {
+        var account = createTestAccount("acc-1", "Brokerage", "USD");
+        var request = new CreateTransactionRequest(DATE, "Buy", List.of(
+                new TransactionEntryRequest("acc-1", BigDecimal.TEN, "USD", null, null, TransactionEntryType.DEBIT, "instr-1", BigDecimal.ONE, "env-1"),
+                new TransactionEntryRequest("acc-1", BigDecimal.TEN, "USD", null, null, TransactionEntryType.CREDIT, null, null, null)
+        ));
+
+        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
+        when(accountRepository.findRefsByIds(eq(LEDGER_ID), any())).thenReturn(List.of(ref(account)));
+        when(envelopeRepository.findIdsIn(LEDGER_ID, Set.of("env-1"))).thenReturn(Set.of("env-1"));
+        when(instrumentRepository.findIdsIn(LEDGER_ID, Set.of("instr-1"))).thenReturn(Set.of("instr-1"));
+        when(transactionRepository.findById(eq(LEDGER_ID), any())).thenReturn(Optional.of(createTestTransaction()));
+
+        transactionService.create(USER_ID, LEDGER_SLUG, request);
+
+        verify(transactionRepository).create(eq(LEDGER_ID), any(Transaction.class));
     }
 
     @Test

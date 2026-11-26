@@ -3,8 +3,10 @@ package com.rslima.ricash.ledgers.instruments;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Repository for managing financial instruments.
@@ -19,6 +21,15 @@ public interface InstrumentRepository {
      * @return the instrument if found in that ledger
      */
     Optional<Instrument> findById(String ledgerId, String id);
+
+    /**
+     * Returns the subset of {@code ids} that belong to the ledger.
+     *
+     * @param ledgerId the ledger the instruments must belong to
+     * @param ids candidate instrument IDs
+     * @return the IDs found in that ledger
+     */
+    Set<String> findIdsIn(String ledgerId, Collection<String> ids);
 
     /**
      * Finds an instrument by ledger ID and symbol.

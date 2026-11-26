@@ -3,6 +3,8 @@ package com.rslima.ricash.ledgers.envelopes;
 import com.rslima.ricash.ledgers.Ledger;
 import com.rslima.ricash.ledgers.LedgerAccess;
 import com.rslima.ricash.ledgers.LedgerRepository;
+import com.rslima.ricash.ledgers.accounts.AccountRef;
+import com.rslima.ricash.ledgers.accounts.AccountRepository;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -18,11 +20,14 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -41,6 +46,9 @@ class EnvelopeServiceBeanTest {
     @Mock
     private LedgerRepository ledgerRepository;
 
+    @Mock
+    private AccountRepository accountRepository;
+
     private EnvelopeServiceBean envelopeService;
 
     private static final String USER_ID = "test-user";
@@ -50,7 +58,8 @@ class EnvelopeServiceBeanTest {
 
     @BeforeEach
     void setUp() {
-        envelopeService = new EnvelopeServiceBean(envelopeRepository, allocationRepository, mappingRepository, new LedgerAccess(ledgerRepository));
+        envelopeService = new EnvelopeServiceBean(envelopeRepository, allocationRepository, mappingRepository,
+                new LedgerAccess(ledgerRepository), accountRepository);
     }
 
     @Test
@@ -119,6 +128,75 @@ class EnvelopeServiceBeanTest {
 
         assertThatThrownBy(() -> envelopeService.update(USER_ID, LEDGER_SLUG, ENVELOPE_ID, request))
                 .isInstanceOf(EnvelopeNotFoundException.class);
+    }
+
+    @Test
+    void create_parentOutsideLedger_throwsWithoutWriting() {
+        var request = new CreateEnvelopeRequest("Groceries", null, "USD", EnvelopeType.EXPENSE, "foreign-id");
+
+        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
+        when(envelopeRepository.findIdsIn(LEDGER_ID, List.of("foreign-id"))).thenReturn(Set.of());
+
+        assertThatThrownBy(() -> envelopeService.create(USER_ID, LEDGER_SLUG, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Parent envelope not found: foreign-id");
+        verify(envelopeRepository, never()).create(any(), any());
+    }
+
+    @Test
+    void update_selfAsParent_throwsWithoutWriting() {
+        var request = new UpdateEnvelopeRequest("Groceries", null, EnvelopeType.EXPENSE, "USD", EnvelopeStatus.ACTIVE, ENVELOPE_ID);
+
+        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
+        when(envelopeRepository.findById(LEDGER_ID, ENVELOPE_ID)).thenReturn(Optional.of(createTestEnvelope()));
+        when(envelopeRepository.findIdsIn(LEDGER_ID, List.of(ENVELOPE_ID))).thenReturn(Set.of(ENVELOPE_ID));
+        when(envelopeRepository.findChildEnvelopeIds(LEDGER_ID, ENVELOPE_ID)).thenReturn(List.of());
+
+        assertThatThrownBy(() -> envelopeService.update(USER_ID, LEDGER_SLUG, ENVELOPE_ID, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("cannot be its own parent");
+        verify(envelopeRepository, never()).update(any(), any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void update_descendantAsParent_throwsWithoutWriting() {
+        var request = new UpdateEnvelopeRequest("Groceries", null, EnvelopeType.EXPENSE, "USD", EnvelopeStatus.ACTIVE, "child-id");
+
+        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
+        when(envelopeRepository.findById(LEDGER_ID, ENVELOPE_ID)).thenReturn(Optional.of(createTestEnvelope()));
+        when(envelopeRepository.findIdsIn(LEDGER_ID, List.of("child-id"))).thenReturn(Set.of("child-id"));
+        when(envelopeRepository.findChildEnvelopeIds(LEDGER_ID, ENVELOPE_ID)).thenReturn(List.of("child-id"));
+        when(envelopeRepository.findChildEnvelopeIds(LEDGER_ID, "child-id")).thenReturn(List.of());
+
+        assertThatThrownBy(() -> envelopeService.update(USER_ID, LEDGER_SLUG, ENVELOPE_ID, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("descendants");
+        verify(envelopeRepository, never()).update(any(), any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void setEnvelopeAccounts_accountOutsideLedger_throwsWithoutTouchingMappings() {
+        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
+        when(envelopeRepository.findById(LEDGER_ID, ENVELOPE_ID)).thenReturn(Optional.of(createTestEnvelope()));
+        when(accountRepository.findRefsByIds(LEDGER_ID, List.of("acc-1", "foreign-acc")))
+                .thenReturn(List.of(new AccountRef("acc-1", "Groceries", "USD")));
+
+        assertThatThrownBy(() -> envelopeService.setEnvelopeAccounts(USER_ID, LEDGER_SLUG, ENVELOPE_ID, List.of("acc-1", "foreign-acc")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Account not found: foreign-acc");
+        verify(mappingRepository, never()).setMappingsForEnvelope(any(), anyList());
+    }
+
+    @Test
+    void setEnvelopeAccounts_ownAccounts_rewritesMappings() {
+        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
+        when(envelopeRepository.findById(LEDGER_ID, ENVELOPE_ID)).thenReturn(Optional.of(createTestEnvelope()));
+        when(accountRepository.findRefsByIds(LEDGER_ID, List.of("acc-1")))
+                .thenReturn(List.of(new AccountRef("acc-1", "Groceries", "USD")));
+
+        envelopeService.setEnvelopeAccounts(USER_ID, LEDGER_SLUG, ENVELOPE_ID, List.of("acc-1"));
+
+        verify(mappingRepository).setMappingsForEnvelope(ENVELOPE_ID, List.of("acc-1"));
     }
 
     @Test

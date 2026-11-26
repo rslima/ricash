@@ -55,7 +55,7 @@ public class AccountJdbcRepository implements AccountRepository {
                             FROM accounts
                             WHERE ledger_id = :ledgerId AND id = :accountId
 
-                            UNION ALL
+                            UNION
 
                             -- Recursive case: find all descendants
                             SELECT a.id

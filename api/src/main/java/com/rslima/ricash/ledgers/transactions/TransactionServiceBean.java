@@ -5,7 +5,9 @@ import com.rslima.ricash.ledgers.LedgerAccess;
 import com.rslima.ricash.ledgers.MonetaryAmount;
 import com.rslima.ricash.ledgers.accounts.AccountRef;
 import com.rslima.ricash.ledgers.accounts.AccountRepository;
+import com.rslima.ricash.ledgers.envelopes.EnvelopeRepository;
 import com.rslima.ricash.ledgers.exchangerates.ExchangeRateService;
+import com.rslima.ricash.ledgers.instruments.InstrumentRepository;
 
 import com.github.f4b6a3.uuid.UuidCreator;
 import lombok.RequiredArgsConstructor;
@@ -17,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.*;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @RequiredArgsConstructor
@@ -26,6 +29,8 @@ public class TransactionServiceBean implements TransactionService {
     private final LedgerAccess ledgerAccess;
     private final AccountRepository accountRepository;
     private final ExchangeRateService exchangeRateService;
+    private final EnvelopeRepository envelopeRepository;
+    private final InstrumentRepository instrumentRepository;
 
     @Override
     public Page<Transaction> listLedgerTransactions(String userId, String ledgerSlug, Pageable pageRequest) {
@@ -143,6 +148,12 @@ public class TransactionServiceBean implements TransactionService {
     @Transactional
     public void delete(String userId, String ledgerSlug, String transactionId) {
         final var ledger = ledgerAccess.requireLedger(userId, ledgerSlug);
+
+        // Ledger-scoped existence check first: an id from another ledger must
+        // be a 404, never a delete.
+        transactionRepository.findById(ledger.id(), transactionId)
+                .orElseThrow(() -> new TransactionNotFoundException(transactionId));
+
         transactionRepository.delete(ledger.id(), transactionId);
     }
 
@@ -154,6 +165,11 @@ public class TransactionServiceBean implements TransactionService {
                 .collect(Collectors.toSet());
         Map<String, AccountRef> accountsById = accountRepository.findRefsByIds(ledger.id(), accountIds).stream()
                 .collect(Collectors.toMap(AccountRef::id, account -> account));
+
+        requireOwnedIds("Envelope", requestEntries, TransactionEntryRequest::envelopeId,
+                ids -> envelopeRepository.findIdsIn(ledger.id(), ids));
+        requireOwnedIds("Instrument", requestEntries, TransactionEntryRequest::instrumentId,
+                ids -> instrumentRepository.findIdsIn(ledger.id(), ids));
 
         List<TransactionEntry> entries = new ArrayList<>();
 
@@ -207,6 +223,31 @@ public class TransactionServiceBean implements TransactionService {
         }
 
         return entries;
+    }
+
+    /**
+     * Rejects entry references (envelope, instrument) that are not in this
+     * ledger. The foreign keys only prove such a row exists somewhere; a
+     * foreign envelope id would otherwise book spending into another user's
+     * budget through the V13 trigger.
+     */
+    private static void requireOwnedIds(String kind, List<TransactionEntryRequest> requestEntries,
+                                        Function<TransactionEntryRequest, String> idOf,
+                                        Function<Set<String>, Set<String>> findOwnedIds) {
+        Set<String> ids = requestEntries.stream()
+                .map(idOf)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        if (ids.isEmpty()) {
+            return;
+        }
+
+        Set<String> owned = findOwnedIds.apply(ids);
+        for (String id : ids) {
+            if (!owned.contains(id)) {
+                throw new IllegalArgumentException(kind + " not found: " + id);
+            }
+        }
     }
 
     /**

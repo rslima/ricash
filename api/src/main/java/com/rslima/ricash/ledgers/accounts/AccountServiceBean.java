@@ -12,8 +12,12 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.SequencedSet;
 
 @RequiredArgsConstructor
 @Slf4j
@@ -38,6 +42,8 @@ public class AccountServiceBean implements AccountService {
     @Transactional
     public Account create(String userId, String ledgerSlug, CreateAccountRequest request) {
         final var ledger = ledgerAccess.requireLedger(userId, ledgerSlug);
+        validateParent(ledger.id(), null, request.parentAccountId());
+
         final var baseSlug = slugService.slugify(request.name());
         final var slug = SlugService.uniqueSlug(baseSlug, s -> accountRepository.existsBySlug(ledger.id(), s));
 
@@ -66,6 +72,7 @@ public class AccountServiceBean implements AccountService {
         // Verify account exists
         accountRepository.findById(ledger.id(), accountId)
                 .orElseThrow(() -> new AccountNotFoundException(accountId));
+        validateParent(ledger.id(), accountId, request.parentAccountId());
 
         return accountRepository.update(
                 ledger.id(),
@@ -88,8 +95,7 @@ public class AccountServiceBean implements AccountService {
                 .orElseThrow(() -> new AccountNotFoundException(accountId));
 
         // Collect all account IDs to delete (account + all descendants)
-        List<String> accountIdsToDelete = new java.util.ArrayList<>();
-        collectAccountIdsRecursively(ledger.id(), accountId, accountIdsToDelete);
+        List<String> accountIdsToDelete = new ArrayList<>(collectSubtreeIds(ledger.id(), accountId));
 
         // Check if any of the accounts have transactions
         for (String id : accountIdsToDelete) {
@@ -99,17 +105,48 @@ public class AccountServiceBean implements AccountService {
         }
 
         // Delete accounts in reverse order (children first)
-        java.util.Collections.reverse(accountIdsToDelete);
+        Collections.reverse(accountIdsToDelete);
         for (String id : accountIdsToDelete) {
             accountRepository.delete(ledger.id(), id);
         }
     }
 
-    private void collectAccountIdsRecursively(String ledgerId, String accountId, List<String> accountIds) {
-        accountIds.add(accountId);
-        List<String> childIds = accountRepository.findChildAccountIds(ledgerId, accountId);
-        for (String childId : childIds) {
-            collectAccountIdsRecursively(ledgerId, childId, accountIds);
+    /**
+     * A parent must be another account of the same ledger, and (on update) not
+     * the account itself or one of its descendants: a parent cycle would make
+     * the account-tree queries and the subtree walk below never finish.
+     *
+     * @param accountId the account being updated, or null on create
+     */
+    private void validateParent(String ledgerId, String accountId, String parentAccountId) {
+        if (parentAccountId == null) {
+            return;
+        }
+        if (accountRepository.findRefsByIds(ledgerId, List.of(parentAccountId)).isEmpty()) {
+            throw new IllegalArgumentException("Parent account not found: " + parentAccountId);
+        }
+        if (accountId != null && collectSubtreeIds(ledgerId, accountId).contains(parentAccountId)) {
+            throw new IllegalArgumentException(
+                    "An account cannot be its own parent or be moved under one of its descendants");
+        }
+    }
+
+    /**
+     * The account and all of its descendants, parents before children. The
+     * visited set makes the walk terminate even if stored data holds a cycle.
+     */
+    private SequencedSet<String> collectSubtreeIds(String ledgerId, String accountId) {
+        SequencedSet<String> visited = new LinkedHashSet<>();
+        collectSubtreeIds(ledgerId, accountId, visited);
+        return visited;
+    }
+
+    private void collectSubtreeIds(String ledgerId, String accountId, SequencedSet<String> visited) {
+        if (!visited.add(accountId)) {
+            return;
+        }
+        for (String childId : accountRepository.findChildAccountIds(ledgerId, accountId)) {
+            collectSubtreeIds(ledgerId, childId, visited);
         }
     }
 
