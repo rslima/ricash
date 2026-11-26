@@ -20,6 +20,7 @@ import java.time.Clock;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.*;
+import java.time.LocalDate;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -75,30 +76,8 @@ public class TransactionServiceBean implements TransactionService {
     public Transaction create(String userId, String ledgerSlug, CreateTransactionRequest request) {
         final var ledger = ledgerAccess.requireLedger(userId, ledgerSlug);
 
-        // Process entries with currency conversions
-        List<TransactionEntry> processedEntries = processEntries(ledger, request.entries(), request.date());
-
-        // Validate multi-currency balance
-        validateMultiCurrencyBalance(processedEntries);
-
-        // Separate debits and credits
-        List<TransactionEntry> debitEntries = processedEntries.stream()
-                .filter(e -> e.type() == TransactionEntryType.DEBIT)
-                .toList();
-
-        List<TransactionEntry> creditEntries = processedEntries.stream()
-                .filter(e -> e.type() == TransactionEntryType.CREDIT)
-                .toList();
-
-        final var transaction = new Transaction(
-                UuidCreator.getTimeOrderedEpoch().toString(),
-                request.date(),
-                Instant.now(clock),
-                request.description(),
-                creditEntries,
-                debitEntries
-        );
-
+        final var transaction = buildTransaction(ledger, UuidCreator.getTimeOrderedEpoch().toString(),
+                Instant.now(clock), request.date(), request.description(), request.entries());
         transactionRepository.create(ledger.id(), transaction);
 
         // Fetch the created transaction to get account names populated
@@ -115,30 +94,8 @@ public class TransactionServiceBean implements TransactionService {
         final var existing = transactionRepository.findById(ledger.id(), transactionId)
                 .orElseThrow(() -> new TransactionNotFoundException(transactionId));
 
-        // Process entries with currency conversions
-        List<TransactionEntry> processedEntries = processEntries(ledger, request.entries(), request.date());
-
-        // Validate multi-currency balance
-        validateMultiCurrencyBalance(processedEntries);
-
-        // Separate debits and credits
-        List<TransactionEntry> debitEntries = processedEntries.stream()
-                .filter(e -> e.type() == TransactionEntryType.DEBIT)
-                .toList();
-
-        List<TransactionEntry> creditEntries = processedEntries.stream()
-                .filter(e -> e.type() == TransactionEntryType.CREDIT)
-                .toList();
-
-        final var transaction = new Transaction(
-                transactionId,
-                request.date(),
-                existing.createdAt(),
-                request.description(),
-                creditEntries,
-                debitEntries
-        );
-
+        final var transaction = buildTransaction(ledger, transactionId, existing.createdAt(),
+                request.date(), request.description(), request.entries());
         transactionRepository.update(ledger.id(), transaction);
 
         // Fetch the updated transaction to get account names populated
@@ -159,7 +116,26 @@ public class TransactionServiceBean implements TransactionService {
         transactionRepository.delete(ledger.id(), transactionId);
     }
 
-    private List<TransactionEntry> processEntries(LedgerRef ledger, List<TransactionEntryRequest> requestEntries, java.time.LocalDate transactionDate) {
+    /**
+     * Shared by create and update: resolves and converts the entries,
+     * enforces the per-currency balance, and splits debits from credits.
+     */
+    private Transaction buildTransaction(LedgerRef ledger, String id, Instant createdAt, LocalDate date,
+                                         String description, List<TransactionEntryRequest> requestEntries) {
+        List<TransactionEntry> entries = processEntries(ledger, requestEntries, date);
+        validateMultiCurrencyBalance(entries);
+
+        List<TransactionEntry> debitEntries = entries.stream()
+                .filter(e -> e.type() == TransactionEntryType.DEBIT)
+                .toList();
+        List<TransactionEntry> creditEntries = entries.stream()
+                .filter(e -> e.type() == TransactionEntryType.CREDIT)
+                .toList();
+
+        return new Transaction(id, date, createdAt, description, creditEntries, debitEntries);
+    }
+
+    private List<TransactionEntry> processEntries(LedgerRef ledger, List<TransactionEntryRequest> requestEntries, LocalDate transactionDate) {
         // One batched lookup instead of one (expensive, balance-computing)
         // findById per entry - entries only need the account's currency and name.
         Set<String> accountIds = requestEntries.stream()

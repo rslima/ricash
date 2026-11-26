@@ -8,6 +8,8 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.Collection;
@@ -190,7 +192,7 @@ public class InstrumentJdbcRepository implements InstrumentRepository {
             .update();
     }
 
-    private Instrument mapRow(java.sql.ResultSet rs, int rowNum) throws java.sql.SQLException {
+    private Instrument mapRow(ResultSet rs, int rowNum) throws SQLException {
         return new Instrument(
             rs.getString("id"),
             rs.getString("ledger_id"),

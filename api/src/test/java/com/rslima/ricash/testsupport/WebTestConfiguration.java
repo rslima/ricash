@@ -28,7 +28,7 @@ public class WebTestConfiguration {
 
     @Bean
     JwtClaimProperties jwtClaimProperties() {
-        return new JwtClaimProperties("preferred_username", "realm_access/roles", "", "");
+        return new JwtClaimProperties("preferred_username", "");
     }
 
     @Bean
