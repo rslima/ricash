@@ -1,6 +1,6 @@
 package com.rslima.ricash.ledgers.transactions;
 
-import com.rslima.ricash.ledgers.Ledger;
+import com.rslima.ricash.ledgers.LedgerRef;
 import com.rslima.ricash.ledgers.LedgerAccess;
 import com.rslima.ricash.ledgers.MonetaryAmount;
 import com.rslima.ricash.ledgers.accounts.AccountRef;
@@ -157,7 +157,7 @@ public class TransactionServiceBean implements TransactionService {
         transactionRepository.delete(ledger.id(), transactionId);
     }
 
-    private List<TransactionEntry> processEntries(Ledger ledger, List<TransactionEntryRequest> requestEntries, java.time.LocalDate transactionDate) {
+    private List<TransactionEntry> processEntries(LedgerRef ledger, List<TransactionEntryRequest> requestEntries, java.time.LocalDate transactionDate) {
         // One batched lookup instead of one (expensive, balance-computing)
         // findById per entry - entries only need the account's currency and name.
         Set<String> accountIds = requestEntries.stream()

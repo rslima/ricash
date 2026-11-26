@@ -12,6 +12,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -201,4 +202,55 @@ class LedgerJdbcRepositoryTest {
         assertThat(result.getContent().getFirst().accounts()).hasSize(1);
     }
 
+    @Test
+    void listUserLedgers_matchesFindBySlugPerLedger_withNestedBalances() {
+        // Two ledgers on one page, each with a parent/child tree and entries,
+        // plus another user's ledger that must not leak into the result.
+        fixtures.insertLedger("ledger-1", "user-1", "Home", "USD");
+        fixtures.insertAccount("l1-cash", "ledger-1", null, "Cash", "USD", "ASSET");
+        fixtures.insertAccount("l1-food", "ledger-1", null, "Food", "USD", "EXPENSE");
+        fixtures.insertAccount("l1-grocery", "ledger-1", "l1-food", "Grocery", "USD", "EXPENSE");
+        fixtures.insertTransaction("t1", "ledger-1", "Groceries", LocalDate.of(2026, 1, 5));
+        fixtures.insertEntry("t1", "l1-grocery", "40.00", "DEBIT", "USD");
+        fixtures.insertEntry("t1", "l1-cash", "40.00", "CREDIT", "USD");
+
+        fixtures.insertLedger("ledger-2", "user-1", "Travel", "EUR");
+        fixtures.insertAccount("l2-card", "ledger-2", null, "Card", "EUR", "LIABILITY");
+        fixtures.insertAccount("l2-trips", "ledger-2", null, "Trips", "EUR", "EXPENSE");
+        fixtures.insertAccount("l2-hotels", "ledger-2", "l2-trips", "Hotels", "EUR", "EXPENSE");
+        fixtures.insertTransaction("t2", "ledger-2", "Hotel", LocalDate.of(2026, 1, 6));
+        fixtures.insertEntry("t2", "l2-hotels", "120.00", "DEBIT", "EUR");
+        fixtures.insertEntry("t2", "l2-card", "120.00", "CREDIT", "EUR");
+
+        fixtures.insertLedger("ledger-other", "user-2", "Other", "USD");
+        fixtures.insertAccount("other-acc", "ledger-other", null, "Other", "USD", "ASSET");
+
+        var page = repository.listUserLedgers("user-1", PageRequest.of(0, 20));
+
+        assertThat(page.getContent()).extracting(Ledger::id).containsExactly("ledger-1", "ledger-2");
+        for (var listed : page.getContent()) {
+            var single = repository.findBySlug("user-1", listed.slug()).orElseThrow();
+            assertThat(listed.accounts())
+                    .usingRecursiveFieldByFieldElementComparatorIgnoringFields("createdAt")
+                    .containsExactlyInAnyOrderElementsOf(single.accounts());
+        }
+
+        var food = page.getContent().getFirst().accounts().stream()
+                .filter(a -> a.id().equals("l1-food")).findFirst().orElseThrow();
+        assertThat(food.balance()).isEqualByComparingTo("40.00");
+        assertThat(food.subAccounts()).extracting(a -> a.id()).containsExactly("l1-grocery");
+
+        var trips = page.getContent().get(1).accounts().stream()
+                .filter(a -> a.id().equals("l2-trips")).findFirst().orElseThrow();
+        assertThat(trips.balance()).isEqualByComparingTo("120.00");
+    }
+
+    @Test
+    void findRefBySlug_returnsIdAndCurrencyOnly_andIsUserScoped() {
+        fixtures.insertLedger("ledger-1", "user-1", "Home", "BRL");
+
+        assertThat(repository.findRefBySlug("user-1", "home"))
+                .contains(new LedgerRef("ledger-1", "home", "BRL"));
+        assertThat(repository.findRefBySlug("user-2", "home")).isEmpty();
+    }
 }

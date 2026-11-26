@@ -9,7 +9,6 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
-import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -26,88 +25,33 @@ public class LedgerJdbcRepository implements LedgerRepository {
 
     @Override
     public Page<Ledger> listUserLedgers(String userId, Pageable pageRequest) {
-
-        final var ledgersAndAccounts = jdbcClient.sql("""
-                           WITH RECURSIVE account_tree AS (
-                               -- Base case: each account includes itself
-                               SELECT id, id as root_id, ledger_id
-                               FROM accounts
-
-                               UNION
-
-                               -- Recursive case: find children and link them to the same root
-                               SELECT a.id, at.root_id, a.ledger_id
-                               FROM accounts a
-                               INNER JOIN account_tree at ON a.parent_account_id = at.id
-                           )
-                           SELECT
-                               l.id l_id,
-                               l.user_id,
-                               l.slug ledger_slug,
-                               l.name ledger_name,
-                               l.description ledger_description,
-                               l.currency ledger_currency,
-                               l.created_at ledger_created_at,
-                               ab.account_id,
-                               ab.parent_account_id,
-                               ab.account_slug,
-                               ab.account_name,
-                               ab.account_description,
-                               ab.account_currency,
-                               ab.status,
-                               ab.type,
-                               ab.account_balance,
-                               ab.account_created_at
-                           FROM
-                               (SELECT
-                                    *
-                                FROM
-                                    ledgers
-                                WHERE
-                                    user_id = :userId
-                                ORDER BY created_at, id
-                                OFFSET :offset
-                                LIMIT :limit) l
-                           LEFT JOIN
-                               (SELECT
-                                   a.id AS account_id,
-                                   a.ledger_id,
-                                   a.parent_account_id,
-                                   a.slug AS account_slug,
-                                   a.name AS account_name,
-                                   a.description AS account_description,
-                                   a.currency AS account_currency,
-                                   a.status,
-                                   a.type,
-                                   a.created_at AS account_created_at,
-                           """
-                        + AccountTreeSql.BALANCE_EXPRESSION + " AS account_balance\n"
-                        + """
-                               FROM accounts a
-                               LEFT JOIN account_tree at ON at.root_id = a.id AND at.ledger_id = a.ledger_id
-                               LEFT JOIN account_balance_summary bs ON bs.account_id = at.id AND bs.currency = a.currency
-                               GROUP BY a.id, a.ledger_id, a.parent_account_id, a.slug, a.name, a.description,
-                                        a.currency, a.status, a.type, a.created_at) ab
-                           ON
-                               l.id = ab.ledger_id""")
+        final var dbLedgers = jdbcClient.sql("""
+                        SELECT id, user_id, slug, name, description, currency, created_at
+                        FROM ledgers
+                        WHERE user_id = :userId
+                        ORDER BY created_at, id
+                        OFFSET :offset
+                        LIMIT :limit
+                        """)
                 .param("userId", userId)
                 .param("offset", pageRequest.getOffset())
                 .param("limit", pageRequest.getPageSize())
-                .query(DBLedgerAndAccount.class)
+                .query(DBLedger.class)
                 .list();
 
-        final var ledgerAccountRows = ledgersAndAccounts.stream().map(this::toLedgerAccountRow).toList();
+        // One account query for the whole page, scoped to the page's ledgers.
+        final Map<String, List<AccountTreeSql.DBAccount>> accountsByLedger = dbLedgers.isEmpty()
+                ? Map.of()
+                : jdbcClient.sql(AccountTreeSql.SELECT_ACCOUNTS_WITH_BALANCE_FOR_LEDGERS)
+                        .param("ledgerIds", dbLedgers.stream().map(DBLedger::id).toList())
+                        .query(AccountTreeSql.DBAccount.class)
+                        .list()
+                        .stream()
+                        .collect(groupingBy(AccountTreeSql.DBAccount::ledgerId));
 
-        // LinkedHashMap keeps the ledgers in the ORDER BY sequence of the query.
-        List<Ledger> result = ledgerAccountRows.stream()
-                .collect(groupingBy(LedgerAccountRow::ledger, java.util.LinkedHashMap::new, java.util.stream.Collectors.toList()))
-                .entrySet().stream()
-                .map(e -> Map.entry(e.getKey(), e.getValue().stream()
-                        .map(LedgerAccountRow::account)
-                        .filter(account -> account.id() != null)
-                        .toList()))
-                .map(e -> Map.entry(e.getKey(), buildAccountForest(e.getValue())))
-                .map(e -> toLedger(e.getKey(), e.getValue()))
+        final List<Ledger> result = dbLedgers.stream()
+                .map(ledger -> toLedger(ledger,
+                        buildAccountForest(accountsByLedger.getOrDefault(ledger.id(), List.of()))))
                 .toList();
 
         final var total = jdbcClient.sql("SELECT COUNT(*) FROM ledgers WHERE user_id = :userId")
@@ -118,48 +62,24 @@ public class LedgerJdbcRepository implements LedgerRepository {
         return new PageImpl<>(result, pageRequest, total);
     }
 
-    record DBLedgerAndAccount(String lId, String userId, String ledgerSlug, String ledgerName, String ledgerDescription,
-                              String ledgerCurrency, Instant ledgerCreatedAt,
-                              String accountId, String parentAccountId, String accountSlug, String accountName, String accountDescription,
-                              String accountCurrency, String status, String type, BigDecimal accountBalance,
-                              Instant accountCreatedAt) {
-    }
-
     record DBLedger(String id, String userId, String slug, String name, String description, String currency, Instant createdAt) {
-    }
-
-    private record LedgerAccountRow(DBLedger ledger, AccountTreeSql.DBAccount account) {
-    }
-
-    private LedgerAccountRow toLedgerAccountRow(DBLedgerAndAccount la) {
-        final var dbLedger = new DBLedger(
-                la.lId(),
-                la.userId(),
-                la.ledgerSlug(),
-                la.ledgerName(),
-                la.ledgerDescription(),
-                la.ledgerCurrency(),
-                la.ledgerCreatedAt());
-
-        final var account = new AccountTreeSql.DBAccount(
-                la.accountId(),
-                la.lId(),
-                la.parentAccountId(),
-                la.accountSlug(),
-                la.accountName(),
-                la.accountDescription(),
-                la.accountCurrency(),
-                la.type(),
-                la.status(),
-                la.accountBalance(),
-                la.accountCreatedAt());
-
-        return new LedgerAccountRow(dbLedger, account);
     }
 
     @Override
     public Optional<Ledger> findBySlug(String userId, String slug) {
         return findLedger(userId, "slug = :lookupValue", slug);
+    }
+
+    @Override
+    public Optional<LedgerRef> findRefBySlug(String userId, String slug) {
+        return jdbcClient.sql("""
+                        SELECT id, slug, currency FROM ledgers
+                        WHERE user_id = :userId AND slug = :slug
+                        """)
+                .param("userId", userId)
+                .param("slug", slug)
+                .query(LedgerRef.class)
+                .optional();
     }
 
     /**

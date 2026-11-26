@@ -1,6 +1,6 @@
 package com.rslima.ricash.ledgers.accounts;
 
-import com.rslima.ricash.ledgers.Ledger;
+import com.rslima.ricash.ledgers.LedgerRef;
 import com.rslima.ricash.ledgers.LedgerAccess;
 import com.rslima.ricash.ledgers.LedgerRepository;
 import com.rslima.ricash.ledgers.SlugService;
@@ -57,7 +57,7 @@ class AccountServiceBeanTest {
         var account = createTestAccount();
         var page = new PageImpl<>(List.of(account), pageRequest, 1);
 
-        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
+        when(ledgerRepository.findRefBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
         when(accountRepository.listLedgerAccounts(LEDGER_ID, pageRequest)).thenReturn(page);
 
         var result = accountService.listLedgerAccounts(USER_ID, LEDGER_SLUG, pageRequest);
@@ -68,7 +68,7 @@ class AccountServiceBeanTest {
 
     @Test
     void find_delegatesToRepository() {
-        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
+        when(ledgerRepository.findRefBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
         when(accountRepository.findById(LEDGER_ID, ACCOUNT_ID)).thenReturn(Optional.of(createTestAccount()));
 
         var result = accountService.find(USER_ID, LEDGER_SLUG, ACCOUNT_ID);
@@ -82,7 +82,7 @@ class AccountServiceBeanTest {
         var request = new CreateAccountRequest("Checking", "Main account", "USD", AccountType.ASSET, null);
         var captor = ArgumentCaptor.forClass(Account.class);
 
-        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
+        when(ledgerRepository.findRefBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
         when(slugService.slugify("Checking")).thenReturn("checking");
         when(accountRepository.existsBySlug(LEDGER_ID, "checking")).thenReturn(false);
         when(accountRepository.create(eq(LEDGER_ID), any(Account.class))).thenAnswer(inv -> inv.getArgument(1));
@@ -102,7 +102,7 @@ class AccountServiceBeanTest {
     void create_slugCollisionAppendsCounter() {
         var request = new CreateAccountRequest("Checking", null, "USD", AccountType.ASSET, null);
 
-        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
+        when(ledgerRepository.findRefBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
         when(slugService.slugify("Checking")).thenReturn("checking");
         when(accountRepository.existsBySlug(LEDGER_ID, "checking")).thenReturn(true);
         when(accountRepository.existsBySlug(LEDGER_ID, "checking-1")).thenReturn(false);
@@ -120,7 +120,7 @@ class AccountServiceBeanTest {
         var request = new UpdateAccountRequest("Updated", "Desc", AccountType.ASSET, "USD", null);
         var updatedAccount = createTestAccount();
 
-        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
+        when(ledgerRepository.findRefBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
         when(accountRepository.findById(LEDGER_ID, ACCOUNT_ID)).thenReturn(Optional.of(createTestAccount()));
         when(accountRepository.update(LEDGER_ID, ACCOUNT_ID, "Updated", "Desc", AccountType.ASSET, "USD", null))
                 .thenReturn(updatedAccount);
@@ -134,7 +134,7 @@ class AccountServiceBeanTest {
     void update_notFound_throws() {
         var request = new UpdateAccountRequest("Updated", "Desc", AccountType.ASSET, "USD", null);
 
-        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
+        when(ledgerRepository.findRefBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
         when(accountRepository.findById(LEDGER_ID, ACCOUNT_ID)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> accountService.update(USER_ID, LEDGER_SLUG, ACCOUNT_ID, request))
@@ -145,7 +145,7 @@ class AccountServiceBeanTest {
     void create_parentInLedger_isAccepted() {
         var request = new CreateAccountRequest("Groceries", null, "USD", AccountType.EXPENSE, "parent-id");
 
-        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
+        when(ledgerRepository.findRefBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
         when(accountRepository.findRefsByIds(LEDGER_ID, List.of("parent-id")))
                 .thenReturn(List.of(new AccountRef("parent-id", "Food", "USD")));
         when(slugService.slugify("Groceries")).thenReturn("groceries");
@@ -160,7 +160,7 @@ class AccountServiceBeanTest {
     void create_parentOutsideLedger_throwsWithoutWriting() {
         var request = new CreateAccountRequest("Groceries", null, "USD", AccountType.EXPENSE, "foreign-id");
 
-        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
+        when(ledgerRepository.findRefBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
         when(accountRepository.findRefsByIds(LEDGER_ID, List.of("foreign-id"))).thenReturn(List.of());
 
         assertThatThrownBy(() -> accountService.create(USER_ID, LEDGER_SLUG, request))
@@ -173,7 +173,7 @@ class AccountServiceBeanTest {
     void update_selfAsParent_throwsWithoutWriting() {
         var request = new UpdateAccountRequest("Checking", null, AccountType.ASSET, "USD", ACCOUNT_ID);
 
-        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
+        when(ledgerRepository.findRefBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
         when(accountRepository.findById(LEDGER_ID, ACCOUNT_ID)).thenReturn(Optional.of(createTestAccount()));
         when(accountRepository.findRefsByIds(LEDGER_ID, List.of(ACCOUNT_ID)))
                 .thenReturn(List.of(new AccountRef(ACCOUNT_ID, "Checking", "USD")));
@@ -189,7 +189,7 @@ class AccountServiceBeanTest {
     void update_descendantAsParent_throwsWithoutWriting() {
         var request = new UpdateAccountRequest("Checking", null, AccountType.ASSET, "USD", "grandchild-id");
 
-        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
+        when(ledgerRepository.findRefBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
         when(accountRepository.findById(LEDGER_ID, ACCOUNT_ID)).thenReturn(Optional.of(createTestAccount()));
         when(accountRepository.findRefsByIds(LEDGER_ID, List.of("grandchild-id")))
                 .thenReturn(List.of(new AccountRef("grandchild-id", "Leaf", "USD")));
@@ -207,7 +207,7 @@ class AccountServiceBeanTest {
     void delete_storedCycle_terminates() {
         // Data written before V15 / the parent checks could hold a cycle; the
         // subtree walk must still finish instead of recursing forever.
-        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
+        when(ledgerRepository.findRefBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
         when(accountRepository.findById(LEDGER_ID, ACCOUNT_ID)).thenReturn(Optional.of(createTestAccount()));
         when(accountRepository.findChildAccountIds(LEDGER_ID, ACCOUNT_ID)).thenReturn(List.of("child-id"));
         when(accountRepository.findChildAccountIds(LEDGER_ID, "child-id")).thenReturn(List.of(ACCOUNT_ID));
@@ -220,7 +220,7 @@ class AccountServiceBeanTest {
 
     @Test
     void delete_leafAccount() {
-        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
+        when(ledgerRepository.findRefBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
         when(accountRepository.findById(LEDGER_ID, ACCOUNT_ID)).thenReturn(Optional.of(createTestAccount()));
         when(accountRepository.findChildAccountIds(LEDGER_ID, ACCOUNT_ID)).thenReturn(List.of());
         when(accountRepository.hasTransactions(ACCOUNT_ID)).thenReturn(false);
@@ -232,7 +232,7 @@ class AccountServiceBeanTest {
 
     @Test
     void delete_accountWithTransactions_throws() {
-        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
+        when(ledgerRepository.findRefBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
         when(accountRepository.findById(LEDGER_ID, ACCOUNT_ID)).thenReturn(Optional.of(createTestAccount()));
         when(accountRepository.findChildAccountIds(LEDGER_ID, ACCOUNT_ID)).thenReturn(List.of());
         when(accountRepository.hasTransactions(ACCOUNT_ID)).thenReturn(true);
@@ -245,7 +245,7 @@ class AccountServiceBeanTest {
     void delete_parentWithChildren_deletesRecursively() {
         var childId = "child-id";
 
-        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
+        when(ledgerRepository.findRefBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
         when(accountRepository.findById(LEDGER_ID, ACCOUNT_ID)).thenReturn(Optional.of(createTestAccount()));
         when(accountRepository.findChildAccountIds(LEDGER_ID, ACCOUNT_ID)).thenReturn(List.of(childId));
         when(accountRepository.findChildAccountIds(LEDGER_ID, childId)).thenReturn(List.of());
@@ -263,7 +263,7 @@ class AccountServiceBeanTest {
     void delete_childHasTransactions_throws() {
         var childId = "child-id";
 
-        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
+        when(ledgerRepository.findRefBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
         when(accountRepository.findById(LEDGER_ID, ACCOUNT_ID)).thenReturn(Optional.of(createTestAccount()));
         when(accountRepository.findChildAccountIds(LEDGER_ID, ACCOUNT_ID)).thenReturn(List.of(childId));
         when(accountRepository.findChildAccountIds(LEDGER_ID, childId)).thenReturn(List.of());
@@ -274,8 +274,8 @@ class AccountServiceBeanTest {
                 .isInstanceOf(AccountHasTransactionsException.class);
     }
 
-    private Ledger createTestLedger() {
-        return new Ledger(LEDGER_ID, USER_ID, LEDGER_SLUG, "Test Ledger", "Description", "USD", Instant.now(), List.of());
+    private LedgerRef createTestLedger() {
+        return new LedgerRef(LEDGER_ID, LEDGER_SLUG, "USD");
     }
 
     private Account createTestAccount() {

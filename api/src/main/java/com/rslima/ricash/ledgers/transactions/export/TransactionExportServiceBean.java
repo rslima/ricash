@@ -41,7 +41,7 @@ public class TransactionExportServiceBean implements TransactionExportService {
             throw new IllegalArgumentException("'from' must not be after 'to'");
         }
 
-        final var ledger = ledgerAccess.requireLedger(userId, ledgerSlug);
+        final var ledger = ledgerAccess.requireLedgerWithAccounts(userId, ledgerSlug);
         final var accountsById = flattenAccountForest(ledger.accounts());
 
         Account scopeRoot = null;

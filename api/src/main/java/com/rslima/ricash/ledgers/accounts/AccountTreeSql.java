@@ -67,36 +67,68 @@ public final class AccountTreeSql {
             """;
 
     /**
+     * Multi-ledger variant of {@link #LEDGER_ACCOUNT_TREE_CTE} for the ledgers
+     * in {@code :ledgerIds}. The recursion carries {@code ledger_id} and only
+     * follows children of the same ledger, so each subtree stays within its
+     * ledger exactly as in the single-ledger CTE.
+     */
+    public static final String LEDGERS_ACCOUNT_TREE_CTE = """
+            WITH RECURSIVE account_tree AS (
+                SELECT id, id AS root_id, ledger_id
+                FROM accounts
+                WHERE ledger_id IN (:ledgerIds)
+
+                UNION
+
+                SELECT a.id, at.root_id, at.ledger_id
+                FROM accounts a
+                INNER JOIN account_tree at ON a.parent_account_id = at.id AND a.ledger_id = at.ledger_id
+            )
+            """;
+
+    /**
      * Selects every account of a ledger (param {@code :ledgerId}) with its
      * aggregated subtree balance. Callers may append ORDER BY / OFFSET / LIMIT
      * clauses. Rows map to {@link DBAccount}.
      */
-    public static final String SELECT_LEDGER_ACCOUNTS_WITH_BALANCE = LEDGER_ACCOUNT_TREE_CTE
-            + """
-            SELECT
-                a.id,
-                a.ledger_id,
-                a.parent_account_id,
-                a.slug,
-                a.name,
-                a.description,
-                a.currency,
-                a.type,
-                a.status,
-            """
-            + BALANCE_COLUMN
-            + """
-                a.created_at
-            FROM
-                accounts a
-            LEFT JOIN
-                account_tree at ON at.root_id = a.id
-            LEFT JOIN
-                account_balance_summary bs ON bs.account_id = at.id AND bs.currency = a.currency
-            WHERE
-                a.ledger_id = :ledgerId
-            """
-            + ACCOUNT_GROUP_BY;
+    public static final String SELECT_LEDGER_ACCOUNTS_WITH_BALANCE =
+            selectAccountsWithBalance(LEDGER_ACCOUNT_TREE_CTE, "a.ledger_id = :ledgerId");
+
+    /**
+     * Same rows as {@link #SELECT_LEDGER_ACCOUNTS_WITH_BALANCE} for every
+     * ledger in {@code :ledgerIds} at once (one query for a page of ledgers).
+     */
+    public static final String SELECT_ACCOUNTS_WITH_BALANCE_FOR_LEDGERS =
+            selectAccountsWithBalance(LEDGERS_ACCOUNT_TREE_CTE, "a.ledger_id IN (:ledgerIds)");
+
+    private static String selectAccountsWithBalance(String accountTreeCte, String ledgerPredicate) {
+        return accountTreeCte
+                + """
+                SELECT
+                    a.id,
+                    a.ledger_id,
+                    a.parent_account_id,
+                    a.slug,
+                    a.name,
+                    a.description,
+                    a.currency,
+                    a.type,
+                    a.status,
+                """
+                + BALANCE_COLUMN
+                + """
+                    a.created_at
+                FROM
+                    accounts a
+                LEFT JOIN
+                    account_tree at ON at.root_id = a.id
+                LEFT JOIN
+                    account_balance_summary bs ON bs.account_id = at.id AND bs.currency = a.currency
+                WHERE
+                """
+                + "    " + ledgerPredicate + "\n"
+                + ACCOUNT_GROUP_BY;
+    }
 
     /** Row shape produced by the shared account/balance queries. */
     public record DBAccount(String id, String ledgerId, String parentAccountId, String slug, String name,
