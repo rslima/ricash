@@ -1,21 +1,26 @@
 import { Suspense, useState } from "react"
-import { Outlet } from "react-router"
+import { Outlet, useLocation } from "react-router"
 import { Sidebar } from "./Sidebar"
 import { Header } from "./Header"
 import { BottomNav } from "./BottomNav"
 import { TableSkeleton } from "@/components/ui/table-skeleton"
+import { RouteErrorBoundary } from "@/components/RouteErrorBoundary"
 import { useIsMobile } from "@/hooks/use-mobile"
 
 export function Layout() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const isMobile = useIsMobile()
+  const { pathname } = useLocation()
 
   // Suspense lives inside the shell so lazy page chunks load without
-  // unmounting the header/nav.
+  // unmounting the header/nav. The error boundary does the same for render
+  // errors and failed chunk loads, and clears when the user navigates away.
   const outlet = (
-    <Suspense fallback={<TableSkeleton />}>
-      <Outlet />
-    </Suspense>
+    <RouteErrorBoundary resetKey={pathname}>
+      <Suspense fallback={<TableSkeleton />}>
+        <Outlet />
+      </Suspense>
+    </RouteErrorBoundary>
   )
 
   if (isMobile) {

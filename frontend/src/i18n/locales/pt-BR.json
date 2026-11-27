@@ -456,5 +456,15 @@
     "deleteFailed": "Falha ao excluir. Por favor, tente novamente.",
     "fetchRateFailed": "Não foi possível buscar uma taxa para este par de moedas e data. O provedor pode não tê-la.",
     "exportFailed": "Falha ao exportar transações"
+  },
+  "errorBoundary": {
+    "title": "Algo deu errado",
+    "description": "Esta página não carregou. Recarregar costuma resolver, por exemplo logo depois de uma atualização do app.",
+    "reload": "Recarregar"
+  },
+  "notFound": {
+    "title": "Página não encontrada",
+    "description": "O endereço aberto não corresponde a nenhuma página.",
+    "goHome": "Ir para o painel"
   }
 }
