@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { TableSkeleton } from "@/components/ui/table-skeleton"
 import { Input } from "@/components/ui/input"
+import { CurrencyInput } from "@/components/CurrencyInput"
 import { Label } from "@/components/ui/label"
 import {
   Table,
@@ -262,10 +263,10 @@ function AccountForm({
         </div>
         <div className="grid gap-2">
           <Label htmlFor={`${idPrefix}currency`}>{t("common.currency")}</Label>
-          <Input
+          <CurrencyInput
             id={`${idPrefix}currency`}
             value={value.currency}
-            onChange={(e) => onChange({ ...value, currency: e.target.value })}
+            onValueChange={(currency) => onChange({ ...value, currency })}
             placeholder={currencyPlaceholder}
             required
           />

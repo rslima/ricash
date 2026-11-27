@@ -6,9 +6,16 @@ export const MONTH_KEYS = [
   "July", "August", "September", "October", "November", "December",
 ] as const
 
-/** Today's date as the YYYY-MM-DD string date inputs and the API expect. */
+/**
+ * Today's date in the user's time zone, as the YYYY-MM-DD string date inputs
+ * and the API expect. Not `toISOString()`: that is the UTC date, which is
+ * already tomorrow in the evening west of Greenwich.
+ */
 export function todayISO(): string {
-  return new Date().toISOString().slice(0, 10)
+  const now = new Date()
+  const month = String(now.getMonth() + 1).padStart(2, "0")
+  const day = String(now.getDate()).padStart(2, "0")
+  return `${now.getFullYear()}-${month}-${day}`
 }
 
 /** Localized "Month YYYY" label for a 1-based month. */

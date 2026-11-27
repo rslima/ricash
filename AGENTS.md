@@ -20,6 +20,9 @@ Ricash is a personal finance management application with a Spring Boot backend A
 - **Framework**: React 19 with TypeScript 5.9, TanStack Query for server state
 - **Build Tool**: Vite 7
 - **Dev Server**: Vite dev server with HMR; its proxy strips the `/api` prefix, so the frontend calls `/api/v1/...` while the backend serves `/v1/...`
+- **Dates**: "today" is the user's local date (`lib/dates.ts` `todayISO`), never `toISOString().slice(0, 10)`, which is the UTC date and already tomorrow in a Brazilian evening. Vitest runs the whole suite under `TZ=America/Sao_Paulo` (`src/test/global-setup.ts`) to catch that class of bug
+- **Form inputs**: currency codes go through `components/CurrencyInput` (uppercased, 3 letters, as the API requires); typed money amounts parse with `lib/utils` `parseMoneyInput` (empty → `null`, rounded to cents)
+- **Cache invalidation**: mutations invalidate every resource they move, by ledger-scoped key prefix: transactions refresh accounts, envelopes and portfolio positions; account changes refresh transactions and reports (they embed account names/types)
 
 ### Domain Model
 The backend follows a domain-driven structure organized by business concepts:

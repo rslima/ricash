@@ -270,6 +270,88 @@ describe("Budget", () => {
       })
     })
 
+    describe("inline allocation editor", () => {
+      async function startEditingGroceries(user: ReturnType<typeof userEvent.setup>) {
+        const envelope = makeEnvelope({ id: "env-groceries", attributes: { name: "Groceries" } })
+        mockLedgerWith(
+          [envelope],
+          makeBudgetSummary({
+            envelopeBalances: [makeBalance("env-groceries", { allocated: 500, spent: 200, available: 300 })],
+          })
+        )
+        vi.mocked(envelopesApi.allocateEnvelope).mockResolvedValue({
+          data: {
+            type: "envelope-allocations",
+            id: "alloc-1",
+            attributes: {
+              envelopeId: "env-groceries",
+              periodYear: currentYear,
+              periodMonth: currentMonth,
+              allocatedAmount: 0,
+              notes: null,
+              createdAt: "2024-01-01T00:00:00Z",
+              updatedAt: "2024-01-01T00:00:00Z",
+            },
+          },
+        })
+
+        renderBudget()
+        await user.click(await screen.findByRole("button", { name: "$500.00" }))
+        return screen.getByRole("spinbutton", { name: "Allocated" })
+      }
+
+      it("does not save when the value is unchanged", async () => {
+        const user = userEvent.setup()
+        await startEditingGroceries(user)
+
+        await user.tab()
+
+        expect(screen.queryByRole("spinbutton")).not.toBeInTheDocument()
+        expect(envelopesApi.allocateEnvelope).not.toHaveBeenCalled()
+      })
+
+      it("cancels instead of allocating 0 when the field is emptied", async () => {
+        const user = userEvent.setup()
+        const input = await startEditingGroceries(user)
+
+        await user.clear(input)
+        await user.keyboard("{Enter}")
+
+        expect(screen.getByRole("button", { name: "$500.00" })).toBeInTheDocument()
+        expect(envelopesApi.allocateEnvelope).not.toHaveBeenCalled()
+      })
+
+      it("discards the edit on Escape", async () => {
+        const user = userEvent.setup()
+        const input = await startEditingGroceries(user)
+
+        await user.clear(input)
+        await user.type(input, "900")
+        await user.keyboard("{Escape}")
+
+        expect(screen.queryByRole("spinbutton")).not.toBeInTheDocument()
+        expect(envelopesApi.allocateEnvelope).not.toHaveBeenCalled()
+      })
+
+      it("saves once, rounded to cents", async () => {
+        const user = userEvent.setup()
+        const input = await startEditingGroceries(user)
+
+        await user.clear(input)
+        await user.type(input, "10.555")
+        await user.keyboard("{Enter}")
+
+        await waitFor(() => {
+          expect(envelopesApi.allocateEnvelope).toHaveBeenCalledWith("personal-finance", "env-groceries", {
+            year: currentYear,
+            month: currentMonth,
+            allocatedAmount: 10.56,
+          })
+        })
+        expect(envelopesApi.allocateEnvelope).toHaveBeenCalledTimes(1)
+      })
+    })
+
     it("navigates to the previous month", async () => {
       const user = userEvent.setup()
       mockLedgerWith([])

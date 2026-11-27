@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { TableSkeleton } from "@/components/ui/table-skeleton"
 import { Input } from "@/components/ui/input"
+import { CurrencyInput } from "@/components/CurrencyInput"
 import { Label } from "@/components/ui/label"
 import {
   Table,
@@ -169,12 +170,10 @@ export function Ledgers() {
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="currency">{t("common.currency")}</Label>
-                <Input
+                <CurrencyInput
                   id="currency"
                   value={formData.currency}
-                  onChange={(e) =>
-                    setFormData({ ...formData, currency: e.target.value })
-                  }
+                  onValueChange={(currency) => setFormData({ ...formData, currency })}
                   placeholder="USD"
                   required
                 />

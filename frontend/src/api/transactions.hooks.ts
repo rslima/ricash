@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tansta
 import { createLedgerScopedKeys } from "./queryKeys"
 import { accountKeys } from "./accounts.hooks"
 import { envelopeKeys } from "./envelopes.hooks"
+import { instrumentKeys } from "./instruments.hooks"
 import {
   getTransactions,
   getCategoryTransactions,
@@ -37,12 +38,15 @@ export const transactionKeys = {
   templates: (ledgerSlug: string) => ["transactions", ledgerSlug, "templates"] as const,
 }
 
-// A transaction changes account balances and envelope balances, so mutations
+// A transaction changes account balances, envelope balances and (through
+// entries carrying instrumentId/quantity) portfolio positions, so mutations
 // invalidate those resources for the ledger in addition to transactions/reports.
+// The portfolio prefix also covers the per-account portfolio queries.
 function invalidateTransactionEffects(queryClient: QueryClient, ledgerSlug: string) {
   queryClient.invalidateQueries({ queryKey: transactionKeys.ledger(ledgerSlug) })
   queryClient.invalidateQueries({ queryKey: accountKeys.ledger(ledgerSlug) })
   queryClient.invalidateQueries({ queryKey: envelopeKeys.ledger(ledgerSlug) })
+  queryClient.invalidateQueries({ queryKey: instrumentKeys.portfolio(ledgerSlug) })
 }
 
 export function useTransactions(ledgerSlug: string, filters?: TransactionFilters, enabled = true) {

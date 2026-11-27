@@ -1,6 +1,9 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query"
 import type { PaginationParams } from "./types"
 import { createLedgerScopedKeys } from "./queryKeys"
+// Circular with transactions.hooks (which imports accountKeys); safe because
+// each side reads the other's keys only inside callbacks, never at load time.
+import { transactionKeys } from "./transactions.hooks"
 import {
   getAccounts,
   getAccount,
@@ -54,12 +57,19 @@ export function useCreateAccount(ledgerSlug: string) {
   })
 }
 
+// Transaction lists and reports embed account names and group by account
+// type, so changing or removing an account refreshes them too.
+function invalidateAccountEffects(queryClient: QueryClient, ledgerSlug: string) {
+  queryClient.invalidateQueries({ queryKey: accountKeys.ledger(ledgerSlug) })
+  queryClient.invalidateQueries({ queryKey: transactionKeys.ledger(ledgerSlug) })
+}
+
 export function useUpdateAccount(ledgerSlug: string) {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: ({ accountId, data }: { accountId: string; data: UpdateAccountData }) =>
       updateAccount(ledgerSlug, accountId, data),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: accountKeys.ledger(ledgerSlug) }),
+    onSuccess: () => invalidateAccountEffects(queryClient, ledgerSlug),
   })
 }
 
@@ -67,6 +77,6 @@ export function useDeleteAccount(ledgerSlug: string) {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (accountId: string) => deleteAccount(ledgerSlug, accountId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: accountKeys.ledger(ledgerSlug) }),
+    onSuccess: () => invalidateAccountEffects(queryClient, ledgerSlug),
   })
 }

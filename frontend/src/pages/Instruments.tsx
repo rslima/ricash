@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
+import { CurrencyInput } from "@/components/CurrencyInput"
 import { Label } from "@/components/ui/label"
 import {
   Table,
@@ -148,13 +149,12 @@ function InstrumentForm({
         </div>
         <div className="grid grid-cols-4 items-center gap-4">
           <Label htmlFor={`${idPrefix}currency`} className="text-right">{t("common.currency")}</Label>
-          <Input
+          <CurrencyInput
             id={`${idPrefix}currency`}
             value={formData.currency}
-            onChange={(e) => setFormData({ ...formData, currency: e.target.value.toUpperCase() })}
+            onValueChange={(currency) => setFormData({ ...formData, currency })}
             placeholder="BRL"
-            maxLength={3}
-            className="col-span-3 uppercase"
+            className="col-span-3"
             required
           />
         </div>
@@ -249,7 +249,7 @@ export function Instruments() {
         symbol: formData.symbol.toUpperCase(),
         name: formData.name,
         type: formData.type,
-        currency: formData.currency.toUpperCase(),
+        currency: formData.currency,
         market: formData.market || undefined,
         isin: formData.isin || undefined,
       },
@@ -288,7 +288,7 @@ export function Instruments() {
           symbol: editFormData.symbol.toUpperCase(),
           name: editFormData.name,
           type: editFormData.type,
-          currency: editFormData.currency.toUpperCase(),
+          currency: editFormData.currency,
           market: editFormData.market || undefined,
           isin: editFormData.isin || undefined,
           status: editFormData.status,

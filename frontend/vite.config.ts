@@ -72,6 +72,9 @@ export default defineConfig({
     globals: true,
     clearMocks: true,
     environment: 'jsdom',
+    // Runs the suite in a non-UTC zone so code that confuses the UTC date
+    // with the local one fails here, not in the user's evening.
+    globalSetup: ['./src/test/global-setup.ts'],
     setupFiles: ['./src/test/setup.ts'],
     include: ['src/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
     coverage: {

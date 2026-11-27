@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { CurrencyInput } from "@/components/CurrencyInput"
 import { Label } from "@/components/ui/label"
 import {
   Select,
@@ -89,13 +90,11 @@ export function TransactionEntryForm({
                   title={amountDerived ? t("transactions.derivedCreditAmount") : undefined}
                   className={amountDerived ? "w-28 bg-muted" : "w-28"}
                 />
-                <Input
-                  type="text"
+                <CurrencyInput
                   value={entry.currency}
-                  onChange={(e) => form.updateEntry(index, "currency", e.target.value.toUpperCase())}
+                  onValueChange={(currency) => form.updateEntry(index, "currency", currency)}
                   placeholder="USD"
-                  maxLength={3}
-                  className="w-20 uppercase"
+                  className="w-20"
                 />
                 {form.entries.filter((e) => e.type === type).length > 1 && (
                   <Button
