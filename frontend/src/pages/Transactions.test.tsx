@@ -216,16 +216,16 @@ describe("Transactions", () => {
       // Comboboxes in DOM order: [description, credit account, debit account].
       // The combobox role takes no name from content, so query by position.
       // Credit entry account
-      await user.click(within(dialog).getAllByRole("combobox")[1])
+      await user.click(within(dialog).getAllByRole("combobox")[1]!)
       await user.click(screen.getByText("Checking Account"))
 
       // Debit entry account
-      await user.click(within(dialog).getAllByRole("combobox")[2])
+      await user.click(within(dialog).getAllByRole("combobox")[2]!)
       await user.click(screen.getByText("Groceries"))
 
       // Entries seed with the default currency (BRL); set both to the accounts' USD
       while (within(dialog).queryAllByDisplayValue("BRL").length > 0) {
-        const input = within(dialog).getAllByDisplayValue("BRL")[0]
+        const input = within(dialog).getAllByDisplayValue("BRL")[0]!
         await user.clear(input)
         await user.type(input, "USD")
       }
@@ -233,14 +233,14 @@ describe("Transactions", () => {
       // The lone credit amount is read-only; typing the debit derives it.
       const amountInputs = within(dialog).getAllByPlaceholderText("0.00")
       expect(amountInputs[0]).toBeDisabled()
-      await user.type(amountInputs[1], "50")
+      await user.type(amountInputs[1]!, "50")
 
       await waitFor(() => {
         expect(within(dialog).getAllByPlaceholderText("0.00")[0]).toHaveValue(50)
       })
 
       // Description via the autocomplete popover
-      await user.click(within(dialog).getAllByRole("combobox")[0])
+      await user.click(within(dialog).getAllByRole("combobox")[0]!)
       await user.type(screen.getByPlaceholderText("Description"), "Lunch")
       await user.keyboard("{Escape}")
 

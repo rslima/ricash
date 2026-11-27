@@ -70,7 +70,7 @@ describe("autoBalanceEntries", () => {
       entry({ type: "DEBIT", amount: "" }),
     ]
     const balanced = autoBalanceEntries(entries)
-    expect(balanced[1].amount).toBe("150.00")
+    expect(balanced[1]?.amount).toBe("150.00")
   })
 
   it("balances per currency independently", () => {
@@ -81,8 +81,8 @@ describe("autoBalanceEntries", () => {
       entry({ type: "DEBIT", amount: "", currency: "USD" }),
     ]
     const balanced = autoBalanceEntries(entries)
-    expect(balanced[1].amount).toBe("100.00")
-    expect(balanced[3].amount).toBe("30.00")
+    expect(balanced[1]?.amount).toBe("100.00")
+    expect(balanced[3]?.amount).toBe("30.00")
   })
 
   it("does nothing when more than one entry is empty in a currency", () => {

@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 
 describe("downloadTransactionsExport", () => {
-  const originalFetch = global.fetch
   const originalCreateObjectURL = URL.createObjectURL
   const originalRevokeObjectURL = URL.revokeObjectURL
   let mockFetch: ReturnType<typeof vi.fn>
@@ -9,14 +8,14 @@ describe("downloadTransactionsExport", () => {
 
   beforeEach(() => {
     mockFetch = vi.fn()
-    global.fetch = mockFetch
+    vi.stubGlobal("fetch", mockFetch)
     URL.createObjectURL = vi.fn(() => "blob:mock-url")
     URL.revokeObjectURL = vi.fn()
     clickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {})
   })
 
   afterEach(() => {
-    global.fetch = originalFetch
+    vi.unstubAllGlobals()
     URL.createObjectURL = originalCreateObjectURL
     URL.revokeObjectURL = originalRevokeObjectURL
     clickSpy.mockRestore()
@@ -43,7 +42,7 @@ describe("downloadTransactionsExport", () => {
       to: "2026-06-30",
     })
 
-    const calledUrl = mockFetch.mock.calls[0][0] as string
+    const calledUrl = mockFetch.mock.calls[0]?.[0] as string
     expect(calledUrl).toContain("/ledgers/main/transactions/export")
     expect(calledUrl).toContain("format=csv")
     expect(calledUrl).toContain("accountId=acc-1")
@@ -64,7 +63,7 @@ describe("downloadTransactionsExport", () => {
       to: "",
     })
 
-    const calledUrl = mockFetch.mock.calls[0][0] as string
+    const calledUrl = mockFetch.mock.calls[0]?.[0] as string
     expect(calledUrl).toContain("format=ofx")
     expect(calledUrl).not.toContain("accountId=")
     expect(calledUrl).not.toContain("includeChildren=")
@@ -133,7 +132,7 @@ describe("downloadTransactionsExport", () => {
     const { downloadTransactionsExport } = await import("./exports")
     await downloadTransactionsExport("main", { format: "csv" })
 
-    const options = mockFetch.mock.calls[0][1] as RequestInit
+    const options = mockFetch.mock.calls[0]?.[1] as RequestInit
     expect(options.headers).toMatchObject({ Accept: "*/*" })
     expect(options.headers).not.toHaveProperty("Content-Type")
   })

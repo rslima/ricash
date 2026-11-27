@@ -21,13 +21,13 @@ describe("buildTree", () => {
     const roots = buildTree(items, getId, getParentId)
 
     expect(roots.map((n) => n.item.id)).toEqual(["a", "b"])
-    expect(roots[0].children.map((n) => n.item.id)).toEqual(["a1", "a2"])
-    expect(roots[1].children).toEqual([])
+    expect(roots[0]?.children.map((n) => n.item.id)).toEqual(["a1", "a2"])
+    expect(roots[1]?.children).toEqual([])
   })
 
   it("nests grandchildren recursively", () => {
     const roots = buildTree([item("a"), item("a1", "a"), item("a1x", "a1")], getId, getParentId)
-    expect(roots[0].children[0].children[0].item.id).toBe("a1x")
+    expect(roots[0]?.children[0]?.children[0]?.item.id).toBe("a1x")
   })
 
   it("treats items with unknown parents as roots", () => {

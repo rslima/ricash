@@ -18,9 +18,8 @@ import type {
   JsonApiResponse,
   EnvelopeResource,
   EnvelopeAllocationResource,
-  EnvelopeBalance,
-  BudgetSummary,
 } from "./types"
+import type { EnvelopeBalance, BudgetSummary } from "./envelopes"
 
 vi.mock("./client", () => ({
   apiClient: {

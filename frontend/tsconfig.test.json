@@ -1,0 +1,12 @@
+{
+  // Type-checks the tests, which tsconfig.app.json excludes (Vitest strips
+  // types without checking them). Part of `tsc -b`, so build and CI fail on
+  // a broken test type just as on broken app code.
+  "extends": "./tsconfig.app.json",
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.test.tsbuildinfo",
+    "types": ["vite/client", "vitest/globals", "node"]
+  },
+  "include": ["src/**/*.test.ts", "src/**/*.test.tsx", "src/test", "src/**/*.d.ts"],
+  "exclude": []
+}

@@ -32,18 +32,6 @@ export type JsonApiListResponse<T> = JsonApiResponse<T[]>
 
 // Domain types
 
-export interface UserAttributes {
-  username: string
-  email: string
-  firstName: string
-  lastName: string
-  roles: string[]
-  createdAt: string
-  updatedAt: string
-}
-
-export type UserResource = JsonApiResource<"users", UserAttributes>
-
 export interface LedgerAttributes {
   slug: string
   name: string

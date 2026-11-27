@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
+import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from "vitest"
 import { screen, waitFor, fireEvent } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { ExportTransactionsDialog } from "./ExportTransactionsDialog"
@@ -41,7 +41,7 @@ describe("ExportTransactionsDialog", () => {
   const originalCreateObjectURL = URL.createObjectURL
   const originalRevokeObjectURL = URL.revokeObjectURL
   let clickSpy: ReturnType<typeof vi.spyOn>
-  let onOpenChange: ReturnType<typeof vi.fn>
+  let onOpenChange: Mock<(open: boolean) => void>
 
   beforeEach(() => {
     vi.clearAllMocks()
@@ -50,7 +50,7 @@ describe("ExportTransactionsDialog", () => {
     URL.createObjectURL = vi.fn(() => "blob:mock-url")
     URL.revokeObjectURL = vi.fn()
     clickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {})
-    onOpenChange = vi.fn()
+    onOpenChange = vi.fn<(open: boolean) => void>()
   })
 
   afterEach(() => {

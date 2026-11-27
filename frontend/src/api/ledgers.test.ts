@@ -27,7 +27,7 @@ describe("getLedgers", () => {
 
     expect(apiClient.get).toHaveBeenCalledWith("/ledgers", undefined)
     expect(result.data).toHaveLength(1)
-    expect(result.data[0].attributes.name).toBe("Personal Finance")
+    expect(result.data[0]?.attributes.name).toBe("Personal Finance")
   })
 
   it("fetches ledgers with pagination params", async () => {

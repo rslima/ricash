@@ -27,7 +27,7 @@ describe("getAccounts", () => {
 
     expect(apiClient.get).toHaveBeenCalledWith("/ledgers/ledger-1/accounts", undefined)
     expect(result.data).toHaveLength(1)
-    expect(result.data[0].attributes.name).toBe("Checking Account")
+    expect(result.data[0]?.attributes.name).toBe("Checking Account")
   })
 
   it("fetches accounts with pagination params", async () => {
