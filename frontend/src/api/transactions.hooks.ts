@@ -1,8 +1,5 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query"
-import { createLedgerScopedKeys } from "./queryKeys"
-import { accountKeys } from "./accounts.hooks"
-import { envelopeKeys } from "./envelopes.hooks"
-import { instrumentKeys } from "./instruments.hooks"
+import { accountKeys, envelopeKeys, instrumentKeys, transactionKeys } from "./queryKeys"
 import {
   getTransactions,
   getCategoryTransactions,
@@ -18,25 +15,6 @@ import {
   type CreateTransactionData,
   type UpdateTransactionData,
 } from "./transactions"
-
-/**
- * Transaction query keys, scoped by ledger. Monthly reports/breakdowns and
- * descriptions/templates all live under this prefix so a single ledger-level
- * invalidation refreshes lists and reports together.
- */
-export const transactionKeys = {
-  ...createLedgerScopedKeys<"transactions", TransactionFilters>("transactions"),
-  category: (ledgerSlug: string, accountId: string, year: number, month: number) =>
-    ["transactions", ledgerSlug, "category", accountId, year, month] as const,
-  monthlyReport: (ledgerSlug: string, year: number, month: number) =>
-    ["transactions", ledgerSlug, "monthly-report", year, month] as const,
-  expenseBreakdown: (ledgerSlug: string, year: number, month: number) =>
-    ["transactions", ledgerSlug, "expense-breakdown", year, month] as const,
-  incomeBreakdown: (ledgerSlug: string, year: number, month: number) =>
-    ["transactions", ledgerSlug, "income-breakdown", year, month] as const,
-  descriptions: (ledgerSlug: string) => ["transactions", ledgerSlug, "descriptions"] as const,
-  templates: (ledgerSlug: string) => ["transactions", ledgerSlug, "templates"] as const,
-}
 
 // A transaction changes account balances, envelope balances and (through
 // entries carrying instrumentId/quantity) portfolio positions, so mutations

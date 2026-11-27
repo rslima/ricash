@@ -2,9 +2,9 @@ import type { ReactNode } from "react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { renderHook, waitFor } from "@testing-library/react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { useCreateTransaction, useDeleteTransaction, useUpdateTransaction, transactionKeys } from "./transactions.hooks"
-import { useDeleteAccount, useUpdateAccount, accountKeys } from "./accounts.hooks"
-import { instrumentKeys } from "./instruments.hooks"
+import { useCreateTransaction, useDeleteTransaction, useUpdateTransaction } from "./transactions.hooks"
+import { useDeleteAccount, useUpdateAccount } from "./accounts.hooks"
+import { accountKeys, instrumentKeys, transactionKeys } from "./queryKeys"
 
 vi.mock("./transactions", () => ({
   createTransaction: vi.fn().mockResolvedValue({}),

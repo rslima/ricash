@@ -5,7 +5,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsive
 import { ChartCard } from "@/components/charts/ChartCard"
 import { CHART_COLORS, CHART_TOOLTIP_CONTENT_STYLE } from "@/components/charts/chart-theme"
 import { getBudgetSummary, getEnvelopes } from "@/api/envelopes"
-import { envelopeKeys } from "@/api/envelopes.hooks"
+import { envelopeKeys } from "@/api/queryKeys"
 import type { LedgerResource } from "@/api/types"
 import { formatCurrency } from "@/lib/utils"
 

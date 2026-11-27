@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { exchangeRateKeys } from "./queryKeys"
 import type { PaginationParams } from "./types"
 import {
   getExchangeRates,
@@ -8,12 +9,6 @@ import {
   type CreateExchangeRateInput,
   type FetchExchangeRateInput,
 } from "./exchangeRates"
-
-/** Exchange rates are user-global (not ledger-scoped). */
-export const exchangeRateKeys = {
-  all: ["exchange-rates"] as const,
-  list: (params?: PaginationParams) => ["exchange-rates", "list", params ?? {}] as const,
-}
 
 export function useExchangeRates(params?: PaginationParams, enabled = true) {
   return useQuery({

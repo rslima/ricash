@@ -1,9 +1,6 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query"
+import { accountKeys, transactionKeys } from "./queryKeys"
 import type { PaginationParams } from "./types"
-import { createLedgerScopedKeys } from "./queryKeys"
-// Circular with transactions.hooks (which imports accountKeys); safe because
-// each side reads the other's keys only inside callbacks, never at load time.
-import { transactionKeys } from "./transactions.hooks"
 import {
   getAccounts,
   getAccount,
@@ -14,16 +11,6 @@ import {
   type CreateAccountData,
   type UpdateAccountData,
 } from "./accounts"
-
-/**
- * Account query keys, scoped by ledger so different ledgers cache separately.
- * `ledger(slug)` is the invalidation prefix — invalidating it refreshes every
- * account list/detail/balance query for that ledger.
- */
-export const accountKeys = {
-  ...createLedgerScopedKeys("accounts"),
-  balanceSummary: (ledgerSlug: string) => ["accounts", ledgerSlug, "balance-summary"] as const,
-}
 
 export function useAccounts(ledgerSlug: string, params?: PaginationParams, enabled = true) {
   return useQuery({

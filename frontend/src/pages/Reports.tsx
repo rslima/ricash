@@ -20,8 +20,7 @@ import {
   getMonthlyExpenseBreakdown,
 } from "@/api/transactions"
 import { useLedgers } from "@/api/ledgers.hooks"
-import { accountKeys } from "@/api/accounts.hooks"
-import { transactionKeys } from "@/api/transactions.hooks"
+import { accountKeys, transactionKeys } from "@/api/queryKeys"
 import type { AccountResource } from "@/api/types"
 import { formatCurrency } from "@/lib/utils"
 import { getMonthLabel } from "@/lib/dates"

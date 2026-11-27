@@ -13,9 +13,8 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { getAccounts } from "@/api/accounts"
-import { accountKeys } from "@/api/accounts.hooks"
+import { accountKeys, transactionKeys } from "@/api/queryKeys"
 import { getMonthlyExpenseBreakdown } from "@/api/transactions"
-import { transactionKeys } from "@/api/transactions.hooks"
 import type { LedgerResource, AccountResource } from "@/api/types"
 import { formatCurrency } from "@/lib/utils"
 import { MONTH_KEYS } from "@/lib/dates"

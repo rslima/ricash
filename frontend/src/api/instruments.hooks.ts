@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { instrumentKeys } from "./queryKeys"
 import type { PaginationParams } from "./types"
-import { createLedgerScopedKeys } from "./queryKeys"
 import {
   getInstruments,
   getAllInstruments,
@@ -17,21 +17,6 @@ import {
   type UpdateInstrumentInput,
   type CreateInstrumentPriceInput,
 } from "./instruments"
-
-/**
- * Instrument query keys, scoped by ledger. Prices and portfolio positions live
- * under this prefix, so mutating an instrument or a price (which both move
- * portfolio valuations) invalidates the whole ledger subtree.
- */
-export const instrumentKeys = {
-  ...createLedgerScopedKeys("instruments"),
-  allList: (ledgerSlug: string) => ["instruments", ledgerSlug, "all"] as const,
-  prices: (ledgerSlug: string, params?: PaginationParams & { instrumentId?: string }) =>
-    ["instruments", ledgerSlug, "prices", params ?? {}] as const,
-  portfolio: (ledgerSlug: string) => ["instruments", ledgerSlug, "portfolio"] as const,
-  accountPortfolio: (ledgerSlug: string, accountId: string) =>
-    ["instruments", ledgerSlug, "portfolio", "account", accountId] as const,
-}
 
 export function useInstruments(ledgerSlug: string, params?: PaginationParams, enabled = true) {
   return useQuery({
