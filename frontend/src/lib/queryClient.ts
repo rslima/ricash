@@ -1,5 +1,12 @@
-import { QueryClient } from "@tanstack/react-query"
+import { MutationCache, QueryCache, QueryClient } from "@tanstack/react-query"
 import { ApiError } from "@/api/client"
+import { isUnauthorized, recoverFromUnauthorized } from "@/lib/session-recovery"
+
+function onError(error: unknown) {
+  if (isUnauthorized(error)) {
+    void recoverFromUnauthorized(queryClient)
+  }
+}
 
 /**
  * Shared TanStack Query client.
@@ -7,8 +14,13 @@ import { ApiError } from "@/api/client"
  * Server state (data fetched from the API) lives here; local UI state
  * (dialogs, form fields) stays in component `useState`. Mutations invalidate
  * the relevant query keys on success so lists refetch automatically.
+ *
+ * Any 401, from a query or a mutation, goes to lib/session-recovery: one
+ * silent renew, else back to the sign-in screen.
  */
-export const queryClient = new QueryClient({
+export const queryClient: QueryClient = new QueryClient({
+  queryCache: new QueryCache({ onError }),
+  mutationCache: new MutationCache({ onError }),
   defaultOptions: {
     queries: {
       // Data is considered fresh for 30s before a background refetch is allowed.
