@@ -17,6 +17,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
@@ -38,6 +40,9 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class TransactionExportServiceBeanTest {
 
+    private static final Instant FIXED_NOW = Instant.parse("2026-01-15T12:00:00Z");
+    private static final Clock CLOCK = Clock.fixed(FIXED_NOW, ZoneOffset.UTC);
+
     private static final String USER_ID = "test-user";
     private static final String LEDGER_ID = "ledger-id";
     private static final String LEDGER_SLUG = "test-ledger";
@@ -52,7 +57,7 @@ class TransactionExportServiceBeanTest {
 
     @BeforeEach
     void setUp() {
-        exportService = new TransactionExportServiceBean(transactionRepository, new LedgerAccess(ledgerRepository));
+        exportService = new TransactionExportServiceBean(transactionRepository, new LedgerAccess(ledgerRepository), CLOCK);
     }
 
     @Test

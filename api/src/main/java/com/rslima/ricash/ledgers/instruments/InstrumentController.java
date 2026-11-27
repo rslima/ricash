@@ -1,11 +1,11 @@
 package com.rslima.ricash.ledgers.instruments;
 
 import com.rslima.ricash.web.PagedModels;
+import com.rslima.ricash.web.Pages;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.hateoas.EntityModel;
 import org.springframework.hateoas.PagedModel;
 import org.springframework.http.ResponseEntity;
@@ -37,13 +37,13 @@ public class InstrumentController {
             @RequestParam(name = "page[number]", required = false, defaultValue = "0") int page,
             @RequestParam(name = "page[size]", required = false, defaultValue = "20") int size) {
 
-        final var pageable = PageRequest.of(page, size);
+        final var pageable = Pages.of(page, size);
         Page<EntityModel<InstrumentResource>> instrumentResources = instrumentService
                 .listByLedger(userId(principal), ledgerSlug, pageable)
                 .map(instrument -> toEntityModel(instrument, ledgerSlug, principal));
 
         return PagedModels.toPagedModel(instrumentResources,
-                p -> methodOn(InstrumentController.class).listInstruments(ledgerSlug, principal, p, size));
+                p -> methodOn(InstrumentController.class).listInstruments(ledgerSlug, principal, p, pageable.getPageSize()));
     }
 
     @GetMapping("/all")

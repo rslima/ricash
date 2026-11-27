@@ -11,6 +11,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -23,6 +25,9 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class LedgerServiceBeanTest {
+
+    private static final Instant FIXED_NOW = Instant.parse("2026-01-15T12:00:00Z");
+    private static final Clock CLOCK = Clock.fixed(FIXED_NOW, ZoneOffset.UTC);
 
     @Mock
     private LedgerRepository ledgerRepository;
@@ -41,7 +46,7 @@ class LedgerServiceBeanTest {
 
     @BeforeEach
     void setUp() {
-        ledgerService = new LedgerServiceBean(ledgerRepository, slugService, userRepository);
+        ledgerService = new LedgerServiceBean(ledgerRepository, slugService, userRepository, CLOCK);
     }
 
     @Test
@@ -90,9 +95,7 @@ class LedgerServiceBeanTest {
         when(ledgerRepository.existsBySlug(any(), any())).thenReturn(false);
         when(ledgerRepository.create(any(Ledger.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        var beforeCreate = Instant.now();
         var result = ledgerService.create(USER_ID, request);
-        var afterCreate = Instant.now();
 
         verify(ledgerRepository).create(captor.capture());
         var capturedLedger = captor.getValue();
@@ -104,8 +107,7 @@ class LedgerServiceBeanTest {
         assertThat(capturedLedger.name()).isEqualTo("New Ledger");
         assertThat(capturedLedger.description()).isEqualTo("Description");
         assertThat(capturedLedger.currency()).isEqualTo("EUR");
-        assertThat(capturedLedger.createdAt()).isAfterOrEqualTo(beforeCreate);
-        assertThat(capturedLedger.createdAt()).isBeforeOrEqualTo(afterCreate);
+        assertThat(capturedLedger.createdAt()).isEqualTo(FIXED_NOW);
         assertThat(capturedLedger.accounts()).isEmpty();
 
         assertThat(result).isEqualTo(capturedLedger);

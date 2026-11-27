@@ -50,6 +50,16 @@ import java.time.ZoneId;
 @Configuration
 public class LedgerConfiguration {
 
+    /**
+     * The application clock. Services take it instead of calling
+     * Instant.now()/LocalDate.now() so tests can pin time. Exchange rates use
+     * their own Sao Paulo clock (see exchangeRateService).
+     */
+    @Bean
+    public Clock clock() {
+        return Clock.systemDefaultZone();
+    }
+
     @Bean
     public SlugService slugService() {
         return new SlugService();
@@ -71,8 +81,9 @@ public class LedgerConfiguration {
 
     // Instrument beans
     @Bean
-    public InstrumentService instrumentService(InstrumentRepository instrumentRepository, LedgerAccess ledgerAccess) {
-        return new InstrumentServiceBean(instrumentRepository, ledgerAccess);
+    public InstrumentService instrumentService(InstrumentRepository instrumentRepository, LedgerAccess ledgerAccess,
+                                               Clock clock) {
+        return new InstrumentServiceBean(instrumentRepository, ledgerAccess, clock);
     }
 
     @Bean
@@ -83,11 +94,11 @@ public class LedgerConfiguration {
     @Bean
     public EodhdPriceService eodhdPriceService(
             RestClient.Builder restClientBuilder,
-            InstrumentPriceProviderProperties instrumentPriceProviderProperties
+            InstrumentPriceProviderProperties instrumentPriceProviderProperties,
+            Clock clock
     ) {
         // Timeouts come from the auto-configured builder (spring.http.clients.*).
-        return new EodhdPriceService(restClientBuilder.build(), instrumentPriceProviderProperties,
-                Clock.systemDefaultZone());
+        return new EodhdPriceService(restClientBuilder.build(), instrumentPriceProviderProperties, clock);
     }
 
     @Bean
@@ -96,10 +107,11 @@ public class LedgerConfiguration {
             InstrumentRepository instrumentRepository,
             LedgerAccess ledgerAccess,
             EodhdPriceService eodhdPriceService,
-            InstrumentPriceProviderProperties instrumentPriceProviderProperties
+            InstrumentPriceProviderProperties instrumentPriceProviderProperties,
+            Clock clock
     ) {
         return new InstrumentPriceServiceBean(instrumentPriceRepository, instrumentRepository, ledgerAccess,
-                eodhdPriceService, instrumentPriceProviderProperties);
+                eodhdPriceService, instrumentPriceProviderProperties, clock);
     }
 
     @Bean
@@ -123,8 +135,9 @@ public class LedgerConfiguration {
     }
 
     @Bean
-    public LedgerService ledgerService(LedgerRepository ledgerRepository, SlugService slugService, UserRepository userRepository) {
-        return new LedgerServiceBean(ledgerRepository, slugService, userRepository);
+    public LedgerService ledgerService(LedgerRepository ledgerRepository, SlugService slugService,
+                                       UserRepository userRepository, Clock clock) {
+        return new LedgerServiceBean(ledgerRepository, slugService, userRepository, clock);
     }
 
     @Bean
@@ -133,8 +146,9 @@ public class LedgerConfiguration {
     }
 
     @Bean
-    public AccountService accountService(AccountRepository accountRepository, LedgerAccess ledgerAccess, SlugService slugService) {
-        return new AccountServiceBean(accountRepository, ledgerAccess, slugService);
+    public AccountService accountService(AccountRepository accountRepository, LedgerAccess ledgerAccess,
+                                         SlugService slugService, Clock clock) {
+        return new AccountServiceBean(accountRepository, ledgerAccess, slugService, clock);
     }
 
     @Bean
@@ -149,10 +163,11 @@ public class LedgerConfiguration {
             AccountRepository accountRepository,
             ExchangeRateService exchangeRateService,
             EnvelopeRepository envelopeRepository,
-            InstrumentRepository instrumentRepository
+            InstrumentRepository instrumentRepository,
+            Clock clock
     ) {
         return new TransactionServiceBean(transactionRepository, ledgerAccess, accountRepository, exchangeRateService,
-                envelopeRepository, instrumentRepository);
+                envelopeRepository, instrumentRepository, clock);
     }
 
     @Bean
@@ -163,9 +178,10 @@ public class LedgerConfiguration {
     @Bean
     public TransactionExportService transactionExportService(
             TransactionRepository transactionRepository,
-            LedgerAccess ledgerAccess
+            LedgerAccess ledgerAccess,
+            Clock clock
     ) {
-        return new TransactionExportServiceBean(transactionRepository, ledgerAccess);
+        return new TransactionExportServiceBean(transactionRepository, ledgerAccess, clock);
     }
 
     @Bean
@@ -192,10 +208,11 @@ public class LedgerConfiguration {
             EnvelopeAllocationRepository allocationRepository,
             EnvelopeAccountMappingRepository mappingRepository,
             LedgerAccess ledgerAccess,
-            AccountRepository accountRepository
+            AccountRepository accountRepository,
+            Clock clock
     ) {
         return new EnvelopeServiceBean(envelopeRepository, allocationRepository, mappingRepository, ledgerAccess,
-                accountRepository);
+                accountRepository, clock);
     }
 
     @Bean

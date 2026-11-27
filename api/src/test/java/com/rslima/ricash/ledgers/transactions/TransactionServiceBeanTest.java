@@ -1,6 +1,6 @@
 package com.rslima.ricash.ledgers.transactions;
 
-import com.rslima.ricash.ledgers.Ledger;
+import com.rslima.ricash.ledgers.LedgerRef;
 import com.rslima.ricash.ledgers.LedgerAccess;
 import com.rslima.ricash.ledgers.LedgerNotFoundException;
 import com.rslima.ricash.ledgers.LedgerRepository;
@@ -22,6 +22,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -39,6 +41,9 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class TransactionServiceBeanTest {
+
+    private static final Instant FIXED_NOW = Instant.parse("2026-01-15T12:00:00Z");
+    private static final Clock CLOCK = Clock.fixed(FIXED_NOW, ZoneOffset.UTC);
 
     @Mock
     private TransactionRepository transactionRepository;
@@ -69,7 +74,7 @@ class TransactionServiceBeanTest {
     @BeforeEach
     void setUp() {
         transactionService = new TransactionServiceBean(transactionRepository, new LedgerAccess(ledgerRepository), accountRepository,
-                exchangeRateService, envelopeRepository, instrumentRepository);
+                exchangeRateService, envelopeRepository, instrumentRepository, CLOCK);
     }
 
     @Test
@@ -78,7 +83,7 @@ class TransactionServiceBeanTest {
         var transaction = createTestTransaction();
         var page = new PageImpl<>(List.of(transaction), pageRequest, 1);
 
-        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
+        when(ledgerRepository.findRefBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
         when(transactionRepository.listLedgerTransactions(LEDGER_ID, pageRequest)).thenReturn(page);
 
         var result = transactionService.listLedgerTransactions(USER_ID, LEDGER_SLUG, pageRequest);
@@ -94,7 +99,7 @@ class TransactionServiceBeanTest {
         var transaction = createTestTransaction();
         var page = new PageImpl<>(List.of(transaction), pageRequest, 1);
 
-        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
+        when(ledgerRepository.findRefBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
         when(transactionRepository.listAccountTransactions(LEDGER_ID, accountId, pageRequest)).thenReturn(page);
 
         var result = transactionService.listAccountTransactions(USER_ID, LEDGER_SLUG, accountId, pageRequest);
@@ -107,7 +112,7 @@ class TransactionServiceBeanTest {
     void find_delegatesToRepository() {
         var transaction = createTestTransaction();
 
-        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
+        when(ledgerRepository.findRefBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
         when(transactionRepository.findById(LEDGER_ID, TRANSACTION_ID)).thenReturn(Optional.of(transaction));
 
         var result = transactionService.find(USER_ID, LEDGER_SLUG, TRANSACTION_ID);
@@ -118,7 +123,7 @@ class TransactionServiceBeanTest {
 
     @Test
     void delete_delegatesToRepository() {
-        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
+        when(ledgerRepository.findRefBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
         when(transactionRepository.findById(LEDGER_ID, TRANSACTION_ID)).thenReturn(Optional.of(createTestTransaction()));
 
         transactionService.delete(USER_ID, LEDGER_SLUG, TRANSACTION_ID);
@@ -128,7 +133,7 @@ class TransactionServiceBeanTest {
 
     @Test
     void delete_transactionNotInLedger_throwsWithoutDeleting() {
-        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
+        when(ledgerRepository.findRefBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
         when(transactionRepository.findById(LEDGER_ID, TRANSACTION_ID)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> transactionService.delete(USER_ID, LEDGER_SLUG, TRANSACTION_ID))
@@ -138,7 +143,7 @@ class TransactionServiceBeanTest {
 
     @Test
     void getDistinctDescriptions_delegatesToRepository() {
-        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
+        when(ledgerRepository.findRefBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
         when(transactionRepository.findDistinctDescriptions(LEDGER_ID)).thenReturn(List.of("Groceries", "Rent"));
 
         var result = transactionService.getDistinctDescriptions(USER_ID, LEDGER_SLUG);
@@ -149,7 +154,7 @@ class TransactionServiceBeanTest {
     @Test
     void getTransactionTemplates_delegatesToRepository() {
         var template = createTestTransaction();
-        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
+        when(ledgerRepository.findRefBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
         when(transactionRepository.findTransactionTemplates(LEDGER_ID)).thenReturn(List.of(template));
 
         var result = transactionService.getTransactionTemplates(USER_ID, LEDGER_SLUG);
@@ -165,7 +170,7 @@ class TransactionServiceBeanTest {
                 new TransactionEntryRequest("acc-1", BigDecimal.TEN, "USD", null, null, TransactionEntryType.CREDIT, null, null, null)
         ));
 
-        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
+        when(ledgerRepository.findRefBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
         when(accountRepository.findRefsByIds(eq(LEDGER_ID), any())).thenReturn(List.of(ref(account)));
         when(transactionRepository.findById(eq(LEDGER_ID), any())).thenReturn(Optional.of(createTestTransaction()));
 
@@ -185,7 +190,7 @@ class TransactionServiceBeanTest {
                 new TransactionEntryRequest("ghost", BigDecimal.TEN, "USD", null, null, TransactionEntryType.CREDIT, null, null, null)
         ));
 
-        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
+        when(ledgerRepository.findRefBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
         when(accountRepository.findRefsByIds(eq(LEDGER_ID), any())).thenReturn(List.of());
 
         assertThatThrownBy(() -> transactionService.create(USER_ID, LEDGER_SLUG, request))
@@ -203,7 +208,7 @@ class TransactionServiceBeanTest {
                 new TransactionEntryRequest("acc-brl", new BigDecimal("1000"), "BRL", null, null, TransactionEntryType.CREDIT, null, null, null)
         ));
 
-        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
+        when(ledgerRepository.findRefBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
         when(accountRepository.findRefsByIds(eq(LEDGER_ID), any())).thenReturn(List.of(ref(usdAccount), ref(brlAccount)));
         when(transactionRepository.findById(eq(LEDGER_ID), any())).thenReturn(Optional.of(createTestTransaction()));
 
@@ -223,7 +228,7 @@ class TransactionServiceBeanTest {
                 new TransactionEntryRequest("acc-brl", new BigDecimal("1000"), "BRL", null, null, TransactionEntryType.CREDIT, null, null, null)
         ));
 
-        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
+        when(ledgerRepository.findRefBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
         when(accountRepository.findRefsByIds(eq(LEDGER_ID), any())).thenReturn(List.of(ref(usdAccount), ref(brlAccount)));
         when(exchangeRateService.convert(any(MonetaryAmount.class), eq("USD"), eq(DATE)))
                 .thenReturn(Optional.of(new MonetaryAmount(new BigDecimal("180.00"), "USD")));
@@ -245,7 +250,7 @@ class TransactionServiceBeanTest {
                 new TransactionEntryRequest("acc-brl", new BigDecimal("1000"), "BRL", null, null, TransactionEntryType.CREDIT, null, null, null)
         ));
 
-        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
+        when(ledgerRepository.findRefBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
         when(accountRepository.findRefsByIds(eq(LEDGER_ID), any())).thenReturn(List.of(ref(usdAccount), ref(brlAccount)));
         when(exchangeRateService.convert(any(MonetaryAmount.class), eq("USD"), eq(DATE)))
                 .thenReturn(Optional.empty());
@@ -264,7 +269,7 @@ class TransactionServiceBeanTest {
                 new TransactionEntryRequest("acc-usd", new BigDecimal("1000"), "BRL", null, null, TransactionEntryType.CREDIT, null, null, null)
         ));
 
-        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
+        when(ledgerRepository.findRefBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
         when(accountRepository.findRefsByIds(eq(LEDGER_ID), any())).thenReturn(List.of(ref(usdAccount)));
 
         assertThatThrownBy(() -> transactionService.create(USER_ID, LEDGER_SLUG, request))
@@ -280,7 +285,7 @@ class TransactionServiceBeanTest {
                 new TransactionEntryRequest("acc-1", BigDecimal.TEN, "USD", null, null, TransactionEntryType.CREDIT, null, null, null)
         ));
 
-        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
+        when(ledgerRepository.findRefBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
         when(accountRepository.findRefsByIds(eq(LEDGER_ID), any())).thenReturn(List.of(ref(account)));
         when(envelopeRepository.findIdsIn(LEDGER_ID, Set.of("foreign-env"))).thenReturn(Set.of());
 
@@ -298,7 +303,7 @@ class TransactionServiceBeanTest {
                 new TransactionEntryRequest("acc-1", BigDecimal.TEN, "USD", null, null, TransactionEntryType.CREDIT, null, null, null)
         ));
 
-        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
+        when(ledgerRepository.findRefBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
         when(accountRepository.findRefsByIds(eq(LEDGER_ID), any())).thenReturn(List.of(ref(account)));
         when(instrumentRepository.findIdsIn(LEDGER_ID, Set.of("foreign-instr"))).thenReturn(Set.of());
 
@@ -316,7 +321,7 @@ class TransactionServiceBeanTest {
                 new TransactionEntryRequest("acc-1", BigDecimal.TEN, "USD", null, null, TransactionEntryType.CREDIT, null, null, null)
         ));
 
-        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
+        when(ledgerRepository.findRefBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
         when(accountRepository.findRefsByIds(eq(LEDGER_ID), any())).thenReturn(List.of(ref(account)));
         when(envelopeRepository.findIdsIn(LEDGER_ID, Set.of("env-1"))).thenReturn(Set.of("env-1"));
         when(instrumentRepository.findIdsIn(LEDGER_ID, Set.of("instr-1"))).thenReturn(Set.of("instr-1"));
@@ -336,7 +341,7 @@ class TransactionServiceBeanTest {
                 new TransactionEntryRequest("acc-1", BigDecimal.ONE, "USD", null, null, TransactionEntryType.CREDIT, null, null, null)
         ));
 
-        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
+        when(ledgerRepository.findRefBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
         when(accountRepository.findRefsByIds(eq(LEDGER_ID), any())).thenReturn(List.of(ref(account)));
 
         assertThatThrownBy(() -> transactionService.create(USER_ID, LEDGER_SLUG, request))
@@ -353,7 +358,7 @@ class TransactionServiceBeanTest {
                 new TransactionEntryRequest("acc-1", BigDecimal.TEN, "USD", null, null, TransactionEntryType.CREDIT, null, null, null)
         ));
 
-        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
+        when(ledgerRepository.findRefBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
         when(transactionRepository.findById(LEDGER_ID, TRANSACTION_ID)).thenReturn(Optional.of(existing));
         when(accountRepository.findRefsByIds(eq(LEDGER_ID), any())).thenReturn(List.of(ref(account)));
 
@@ -369,7 +374,7 @@ class TransactionServiceBeanTest {
                 new TransactionEntryRequest("acc-1", BigDecimal.TEN, "USD", null, null, TransactionEntryType.DEBIT, null, null, null)
         ));
 
-        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
+        when(ledgerRepository.findRefBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
         when(transactionRepository.findById(LEDGER_ID, TRANSACTION_ID)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> transactionService.update(USER_ID, LEDGER_SLUG, TRANSACTION_ID, request))
@@ -379,14 +384,14 @@ class TransactionServiceBeanTest {
     @Test
     void ledgerNotFound_throws() {
         var pageRequest = PageRequest.of(0, 20);
-        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.empty());
+        when(ledgerRepository.findRefBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> transactionService.listLedgerTransactions(USER_ID, LEDGER_SLUG, pageRequest))
                 .isInstanceOf(LedgerNotFoundException.class);
     }
 
-    private Ledger createTestLedger() {
-        return new Ledger(LEDGER_ID, USER_ID, LEDGER_SLUG, "Test Ledger", "Description", "USD", Instant.now(), List.of());
+    private LedgerRef createTestLedger() {
+        return new LedgerRef(LEDGER_ID, LEDGER_SLUG, "USD");
     }
 
     private Transaction createTestTransaction() {

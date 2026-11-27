@@ -1,6 +1,6 @@
 package com.rslima.ricash.ledgers.instruments;
 
-import com.rslima.ricash.ledgers.Ledger;
+import com.rslima.ricash.ledgers.LedgerRef;
 import com.rslima.ricash.ledgers.LedgerAccess;
 import com.rslima.ricash.ledgers.LedgerNotFoundException;
 import com.rslima.ricash.ledgers.LedgerRepository;
@@ -11,6 +11,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -23,6 +25,9 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class InstrumentServiceBeanTest {
+
+    private static final Instant FIXED_NOW = Instant.parse("2026-01-15T12:00:00Z");
+    private static final Clock CLOCK = Clock.fixed(FIXED_NOW, ZoneOffset.UTC);
 
     @Mock
     private InstrumentRepository instrumentRepository;
@@ -39,11 +44,11 @@ class InstrumentServiceBeanTest {
 
     @BeforeEach
     void setUp() {
-        instrumentService = new InstrumentServiceBean(instrumentRepository, new LedgerAccess(ledgerRepository));
+        instrumentService = new InstrumentServiceBean(instrumentRepository, new LedgerAccess(ledgerRepository), CLOCK);
     }
 
     private void givenLedgerExists() {
-        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
+        when(ledgerRepository.findRefBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
     }
 
     @Test
@@ -78,7 +83,7 @@ class InstrumentServiceBeanTest {
 
     @Test
     void create_unknownLedger_throwsNotFound() {
-        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.empty());
+        when(ledgerRepository.findRefBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> instrumentService.create(USER_ID, LEDGER_SLUG, "PETR4", "Petrobras", InstrumentType.STOCK, "BRL", "B3", null))
                 .isInstanceOf(LedgerNotFoundException.class);
@@ -151,8 +156,8 @@ class InstrumentServiceBeanTest {
                 .isInstanceOf(InstrumentNotFoundException.class);
     }
 
-    private Ledger createTestLedger() {
-        return new Ledger(LEDGER_ID, USER_ID, LEDGER_SLUG, "Test Ledger", null, "BRL", Instant.now(), List.of());
+    private LedgerRef createTestLedger() {
+        return new LedgerRef(LEDGER_ID, LEDGER_SLUG, "BRL");
     }
 
     private Instrument createTestInstrument() {

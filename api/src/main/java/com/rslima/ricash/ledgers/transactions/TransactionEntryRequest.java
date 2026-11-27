@@ -1,5 +1,6 @@
 package com.rslima.ricash.ledgers.transactions;
 
+import com.rslima.ricash.ledgers.CurrencyCode;
 import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -21,9 +22,9 @@ import java.math.BigDecimal;
 public record TransactionEntryRequest(
         @NotBlank String accountId,
         @NotNull @Positive @Digits(integer = 18, fraction = 2) BigDecimal amount,
-        @NotBlank String currency,
+        @NotBlank @CurrencyCode String currency,
         @Positive @Digits(integer = 18, fraction = 2) BigDecimal toAmount,
-        String toCurrency,
+        @CurrencyCode String toCurrency,
         @NotNull TransactionEntryType type,
         String instrumentId,
         @Positive @Digits(integer = 12, fraction = 8) BigDecimal quantity,

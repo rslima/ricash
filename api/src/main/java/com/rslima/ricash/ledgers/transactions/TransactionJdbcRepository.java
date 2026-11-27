@@ -27,6 +27,7 @@ import java.util.LinkedHashMap;
 import static com.rslima.ricash.ledgers.DateRanges.monthEnd;
 import static com.rslima.ricash.ledgers.DateRanges.monthStart;
 import static java.util.stream.Collectors.groupingBy;
+import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toMap;
 
 @RequiredArgsConstructor
@@ -108,7 +109,7 @@ public class TransactionJdbcRepository implements TransactionRepository {
                         ORDER BY t.date DESC, t.created_at DESC
                         """)
                 .param("ledgerId", ledgerId)
-                .param("description", "%" + description + "%")
+                .param("description", containsPattern(description))
                 .param("offset", pageRequest.getOffset())
                 .param("limit", pageRequest.getPageSize())
                 .query(DBTransactionWithEntry.class)
@@ -119,12 +120,21 @@ public class TransactionJdbcRepository implements TransactionRepository {
                         WHERE ledger_id = :ledgerId AND description ILIKE :description
                         """)
                 .param("ledgerId", ledgerId)
-                .param("description", "%" + description + "%")
+                .param("description", containsPattern(description))
                 .query(Long.class)
                 .single();
 
         final var transactions = groupToTransactions(results);
         return new PageImpl<>(transactions, pageRequest, total);
+    }
+
+    /**
+     * ILIKE pattern matching {@code text} literally anywhere: {@code %},
+     * {@code _} and the escape character {@code \} itself (Postgres' default
+     * LIKE escape) in user input are escaped instead of acting as wildcards.
+     */
+    static String containsPattern(String text) {
+        return "%" + text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%";
     }
 
     @Override
@@ -383,7 +393,7 @@ public class TransactionJdbcRepository implements TransactionRepository {
                         """)
                 .param("id", transaction.id())
                 .param("ledgerId", ledgerId)
-                .param("date", java.sql.Date.valueOf(transaction.date()))
+                .param("date", Date.valueOf(transaction.date()))
                 .param("description", transaction.description())
                 .update();
 
@@ -457,7 +467,7 @@ public class TransactionJdbcRepository implements TransactionRepository {
                 .collect(groupingBy(
                         r -> new DBTransaction(r.transactionId(), null, r.date(), r.description(), r.createdAt()),
                         LinkedHashMap::new,
-                        java.util.stream.Collectors.toList()
+                        toList()
                 ))
                 .entrySet().stream()
                 .map(e -> {

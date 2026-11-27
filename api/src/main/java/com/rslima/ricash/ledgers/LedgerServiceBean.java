@@ -8,6 +8,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -18,6 +19,7 @@ public class LedgerServiceBean implements LedgerService {
     private final LedgerRepository ledgerRepository;
     private final SlugService slugService;
     private final UserRepository userRepository;
+    private final Clock clock;
 
     @Override
     public Page<Ledger> listUserLedgers(String userId, Pageable pageRequest) {
@@ -46,7 +48,7 @@ public class LedgerServiceBean implements LedgerService {
                 request.name(),
                 request.description(),
                 request.currency(),
-                Instant.now(),
+                Instant.now(clock),
                 List.of()
         );
         return ledgerRepository.create(ledger);

@@ -1,10 +1,10 @@
 package com.rslima.ricash.ledgers.accounts;
 
 import com.rslima.ricash.web.PagedModels;
+import com.rslima.ricash.web.Pages;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.hateoas.EntityModel;
 import org.springframework.hateoas.PagedModel;
 import org.springframework.http.ResponseEntity;
@@ -42,12 +42,12 @@ public class AccountController {
             @RequestParam(name = "page[number]", required = false, defaultValue = "0") int page,
             @RequestParam(name = "page[size]", required = false, defaultValue = "20") int size) {
 
-        final var pageable = PageRequest.of(page, size);
+        final var pageable = Pages.of(page, size);
         var accountResources = accountService.listLedgerAccounts(userId(principal), ledgerSlug, pageable)
                 .map(account -> toEntityModel(ledgerSlug, account, principal));
 
         return PagedModels.toPagedModel(accountResources,
-                p -> methodOn(AccountController.class).listAccounts(ledgerSlug, principal, p, size));
+                p -> methodOn(AccountController.class).listAccounts(ledgerSlug, principal, p, pageable.getPageSize()));
     }
 
     @GetMapping("/{accountId}")

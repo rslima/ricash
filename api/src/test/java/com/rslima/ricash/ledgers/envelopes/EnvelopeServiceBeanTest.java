@@ -1,6 +1,6 @@
 package com.rslima.ricash.ledgers.envelopes;
 
-import com.rslima.ricash.ledgers.Ledger;
+import com.rslima.ricash.ledgers.LedgerRef;
 import com.rslima.ricash.ledgers.LedgerAccess;
 import com.rslima.ricash.ledgers.LedgerRepository;
 import com.rslima.ricash.ledgers.accounts.AccountRef;
@@ -15,6 +15,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
@@ -33,6 +35,9 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class EnvelopeServiceBeanTest {
+
+    private static final Instant FIXED_NOW = Instant.parse("2026-01-15T12:00:00Z");
+    private static final Clock CLOCK = Clock.fixed(FIXED_NOW, ZoneOffset.UTC);
 
     @Mock
     private EnvelopeRepository envelopeRepository;
@@ -59,7 +64,7 @@ class EnvelopeServiceBeanTest {
     @BeforeEach
     void setUp() {
         envelopeService = new EnvelopeServiceBean(envelopeRepository, allocationRepository, mappingRepository,
-                new LedgerAccess(ledgerRepository), accountRepository);
+                new LedgerAccess(ledgerRepository), accountRepository, CLOCK);
     }
 
     @Test
@@ -68,7 +73,7 @@ class EnvelopeServiceBeanTest {
         var envelope = createTestEnvelope();
         var page = new PageImpl<>(List.of(envelope), pageRequest, 1);
 
-        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
+        when(ledgerRepository.findRefBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
         when(envelopeRepository.listLedgerEnvelopes(LEDGER_ID, pageRequest)).thenReturn(page);
 
         var result = envelopeService.listLedgerEnvelopes(USER_ID, LEDGER_SLUG, pageRequest);
@@ -78,7 +83,7 @@ class EnvelopeServiceBeanTest {
 
     @Test
     void find_delegatesToRepository() {
-        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
+        when(ledgerRepository.findRefBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
         when(envelopeRepository.findById(LEDGER_ID, ENVELOPE_ID)).thenReturn(Optional.of(createTestEnvelope()));
 
         var result = envelopeService.find(USER_ID, LEDGER_SLUG, ENVELOPE_ID);
@@ -92,7 +97,7 @@ class EnvelopeServiceBeanTest {
         var request = new CreateEnvelopeRequest("Groceries", "Food budget", "USD", EnvelopeType.EXPENSE, null);
         var captor = ArgumentCaptor.forClass(Envelope.class);
 
-        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
+        when(ledgerRepository.findRefBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
         when(envelopeRepository.create(eq(LEDGER_ID), any(Envelope.class))).thenAnswer(inv -> inv.getArgument(1));
 
         var result = envelopeService.create(USER_ID, LEDGER_SLUG, request);
@@ -102,6 +107,7 @@ class EnvelopeServiceBeanTest {
         assertThat(captured.id()).isNotNull().hasSize(36);
         assertThat(captured.name()).isEqualTo("Groceries");
         assertThat(captured.status()).isEqualTo(EnvelopeStatus.ACTIVE);
+        assertThat(captured.createdAt()).isEqualTo(FIXED_NOW);
     }
 
     @Test
@@ -109,7 +115,7 @@ class EnvelopeServiceBeanTest {
         var request = new UpdateEnvelopeRequest("Updated", "Desc", EnvelopeType.EXPENSE, "USD", EnvelopeStatus.ACTIVE, null);
         var updated = createTestEnvelope();
 
-        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
+        when(ledgerRepository.findRefBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
         when(envelopeRepository.findById(LEDGER_ID, ENVELOPE_ID)).thenReturn(Optional.of(createTestEnvelope()));
         when(envelopeRepository.update(LEDGER_ID, ENVELOPE_ID, "Updated", "Desc", EnvelopeType.EXPENSE, "USD", EnvelopeStatus.ACTIVE, null))
                 .thenReturn(updated);
@@ -123,7 +129,7 @@ class EnvelopeServiceBeanTest {
     void update_notFound_throws() {
         var request = new UpdateEnvelopeRequest("Updated", "Desc", EnvelopeType.EXPENSE, "USD", EnvelopeStatus.ACTIVE, null);
 
-        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
+        when(ledgerRepository.findRefBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
         when(envelopeRepository.findById(LEDGER_ID, ENVELOPE_ID)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> envelopeService.update(USER_ID, LEDGER_SLUG, ENVELOPE_ID, request))
@@ -134,7 +140,7 @@ class EnvelopeServiceBeanTest {
     void create_parentOutsideLedger_throwsWithoutWriting() {
         var request = new CreateEnvelopeRequest("Groceries", null, "USD", EnvelopeType.EXPENSE, "foreign-id");
 
-        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
+        when(ledgerRepository.findRefBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
         when(envelopeRepository.findIdsIn(LEDGER_ID, List.of("foreign-id"))).thenReturn(Set.of());
 
         assertThatThrownBy(() -> envelopeService.create(USER_ID, LEDGER_SLUG, request))
@@ -147,7 +153,7 @@ class EnvelopeServiceBeanTest {
     void update_selfAsParent_throwsWithoutWriting() {
         var request = new UpdateEnvelopeRequest("Groceries", null, EnvelopeType.EXPENSE, "USD", EnvelopeStatus.ACTIVE, ENVELOPE_ID);
 
-        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
+        when(ledgerRepository.findRefBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
         when(envelopeRepository.findById(LEDGER_ID, ENVELOPE_ID)).thenReturn(Optional.of(createTestEnvelope()));
         when(envelopeRepository.findIdsIn(LEDGER_ID, List.of(ENVELOPE_ID))).thenReturn(Set.of(ENVELOPE_ID));
         when(envelopeRepository.findChildEnvelopeIds(LEDGER_ID, ENVELOPE_ID)).thenReturn(List.of());
@@ -162,7 +168,7 @@ class EnvelopeServiceBeanTest {
     void update_descendantAsParent_throwsWithoutWriting() {
         var request = new UpdateEnvelopeRequest("Groceries", null, EnvelopeType.EXPENSE, "USD", EnvelopeStatus.ACTIVE, "child-id");
 
-        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
+        when(ledgerRepository.findRefBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
         when(envelopeRepository.findById(LEDGER_ID, ENVELOPE_ID)).thenReturn(Optional.of(createTestEnvelope()));
         when(envelopeRepository.findIdsIn(LEDGER_ID, List.of("child-id"))).thenReturn(Set.of("child-id"));
         when(envelopeRepository.findChildEnvelopeIds(LEDGER_ID, ENVELOPE_ID)).thenReturn(List.of("child-id"));
@@ -176,7 +182,7 @@ class EnvelopeServiceBeanTest {
 
     @Test
     void setEnvelopeAccounts_accountOutsideLedger_throwsWithoutTouchingMappings() {
-        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
+        when(ledgerRepository.findRefBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
         when(envelopeRepository.findById(LEDGER_ID, ENVELOPE_ID)).thenReturn(Optional.of(createTestEnvelope()));
         when(accountRepository.findRefsByIds(LEDGER_ID, List.of("acc-1", "foreign-acc")))
                 .thenReturn(List.of(new AccountRef("acc-1", "Groceries", "USD")));
@@ -189,7 +195,7 @@ class EnvelopeServiceBeanTest {
 
     @Test
     void setEnvelopeAccounts_ownAccounts_rewritesMappings() {
-        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
+        when(ledgerRepository.findRefBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
         when(envelopeRepository.findById(LEDGER_ID, ENVELOPE_ID)).thenReturn(Optional.of(createTestEnvelope()));
         when(accountRepository.findRefsByIds(LEDGER_ID, List.of("acc-1")))
                 .thenReturn(List.of(new AccountRef("acc-1", "Groceries", "USD")));
@@ -201,7 +207,7 @@ class EnvelopeServiceBeanTest {
 
     @Test
     void delete_leafEnvelope_cleansAllocationsAndMappings() {
-        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
+        when(ledgerRepository.findRefBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
         when(envelopeRepository.findById(LEDGER_ID, ENVELOPE_ID)).thenReturn(Optional.of(createTestEnvelope()));
         when(envelopeRepository.findChildEnvelopeIds(LEDGER_ID, ENVELOPE_ID)).thenReturn(List.of());
         when(envelopeRepository.hasTransactionEntries(ENVELOPE_ID)).thenReturn(false);
@@ -217,7 +223,7 @@ class EnvelopeServiceBeanTest {
     void delete_parentWithChildren_deletesRecursively() {
         var childId = "child-envelope";
 
-        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
+        when(ledgerRepository.findRefBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
         when(envelopeRepository.findById(LEDGER_ID, ENVELOPE_ID)).thenReturn(Optional.of(createTestEnvelope()));
         when(envelopeRepository.findChildEnvelopeIds(LEDGER_ID, ENVELOPE_ID)).thenReturn(List.of(childId));
         when(envelopeRepository.findChildEnvelopeIds(LEDGER_ID, childId)).thenReturn(List.of());
@@ -232,7 +238,7 @@ class EnvelopeServiceBeanTest {
 
     @Test
     void delete_envelopeWithTransactions_throws() {
-        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
+        when(ledgerRepository.findRefBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
         when(envelopeRepository.findById(LEDGER_ID, ENVELOPE_ID)).thenReturn(Optional.of(createTestEnvelope()));
         when(envelopeRepository.findChildEnvelopeIds(LEDGER_ID, ENVELOPE_ID)).thenReturn(List.of());
         when(envelopeRepository.hasTransactionEntries(ENVELOPE_ID)).thenReturn(true);
@@ -246,7 +252,7 @@ class EnvelopeServiceBeanTest {
         var request = new AllocateEnvelopeRequest(2026, 3, new BigDecimal("500.00"), "March budget");
         var allocation = new EnvelopeAllocation("alloc-id", ENVELOPE_ID, 2026, 3, new BigDecimal("500.00"), "March budget", Instant.now(), Instant.now());
 
-        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
+        when(ledgerRepository.findRefBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
         when(envelopeRepository.findById(LEDGER_ID, ENVELOPE_ID)).thenReturn(Optional.of(createTestEnvelope()));
         when(allocationRepository.upsert(ENVELOPE_ID, 2026, 3, new BigDecimal("500.00"), "March budget"))
                 .thenReturn(allocation);
@@ -258,7 +264,7 @@ class EnvelopeServiceBeanTest {
 
     @Test
     void getBalance_calculatesRolloverPlusAllocatedMinusSpent() {
-        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
+        when(ledgerRepository.findRefBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
         when(envelopeRepository.findById(LEDGER_ID, ENVELOPE_ID)).thenReturn(Optional.of(createTestEnvelope()));
 
         // Current month: allocated 500, spent 300; no earlier activity -> rollover = 0
@@ -275,7 +281,7 @@ class EnvelopeServiceBeanTest {
 
     @Test
     void getBalance_withRolloverFromPreviousMonth() {
-        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
+        when(ledgerRepository.findRefBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
         when(envelopeRepository.findById(LEDGER_ID, ENVELOPE_ID)).thenReturn(Optional.of(createTestEnvelope()));
 
         // February: allocated 400, spent 200 -> 200 rolls into March.
@@ -294,7 +300,7 @@ class EnvelopeServiceBeanTest {
 
     @Test
     void getBalance_overspentMonthClampsCarryButKeepsChain() {
-        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
+        when(ledgerRepository.findRefBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
         when(envelopeRepository.findById(LEDGER_ID, ENVELOPE_ID)).thenReturn(Optional.of(createTestEnvelope()));
 
         // Jan avail 60, Feb overspends to -30 (clamps to 0), Mar avail 30 -> rolls into April.
@@ -312,7 +318,7 @@ class EnvelopeServiceBeanTest {
 
     @Test
     void getBalance_gapMonthBreaksRolloverChain() {
-        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
+        when(ledgerRepository.findRefBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
         when(envelopeRepository.findById(LEDGER_ID, ENVELOPE_ID)).thenReturn(Optional.of(createTestEnvelope()));
 
         // January's 200 leftover must not survive the inactive February.
@@ -329,7 +335,7 @@ class EnvelopeServiceBeanTest {
 
     @Test
     void getToBeBudgeted_calculatesIncomeMinusAllocated() {
-        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
+        when(ledgerRepository.findRefBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
         when(allocationRepository.calculateIncomeForPeriod(LEDGER_ID, 2026, 3)).thenReturn(new BigDecimal("5000"));
         when(allocationRepository.sumAllocatedForPeriod(LEDGER_ID, 2026, 3)).thenReturn(new BigDecimal("3000"));
 
@@ -343,7 +349,7 @@ class EnvelopeServiceBeanTest {
         var envelope1 = new Envelope("env-1", "Groceries", null, "USD", EnvelopeType.EXPENSE, EnvelopeStatus.ACTIVE, Instant.now(), null, List.of());
         var envelope2 = new Envelope("env-2", "Rent", null, "USD", EnvelopeType.EXPENSE, EnvelopeStatus.ACTIVE, Instant.now(), null, List.of());
 
-        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
+        when(ledgerRepository.findRefBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
         when(envelopeRepository.findAllByLedger(LEDGER_ID)).thenReturn(List.of(envelope1, envelope2));
         when(allocationRepository.findMonthlyActivityByLedger(LEDGER_ID, 2026, 3))
                 .thenReturn(List.of(activity("env-1", 2026, 3, "100", "25")));
@@ -359,7 +365,7 @@ class EnvelopeServiceBeanTest {
 
     @Test
     void getEnvelopeAccounts_returnsMappedAccountIds() {
-        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
+        when(ledgerRepository.findRefBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
         when(envelopeRepository.findById(LEDGER_ID, ENVELOPE_ID)).thenReturn(Optional.of(createTestEnvelope()));
         when(mappingRepository.findByEnvelopeId(ENVELOPE_ID)).thenReturn(List.of(
                 new EnvelopeAccountMapping("m1", ENVELOPE_ID, "acc-1"),
@@ -373,7 +379,7 @@ class EnvelopeServiceBeanTest {
 
     @Test
     void getAllEnvelopeMappings_delegatesToRepository() {
-        when(ledgerRepository.findBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
+        when(ledgerRepository.findRefBySlug(USER_ID, LEDGER_SLUG)).thenReturn(Optional.of(createTestLedger()));
         when(mappingRepository.findAllMappingsForLedger(LEDGER_ID)).thenReturn(Map.of("acc-1", "env-1"));
 
         var result = envelopeService.getAllEnvelopeMappings(USER_ID, LEDGER_SLUG);
@@ -390,8 +396,8 @@ class EnvelopeServiceBeanTest {
                 envelopeId, year, month, new BigDecimal(allocated), new BigDecimal(spent));
     }
 
-    private Ledger createTestLedger() {
-        return new Ledger(LEDGER_ID, USER_ID, LEDGER_SLUG, "Test Ledger", "Description", "USD", Instant.now(), List.of());
+    private LedgerRef createTestLedger() {
+        return new LedgerRef(LEDGER_ID, LEDGER_SLUG, "USD");
     }
 
     private Envelope createTestEnvelope() {

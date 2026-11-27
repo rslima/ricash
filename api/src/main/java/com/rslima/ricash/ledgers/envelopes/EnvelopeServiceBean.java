@@ -12,6 +12,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -32,6 +33,7 @@ public class EnvelopeServiceBean implements EnvelopeService {
     private final EnvelopeAccountMappingRepository mappingRepository;
     private final LedgerAccess ledgerAccess;
     private final AccountRepository accountRepository;
+    private final Clock clock;
 
     @Override
     public Page<Envelope> listLedgerEnvelopes(String userId, String ledgerSlug, Pageable pageRequest) {
@@ -58,7 +60,7 @@ public class EnvelopeServiceBean implements EnvelopeService {
                 request.currency(),
                 request.type(),
                 EnvelopeStatus.ACTIVE,
-                Instant.now(),
+                Instant.now(clock),
                 request.parentEnvelopeId(),
                 List.of()
         );

@@ -10,6 +10,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -25,6 +26,7 @@ public class AccountServiceBean implements AccountService {
     private final AccountRepository accountRepository;
     private final LedgerAccess ledgerAccess;
     private final SlugService slugService;
+    private final Clock clock;
 
     @Override
     public Page<Account> listLedgerAccounts(String userId, String ledgerSlug, Pageable pageRequest) {
@@ -56,7 +58,7 @@ public class AccountServiceBean implements AccountService {
                 request.type(),
                 AccountStatus.ACTIVE,
                 BigDecimal.ZERO,
-                Instant.now(),
+                Instant.now(clock),
                 request.parentAccountId(),
                 List.of()
         );
