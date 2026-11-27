@@ -16,8 +16,8 @@ function renderPicker(overrides: Partial<Parameters<typeof MonthYearPicker>[0]> 
 }
 
 // The month select renders first, the year select second.
-const monthTrigger = () => screen.getAllByRole("combobox")[0]
-const yearTrigger = () => screen.getAllByRole("combobox")[1]
+const monthTrigger = () => screen.getAllByRole("combobox")[0]!
+const yearTrigger = () => screen.getAllByRole("combobox")[1]!
 
 describe("MonthYearPicker", () => {
   it("displays the selected month and year", () => {

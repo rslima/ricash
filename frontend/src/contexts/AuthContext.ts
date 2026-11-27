@@ -5,7 +5,6 @@ export interface AuthUser {
   username: string
   email: string
   name: string
-  roles: string[]
 }
 
 export interface AuthContextType {

@@ -33,7 +33,7 @@ describe("getExchangeRates", () => {
 
     expect(apiClient.get).toHaveBeenCalledWith("/exchange-rates", undefined)
     expect(result.data).toHaveLength(1)
-    expect(result.data[0].attributes.fromCurrency).toBe("USD")
+    expect(result.data[0]?.attributes.fromCurrency).toBe("USD")
   })
 })
 

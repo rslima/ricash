@@ -107,6 +107,7 @@ Services start automatically with `spring-boot:run` via spring-boot-docker-compo
 - Never edit an applied migration (checksums); add a compensating one instead (see V14)
 
 ## Testing
+- Frontend: Vitest strips types without checking them, so `frontend/tsconfig.test.json` (a `tsc -b` reference) type-checks the tests; `npm run build` and CI fail on test type errors as on app code
 - Unit tests: Mockito for `*ServiceBean`s and mappers
 - Integration tests: `@SpringBootTest` + Testcontainers (postgres pinned to 18.1 in `TestRicashApplication`); shared raw-SQL seeding via `testsupport/DbFixtures`
 - Web tests: `@WebMvcTest` + `@Import({WebTestConfiguration.class, SecurityConfiguration.class})` + `@ImportAutoConfiguration(JsonApiMediaTypeConfiguration.class)` (the JSON:API converter is not part of the slice by default); authenticate requests with `WebTestConfiguration.jwtFor(userId)`

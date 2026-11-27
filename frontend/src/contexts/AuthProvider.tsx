@@ -17,13 +17,6 @@ function extractAuthUser(oidcUser: User | null | undefined): AuthUser | null {
 
   const profile = oidcUser.profile
 
-  // Support both Keycloak (realm_access.roles) and Auth0 (https://ricash.app/roles) claim formats
-  const realmAccess = profile.realm_access as { roles?: string[] } | undefined
-  const roles =
-    realmAccess?.roles ||
-    (profile["https://ricash.app/roles"] as string[] | undefined) ||
-    []
-
   const username =
     (profile.preferred_username as string) ||
     (profile.email as string) ||
@@ -34,7 +27,6 @@ function extractAuthUser(oidcUser: User | null | undefined): AuthUser | null {
     username,
     email: (profile.email as string) || "",
     name: (profile.name as string) || username,
-    roles,
   }
 }
 

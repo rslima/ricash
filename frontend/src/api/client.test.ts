@@ -28,16 +28,15 @@ describe("ApiError", () => {
 })
 
 describe("ApiClient", () => {
-  const originalFetch = global.fetch
   let mockFetch: ReturnType<typeof vi.fn>
 
   beforeEach(() => {
     mockFetch = vi.fn()
-    global.fetch = mockFetch
+    vi.stubGlobal("fetch", mockFetch)
   })
 
   afterEach(() => {
-    global.fetch = originalFetch
+    vi.unstubAllGlobals()
     vi.resetModules()
   })
 
@@ -70,7 +69,7 @@ describe("ApiClient", () => {
     const { apiClient } = await import("./client")
     await apiClient.get("/test", { page: 1, size: undefined })
 
-    const calledUrl = mockFetch.mock.calls[0][0] as string
+    const calledUrl = mockFetch.mock.calls[0]?.[0] as string
     expect(calledUrl).toContain("page=1")
     expect(calledUrl).not.toContain("size=")
   })

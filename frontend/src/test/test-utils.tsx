@@ -28,7 +28,6 @@ export const mockAuthenticatedUser: AuthUser = {
   username: "testuser",
   email: "test@example.com",
   name: "Test User",
-  roles: [],
 }
 
 /**
