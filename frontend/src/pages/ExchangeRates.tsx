@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { CurrencyInput } from "@/components/CurrencyInput"
 import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
@@ -68,8 +69,8 @@ export function ExchangeRates() {
 
   const isFormValid = () => {
     return (
-      fromCurrency.trim().length === 3 &&
-      toCurrency.trim().length === 3 &&
+      fromCurrency.length === 3 &&
+      toCurrency.length === 3 &&
       parseFloat(rate) > 0 &&
       effectiveDate
     )
@@ -80,8 +81,8 @@ export function ExchangeRates() {
 
     createExchangeRateMutation.mutate(
       {
-        fromCurrency: fromCurrency.toUpperCase(),
-        toCurrency: toCurrency.toUpperCase(),
+        fromCurrency,
+        toCurrency,
         rate: parseFloat(rate),
         effectiveDate
       },
@@ -111,9 +112,9 @@ export function ExchangeRates() {
 
   const isFetchFormValid = () => {
     return (
-      fetchFrom.trim().length === 3 &&
-      fetchTo.trim().length === 3 &&
-      fetchFrom.trim().toUpperCase() !== fetchTo.trim().toUpperCase() &&
+      fetchFrom.length === 3 &&
+      fetchTo.length === 3 &&
+      fetchFrom !== fetchTo &&
       !!fetchDate
     )
   }
@@ -123,8 +124,8 @@ export function ExchangeRates() {
 
     fetchExchangeRateMutation.mutate(
       {
-        fromCurrency: fetchFrom.toUpperCase(),
-        toCurrency: fetchTo.toUpperCase(),
+        fromCurrency: fetchFrom,
+        toCurrency: fetchTo,
         date: fetchDate,
       },
       {
@@ -199,26 +200,24 @@ export function ExchangeRates() {
               <Label htmlFor="fromCurrency" className="text-right">
                 {t("exchangeRates.from")}
               </Label>
-              <Input
+              <CurrencyInput
                 id="fromCurrency"
                 value={fromCurrency}
-                onChange={(e) => setFromCurrency(e.target.value.toUpperCase())}
+                onValueChange={setFromCurrency}
                 placeholder="USD"
-                maxLength={3}
-                className="col-span-3 uppercase"
+                className="col-span-3"
               />
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="toCurrency" className="text-right">
                 {t("exchangeRates.to")}
               </Label>
-              <Input
+              <CurrencyInput
                 id="toCurrency"
                 value={toCurrency}
-                onChange={(e) => setToCurrency(e.target.value.toUpperCase())}
+                onValueChange={setToCurrency}
                 placeholder="BRL"
-                maxLength={3}
-                className="col-span-3 uppercase"
+                className="col-span-3"
               />
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
@@ -283,26 +282,24 @@ export function ExchangeRates() {
               <Label htmlFor="fetchFrom" className="text-right">
                 {t("exchangeRates.from")}
               </Label>
-              <Input
+              <CurrencyInput
                 id="fetchFrom"
                 value={fetchFrom}
-                onChange={(e) => setFetchFrom(e.target.value.toUpperCase())}
+                onValueChange={setFetchFrom}
                 placeholder="USD"
-                maxLength={3}
-                className="col-span-3 uppercase"
+                className="col-span-3"
               />
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="fetchTo" className="text-right">
                 {t("exchangeRates.to")}
               </Label>
-              <Input
+              <CurrencyInput
                 id="fetchTo"
                 value={fetchTo}
-                onChange={(e) => setFetchTo(e.target.value.toUpperCase())}
+                onValueChange={setFetchTo}
                 placeholder="BRL"
-                maxLength={3}
-                className="col-span-3 uppercase"
+                className="col-span-3"
               />
             </div>
             <div className="grid grid-cols-4 items-center gap-4">

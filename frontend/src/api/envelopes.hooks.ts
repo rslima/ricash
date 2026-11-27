@@ -1,7 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { accountKeys, envelopeKeys } from "./queryKeys"
 import type { PaginationParams } from "./types"
-import { createLedgerScopedKeys } from "./queryKeys"
-import { accountKeys } from "./accounts.hooks"
 import {
   getEnvelopes,
   getEnvelope,
@@ -18,22 +17,6 @@ import {
   type UpdateEnvelopeData,
   type AllocateEnvelopeData,
 } from "./envelopes"
-
-/**
- * Envelope query keys, scoped by ledger. Budget summary and envelope→account
- * mappings live under this prefix so a ledger-level invalidation refreshes them
- * along with the envelope lists.
- */
-export const envelopeKeys = {
-  ...createLedgerScopedKeys("envelopes"),
-  balance: (ledgerSlug: string, envelopeId: string, year: number, month: number) =>
-    ["envelopes", ledgerSlug, "balance", envelopeId, year, month] as const,
-  accounts: (ledgerSlug: string, envelopeId: string) =>
-    ["envelopes", ledgerSlug, "accounts", envelopeId] as const,
-  budget: (ledgerSlug: string, year: number, month: number) =>
-    ["envelopes", ledgerSlug, "budget", year, month] as const,
-  mappings: (ledgerSlug: string) => ["envelopes", ledgerSlug, "mappings"] as const,
-}
 
 export function useEnvelopes(ledgerSlug: string, params?: PaginationParams, enabled = true) {
   return useQuery({

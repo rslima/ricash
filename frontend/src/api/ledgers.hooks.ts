@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { ledgerKeys } from "./queryKeys"
 import {
   getLedgers,
   createLedger,
@@ -7,14 +8,6 @@ import {
   type CreateLedgerData,
   type UpdateLedgerData,
 } from "./ledgers"
-
-/**
- * Query keys for ledger data. Centralizing them keeps `useQuery` and the
- * `invalidateQueries` calls in the mutations below in sync.
- */
-export const ledgerKeys = {
-  all: ["ledgers"] as const,
-}
 
 /**
  * Fetches the current user's ledgers. Pass `enabled` to gate on auth.

@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
+import { CurrencyInput } from "@/components/CurrencyInput"
 import { Label } from "@/components/ui/label"
 import {
   Table,
@@ -300,10 +301,10 @@ function EnvelopeForm({
         </div>
         <div className="grid gap-2">
           <Label htmlFor={`${idPrefix}currency`}>{t("common.currency")}</Label>
-          <Input
+          <CurrencyInput
             id={`${idPrefix}currency`}
             value={formData.currency}
-            onChange={(e) => setFormData({ ...formData, currency: e.target.value })}
+            onValueChange={(currency) => setFormData({ ...formData, currency })}
             placeholder={showPlaceholders ? "BRL" : undefined}
             required
           />

@@ -33,6 +33,18 @@ export function formatCurrency(amount: number, currency: string = DEFAULT_CURREN
   }).format(amount)
 }
 
+/**
+ * Parses a typed money amount: `null` when the field is empty or not a number,
+ * otherwise the amount rounded to cents, the precision the API accepts
+ * (numeric(20, 2); more decimals are a 400).
+ */
+export function parseMoneyInput(value: string): number | null {
+  if (value.trim() === "") return null
+  const amount = Number(value)
+  if (!Number.isFinite(amount)) return null
+  return Math.round((amount + Number.EPSILON) * 100) / 100
+}
+
 export function formatDate(date: string | Date): string {
   let dateObj: Date
   if (typeof date === "string") {

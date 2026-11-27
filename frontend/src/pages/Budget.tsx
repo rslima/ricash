@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react"
+import { useState, useMemo, useRef } from "react"
 import { Link } from "react-router"
 import { useTranslation } from "react-i18next"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -23,7 +23,7 @@ import { useAuth } from "@/contexts/AuthContext"
 import { useEnvelopes, useBudgetSummary, useAllocateEnvelope } from "@/api/envelopes.hooks"
 import type { EnvelopeBalance } from "@/api/envelopes"
 import type { EnvelopeResource, EnvelopeType } from "@/api/types"
-import { formatCurrency } from "@/lib/utils"
+import { formatCurrency, parseMoneyInput } from "@/lib/utils"
 import { ChevronLeft, ChevronRight, FolderOpen, TrendingUp, TrendingDown, PiggyBank } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useErrorHandler } from "@/hooks/use-error-handler"
@@ -84,8 +84,12 @@ interface EnvelopeBudgetRowProps {
 }
 
 function EnvelopeBudgetRow({ envelope, balance, onAllocate }: EnvelopeBudgetRowProps) {
+  const { t } = useTranslation()
   const [isEditing, setIsEditing] = useState(false)
   const [editValue, setEditValue] = useState("")
+  // Enter, Escape and blur can each end an edit, and unmounting the focused
+  // input can fire a late blur, so only the first of them takes effect.
+  const editEndedRef = useRef(false)
 
   const allocated = balance?.allocated ?? 0
   const spent = balance?.spent ?? 0
@@ -94,20 +98,27 @@ function EnvelopeBudgetRow({ envelope, balance, onAllocate }: EnvelopeBudgetRowP
 
   const handleEditStart = () => {
     setEditValue(allocated.toString())
+    editEndedRef.current = false
     setIsEditing(true)
   }
 
-  const handleEditSave = () => {
-    const amount = parseFloat(editValue) || 0
-    onAllocate(envelope.id, amount)
+  const endEdit = (save: boolean) => {
+    if (editEndedRef.current) return
+    editEndedRef.current = true
     setIsEditing(false)
+    if (!save) return
+    // Empty or non-numeric cancels instead of allocating 0.
+    const amount = parseMoneyInput(editValue)
+    if (amount !== null && amount !== allocated) {
+      onAllocate(envelope.id, amount)
+    }
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
-      handleEditSave()
+      endEdit(true)
     } else if (e.key === "Escape") {
-      setIsEditing(false)
+      endEdit(false)
     }
   }
 
@@ -126,9 +137,12 @@ function EnvelopeBudgetRow({ envelope, balance, onAllocate }: EnvelopeBudgetRowP
         {isEditing ? (
           <Input
             type="number"
+            step="0.01"
+            inputMode="decimal"
+            aria-label={t("budget.allocated")}
             value={editValue}
             onChange={(e) => setEditValue(e.target.value)}
-            onBlur={handleEditSave}
+            onBlur={() => endEdit(true)}
             onKeyDown={handleKeyDown}
             className="w-24 h-8 text-right"
             autoFocus

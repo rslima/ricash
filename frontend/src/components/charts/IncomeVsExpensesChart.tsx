@@ -5,7 +5,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsive
 import { ChartCard } from "@/components/charts/ChartCard"
 import { CHART_TOOLTIP_CONTENT_STYLE } from "@/components/charts/chart-theme"
 import { getMonthlyReport } from "@/api/transactions"
-import { transactionKeys } from "@/api/transactions.hooks"
+import { transactionKeys } from "@/api/queryKeys"
 import type { MonthlyReport } from "@/api/transactions"
 import type { LedgerResource } from "@/api/types"
 import { formatCurrency } from "@/lib/utils"

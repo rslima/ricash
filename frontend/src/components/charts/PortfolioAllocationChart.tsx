@@ -5,7 +5,7 @@ import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from "recha
 import { ChartCard } from "@/components/charts/ChartCard"
 import { CHART_COLORS, CHART_TOOLTIP_CONTENT_STYLE } from "@/components/charts/chart-theme"
 import { getPortfolio } from "@/api/instruments"
-import { instrumentKeys } from "@/api/instruments.hooks"
+import { instrumentKeys } from "@/api/queryKeys"
 import type { LedgerResource } from "@/api/types"
 import { formatCurrency } from "@/lib/utils"
 

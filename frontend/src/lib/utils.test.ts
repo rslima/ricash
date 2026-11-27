@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach } from "vitest"
 import i18n from "@/i18n"
-import { cn, formatCurrency, formatDate, slugify } from "./utils"
+import { cn, formatCurrency, formatDate, parseMoneyInput, slugify } from "./utils"
 
 // Formatting follows the app language (test setup pins it to "en").
 afterEach(async () => {
@@ -100,5 +100,25 @@ describe("slugify", () => {
 
   it("handles numbers", () => {
     expect(slugify("Project 2024")).toBe("project-2024")
+  })
+})
+
+describe("parseMoneyInput", () => {
+  it("parses plain amounts", () => {
+    expect(parseMoneyInput("750")).toBe(750)
+    expect(parseMoneyInput("12.5")).toBe(12.5)
+    expect(parseMoneyInput("0")).toBe(0)
+  })
+
+  it("rounds to cents, the precision the API accepts", () => {
+    expect(parseMoneyInput("10.555")).toBe(10.56)
+    expect(parseMoneyInput("1.005")).toBe(1.01)
+    expect(parseMoneyInput("100.004")).toBe(100)
+  })
+
+  it("returns null for empty or non-numeric input instead of 0", () => {
+    expect(parseMoneyInput("")).toBeNull()
+    expect(parseMoneyInput("   ")).toBeNull()
+    expect(parseMoneyInput("abc")).toBeNull()
   })
 })
