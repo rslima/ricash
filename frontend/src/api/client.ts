@@ -54,8 +54,7 @@ class ApiClient {
     })
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({ message: "Request failed" }))
-      throw new ApiError(response.status, error.message || "Request failed", error)
+      throw await apiErrorFromResponse(response)
     }
 
     if (response.status === 204) {
@@ -86,9 +85,7 @@ class ApiClient {
     const response = await fetch(this.buildUrl(endpoint, params), { method: "GET", headers })
 
     if (!response.ok) {
-      // Errors arrive as JSON:API error documents ({ errors: [{ detail }] }).
-      const body = await response.json().catch(() => null)
-      throw new ApiError(response.status, body?.errors?.[0]?.detail ?? body?.message ?? "Request failed", body)
+      throw await apiErrorFromResponse(response)
     }
 
     const disposition = response.headers.get("content-disposition")
@@ -125,13 +122,50 @@ class ApiClient {
 export class ApiError extends Error {
   status: number
   data?: unknown
+  /**
+   * The server's explanation, from the JSON:API error document's `detail`
+   * fields (one per line when there are several, e.g. per-field validation
+   * errors). Undefined when the response carried none.
+   */
+  detail?: string
 
-  constructor(status: number, message: string, data?: unknown) {
+  constructor(status: number, message: string, data?: unknown, detail?: string) {
     super(message)
     this.name = "ApiError"
     this.status = status
     this.data = data
+    this.detail = detail
   }
+}
+
+function jsonApiErrorDetails(body: unknown): string[] {
+  if (typeof body !== "object" || body === null || !("errors" in body) || !Array.isArray(body.errors)) {
+    return []
+  }
+  return body.errors.flatMap((error: unknown) =>
+    typeof error === "object" && error !== null && "detail" in error && typeof error.detail === "string"
+      ? [error.detail]
+      : []
+  )
+}
+
+function topLevelMessage(body: unknown): string | undefined {
+  return typeof body === "object" && body !== null && "message" in body && typeof body.message === "string"
+    ? body.message
+    : undefined
+}
+
+/**
+ * Builds the ApiError for a failed response. The backend renders every error
+ * as a JSON:API error document ({ errors: [{ status, title, detail }] }) whose
+ * `detail` says why (validation failure, conflict, ...); a top-level
+ * `message` is still honored for non-API bodies.
+ */
+async function apiErrorFromResponse(response: Response): Promise<ApiError> {
+  const body: unknown = await response.json().catch(() => null)
+  const details = jsonApiErrorDetails(body)
+  const message = details[0] ?? topLevelMessage(body) ?? "Request failed"
+  return new ApiError(response.status, message, body, details.length > 0 ? details.join("\n") : undefined)
 }
 
 export const apiClient = new ApiClient(API_BASE_URL)

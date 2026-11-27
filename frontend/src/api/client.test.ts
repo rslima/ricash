@@ -136,6 +136,55 @@ describe("ApiClient", () => {
     })
   })
 
+  it("carries the JSON:API error details", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 400,
+      json: () => Promise.resolve({
+        errors: [
+          { status: "400", title: "Bad Request", detail: "currency: must be a 3-letter uppercase currency code, e.g. USD" },
+          { status: "400", title: "Bad Request", detail: "name: must not be blank" },
+        ],
+      }),
+    })
+
+    const { apiClient, ApiError: FreshApiError } = await import("./client")
+    const error = await apiClient.post("/test", {}).catch((e: unknown) => e)
+
+    expect(error).toBeInstanceOf(FreshApiError)
+    expect(error).toMatchObject({
+      status: 400,
+      message: "currency: must be a 3-letter uppercase currency code, e.g. USD",
+      detail: "currency: must be a 3-letter uppercase currency code, e.g. USD\nname: must not be blank",
+    })
+  })
+
+  it("leaves detail undefined for a body without JSON:API errors", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 502,
+      json: () => Promise.reject(new SyntaxError("not JSON")),
+    })
+
+    const { apiClient } = await import("./client")
+    const error = await apiClient.get("/test").catch((e: unknown) => e)
+
+    expect(error).toMatchObject({ status: 502, message: "Request failed", detail: undefined })
+  })
+
+  it("carries the error detail from a failed download", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 404,
+      json: () => Promise.resolve({ errors: [{ detail: "Account not found: acct-9" }] }),
+    })
+
+    const { apiClient } = await import("./client")
+    const error = await apiClient.getBlob("/export").catch((e: unknown) => e)
+
+    expect(error).toMatchObject({ status: 404, message: "Account not found: acct-9", detail: "Account not found: acct-9" })
+  })
+
   it("handles 204 No Content response", async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,

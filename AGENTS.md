@@ -114,6 +114,7 @@ Services start automatically with `spring-boot:run` via spring-boot-docker-compo
 - Dev JWTs issued by Keycloak (issuer: http://localhost:9180/realms/Ricash); prod uses Auth0 with audience validation (`application-prod.yml`)
 - Stateless session management (no server-side sessions)
 - Controllers obtain the user id via `web/AuthenticatedUser.userId(principal)` (JWT principal claim `preferred_username`)
+- Frontend sessions: oidc-client-ts renews tokens automatically on every platform (refresh-token grant on native, which requests `offline_access` via `VITE_AUTH_SCOPE` in `.env.android`/`.env.ios`; the silent-renew iframe on web). Any API 401 goes to `frontend/src/lib/session-recovery.ts`: one silent renew, else a local sign-out (cache cleared, sign-in card, one toast). `ApiError.detail` carries the backend's JSON:API `errors[].detail`, which `useErrorHandler` shows under the localized title for 400/409
 
 ## API Conventions
 - Backend base path: `/v1/` (the frontend proxy exposes it as `/api/v1/`)
