@@ -113,6 +113,7 @@ Services start automatically with `spring-boot:run` via spring-boot-docker-compo
 - All endpoints except GET /index.html, GET /actuator/health and the GET /actuator/health/liveness|readiness probes require authentication. Liveness ignores the database; `infra/app.tf` still health-checks `/actuator/health`, which includes it
 - Dev JWTs issued by Keycloak (issuer: http://localhost:9180/realms/Ricash); prod uses Auth0 with audience validation (`application-prod.yml`)
 - Stateless session management (no server-side sessions)
+- Offline/PWA: no API data outlives sign-out: the service worker precaches only the app shell and never caches API responses (Workbox keys by URL, not by the `Authorization` header). `frontend/src/lib/purge-api-cache.ts` deletes the `api-cache` older builds left on devices
 - Controllers obtain the user id via `web/AuthenticatedUser.userId(principal)` (JWT principal claim `preferred_username`)
 
 ## API Conventions

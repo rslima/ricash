@@ -11,6 +11,7 @@ import { NativeAuthReturn } from "@/components/NativeAuthReturn"
 import { TableSkeleton } from "@/components/ui/table-skeleton"
 // The OIDC callback stays eager: it must not depend on a lazy chunk mid-login.
 import { Callback } from "@/pages/Callback"
+import { NotFound } from "@/pages/NotFound"
 
 // Pages are code-split per route; they use named exports, hence the remap.
 const Dashboard = lazy(() => import("@/pages/Dashboard").then((m) => ({ default: m.Dashboard })))
@@ -70,6 +71,7 @@ function App() {
               <Route path="exchange-rates" element={<ExchangeRates />} />
               <Route path="reports" element={<Reports />} />
               <Route path="settings" element={<Settings />} />
+              <Route path="*" element={<NotFound />} />
             </Route>
           </Routes>
         </Suspense>

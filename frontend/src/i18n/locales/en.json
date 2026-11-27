@@ -456,5 +456,15 @@
     "deleteFailed": "Failed to delete. Please try again.",
     "fetchRateFailed": "Could not fetch a rate for this currency pair and date. The provider may not have it.",
     "exportFailed": "Failed to export transactions"
+  },
+  "errorBoundary": {
+    "title": "Something went wrong",
+    "description": "This page failed to load. Reloading usually fixes it, for example right after the app was updated.",
+    "reload": "Reload"
+  },
+  "notFound": {
+    "title": "Page not found",
+    "description": "The address you opened doesn't match any page.",
+    "goHome": "Go to the dashboard"
   }
 }

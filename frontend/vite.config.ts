@@ -42,24 +42,11 @@ export default defineConfig({
           },
         ],
       },
+      // App shell only. API responses are never cached: Workbox keys caches
+      // by URL, not by the Authorization header, so cached financial data
+      // would outlive sign-out and could be served to the next user.
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
-        runtimeCaching: [
-          {
-            urlPattern: /^https?:\/\/.*\/api\/v1\/.*/i,
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'api-cache',
-              expiration: {
-                maxEntries: 100,
-                maxAgeSeconds: 60 * 5,
-              },
-              cacheableResponse: {
-                statuses: [0, 200],
-              },
-            },
-          },
-        ],
       },
     }),
   ],
